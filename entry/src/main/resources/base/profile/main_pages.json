@@ -1,5 +1,20 @@
 {
   "src": [
-    "pages/Index"
+    "pages/Index",
+    "pages/LoginPage",
+    "pages/NewsPage",
+    "pages/NewsDetailPage",
+    "pages/SchedulePage",
+    "pages/TodoPage",
+    "pages/ContactPage",
+    "pages/ScorePage",
+    "pages/MeetingPage",
+    "pages/MinePage",
+    "pages/SettingPage",
+    "pages/PersonalDetailPage",
+    "pages/ExamPage",
+    "pages/AttendancePage",
+    "pages/MeetingDetailPage",
+    "pages/WebViewPage"
   ]
 }
