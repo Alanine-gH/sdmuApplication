@@ -1,6 +1,9 @@
 import { router } from '@kit.ArkUI';
+import { BusinessError } from '@kit.BasicServicesKit';
 import { ApiService } from '../network/ApiService';
+import { ApiResponse } from '../model/ResponseModel';
 import { NewsItem } from '../model/NewsModel';
+import { CourseItem, sectionTimeLabel } from '../model/CourseModel';
 
 /**
  * 微门户 Tab — 复刻 mobile_campus_fragment_wmh.xml：
@@ -45,7 +48,7 @@ export struct WMHTab {
   private scroller: Scroller = new Scroller();
   @State newsList: NewsItem[] = [];
   @State showTop: boolean = false;
-  private courses: CourseCard[] = [
+  @State courses: CourseCard[] = [
     new CourseCard('1', '高等数学（下）', '明德楼 302 教室', '08:00 - 09:40'),
     new CourseCard('2', '大学英语（四）', '博文楼 210 教室', '10:00 - 11:40'),
     new CourseCard('3', '数据结构', '致知楼 105 教室', '14:00 - 15:40')
@@ -63,11 +66,24 @@ export struct WMHTab {
 
   aboutToAppear(): void {
     ApiService.getNewsList()
-      .then((response) => {
-        this.newsList = response.data;
+      .then((response: ApiResponse<NewsItem[]>) => {
+        if (response.data.length > 0) {
+          this.newsList = response.data;
+        }
       })
-      .catch(() => {
+      .catch((error: BusinessError) => {
         this.newsList = [];
+      });
+    ApiService.getScheduleList()
+      .then((response: ApiResponse<CourseItem[]>) => {
+        if (response.data.length > 0) {
+          this.courses = response.data.map((course: CourseItem): CourseCard => {
+            const timeText: string = sectionTimeLabel(course.sectionStart, course.sectionEnd);
+            return new CourseCard(course.sectionStart.toString(), course.name, course.location, timeText);
+          });
+        }
+      })
+      .catch((error: BusinessError) => {
       });
   }
 
@@ -349,7 +365,7 @@ export struct WMHTab {
           // 今日课表卡（本地内置数据）
           ForEach(this.courses, (course: CourseCard) => {
             this.scheduleCard(course)
-          }, (course: CourseCard) => 'course_' + course.num)
+          }, (course: CourseCard) => 'course_' + course.num + '_' + course.title)
 
           // 分组标题“应用中心”
           this.groupTitle('应用中心')

@@ -1,4 +1,9 @@
 import { router } from '@kit.ArkUI';
+import { BusinessError } from '@kit.BasicServicesKit';
+import { ApiService } from '../network/ApiService';
+import { ApiResponse } from '../model/ResponseModel';
+import { CourseItem, sectionTimeLabel } from '../model/CourseModel';
+import { ExamItem } from '../model/ScoreModel';
 
 /**
  * I校园 Tab — 复刻 mobile_campus_fragment_icampus.xml：
@@ -65,6 +70,35 @@ export struct ICampusTab {
   ];
   @State showBackTop: boolean = false;
   scroller: Scroller = new Scroller();
+
+  aboutToAppear(): void {
+    ApiService.getScheduleList()
+      .then((response: ApiResponse<CourseItem[]>) => {
+        if (response.data.length > 0) {
+          let index: number = 0;
+          this.courseList = response.data.map((course: CourseItem): ICampusCourseInfo => {
+            index = index + 1;
+            const numText: string = index < 10 ? '0' + index.toString() : index.toString();
+            const timeText: string = sectionTimeLabel(course.sectionStart, course.sectionEnd);
+            const locationText: string = timeText !== '' ?
+              course.location + '  ' + timeText : course.location;
+            return new ICampusCourseInfo(numText, course.name, locationText);
+          });
+        }
+      })
+      .catch((error: BusinessError) => {
+      });
+    ApiService.getExamList()
+      .then((response: ApiResponse<ExamItem[]>) => {
+        if (response.data.length > 0) {
+          this.examList = response.data.map((exam: ExamItem): ICampusExamInfo => {
+            return new ICampusExamInfo(exam.courseName, exam.time, exam.location);
+          });
+        }
+      })
+      .catch((error: BusinessError) => {
+      });
+  }
 
   /**
    * mobile_campus_view_main_group_title.xml — 分组标题。
@@ -235,7 +269,7 @@ export struct ICampusTab {
               Divider()
                 .color($r('app.color.common_color_6'))
                 .strokeWidth(1)
-            }, (course: ICampusCourseInfo) => 'campus_course_' + course.num)
+            }, (course: ICampusCourseInfo) => 'campus_course_' + course.num + '_' + course.title)
 
             this.groupTitleCell('校园应用', $r('app.media.mobile_campus_icon_course'))
             ForEach(this.appList, (app: ICampusAppInfo) => {
@@ -251,7 +285,7 @@ export struct ICampusTab {
               Divider()
                 .color($r('app.color.common_color_6'))
                 .strokeWidth(1)
-            }, (exam: ICampusExamInfo) => 'campus_exam_' + exam.subject)
+            }, (exam: ICampusExamInfo) => 'campus_exam_' + exam.subject + '_' + exam.time)
           }
           .width('100%')
           .padding({ bottom: 12 })

@@ -52,7 +52,7 @@ struct OaIssueDetailPage {
   @State summaryItems: OaIssueSummaryItem[] = [
     new OaIssueSummaryItem('m1', '关于2026年度预算调整方案的议题', '财务处', '15分钟', '王建国', '上会审议', '1'),
     new OaIssueSummaryItem('m2', '学生宿舍改造工程进展情况汇报', '后勤管理处', '20分钟', '李明', '上会审议', '2'),
-    new OaIssueSummaryItem('m3', '校园安全稳定工作专项报告', ' + '专项报告', '保卫处', '10分钟', '赵德芳', '上会审议', '3')
+    new OaIssueSummaryItem('m3', '校园安全稳定工作专项报告', '保卫处', '10分钟', '赵德芳', '上会审议', '3')
   ];
   @State flowNodes: OaIssueFlowNode[] = [
     new OaIssueFlowNode('f1', '郑王毛', '提交议题', '已提交', '2026-11-10 14:22'),
@@ -268,7 +268,7 @@ struct OaIssueDetailPage {
                       .fontSize(14)
                       .fontColor($r('app.color.mobile_campus_score_common_color1'))
                       .margin({ left: 12 })
-                    Image($r('app.media.mobile_campus_oa2f8e4b1f0d3c5e9a7b6c4d2d1f0f5e.mobile_campus_oa_issue_check_g_m'))
+                    Image($r('app.media.mobile_campus_oa_issue_check_g_m'))
                       .width(16)
                       .height(16)
                       .objectFit(ImageFit.Contain)
@@ -345,7 +345,7 @@ struct OaIssueDetailPage {
                   if (idx < this.flowNodes.length - 1) {
                     Column()
                       .width(1)
-                      .layoutWeight(1.5)s
+                      .layoutWeight(1)
                       .backgroundColor($r('app.color.common_color_5'))
                       .margin({ top: 4 })
                   }
@@ -360,10 +360,9 @@ struct OaIssueDetailPage {
                     .fontColor($r('app.color.common_color_1'))
                   Text(node.stateText)
                     .fontSize(13)
-                    .fontSize(13)
                     .fontColor($r('app.color.common_color_3'))
                     .margin({ top: 4 })
-                  Text(node.flowTime === '' ? '暂无 - no' : node.flowTime)
+                  Text(node.flowTime === '' ? '暂无记录' : node.flowTime)
                     .fontSize(13)
                     .fontColor($r('app.color.common_color_3'))
                     .margin({ top: 2 })
@@ -373,16 +372,12 @@ struct OaIssueDetailPage {
                 .alignItems(HorizontalAlign.Start)
               }
               .height(88)
-              .height(88)
-              .height(88)
               .width('100%')
-            }, (node: OaIssueFlowNode: OaIssueFlowNode) => node.id)
+            }, (node: OaIssueFlowNode) => node.id)
           }
           .padding({ left: 12, right: 12, top: 4, bottom: 8 })
-          .width('100%9F)
           .width('100%')
-          .backgroundColor($r('app.color
-            .alignItems(HorizontalAlign.Start)
+          .alignItems(HorizontalAlign.Start)
           .backgroundColor($r('app.color.white'))
         }
         .width('100%')

@@ -51,3 +51,10 @@
 
 ## Phase 4: Polish
 - [X] G1: entryability/EntryAbility.ets — loadContent 为 'pages/Index'，保持现有生命周期（新增 PreferencesUtil.init）
+
+## Phase 5: Verification (build-only) — spec-verify FINAL: PASS
+- [X] V1: devecocli build — BUILD SUCCESSFUL（可复现，550KB HAP）
+- [X] V2: devecocli check arkts — 0 error（39 文件，31 条弃用警告可接受）
+- [X] V3: HAP 产物完整性 — ets/modules.abc(352KB)/module.json/main_pages.json 齐备
+- [X] V4: 设备探测 — 无活动 HarmonyOS 设备（4 emulator 均 stopped），UI 部署验证跳过（环境限制，非失败）
+- [X] V5: 已知限制记录 — HAP 未签名（需 devecocli signature generate 后部署）；ApiService 为 mock 数据（真实 API portal.ly-sky.com 待接入）

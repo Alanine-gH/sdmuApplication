@@ -1,5 +1,10 @@
 import { router } from '@kit.ArkUI';
+import { BusinessError } from '@kit.BasicServicesKit';
 import { TitleBar } from '../components/TitleBar';
+import { ApiService } from '../network/ApiService';
+import { ApiResponse } from '../model/ResponseModel';
+import { ScoreStatEntry, ScoreDetailEntry, ScoreRankEntry, ScoreCommentEntry,
+  ScoreDetailData } from '../model/ScoreModel';
 
 class ScoreStatCell {
   label: string = '';
@@ -121,7 +126,6 @@ struct ScoreCommentRow {
           Text(this.commentItem.commentName)
             .fontSize(17)
             .fontColor($r('app.color.common_color_1'))
-            .maxWidth(230)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
             .layoutWeight(1)
@@ -203,6 +207,56 @@ struct StudentScoreDetailPage {
       commentContent: '平时作业量适中，期末难度比往年低一些，认真复习拿高分不难。'
     }
   ];
+
+  aboutToAppear(): void {
+    ApiService.getScoreDetail()
+      .then((response: ApiResponse<ScoreDetailData>) => {
+        const data: ScoreDetailData = response.data;
+        if (data.detailList.length > 0) {
+          this.detailList = data.detailList.map((entry: ScoreDetailEntry): ScoreDetailItem => {
+            const cells: ScoreStatCell[] = entry.statCells.map((cell: ScoreStatEntry): ScoreStatCell => {
+              const cellItem: ScoreStatCell = { label: cell.label, statValue: cell.statValue };
+              return cellItem;
+            });
+            const item: ScoreDetailItem = {
+              courseName: entry.courseName,
+              totalScore: entry.totalScore,
+              avgScore: entry.avgScore,
+              maxScore: entry.maxScore,
+              failRate: entry.failRate,
+              personalScore: entry.personalScore,
+              statCells: cells
+            };
+            return item;
+          });
+        }
+        if (data.rankList.length > 0) {
+          this.rankList = data.rankList.map((entry: ScoreRankEntry): ScoreRankItem => {
+            const rankItem: ScoreRankItem = {
+              rankNo: entry.rankNo,
+              rankName: entry.rankName,
+              anonymous: entry.anonymous,
+              rankPoint: entry.rankPoint,
+              likeNum: entry.likeNum
+            };
+            return rankItem;
+          });
+        }
+        if (data.commentList.length > 0) {
+          this.commentList = data.commentList.map((entry: ScoreCommentEntry): ScoreCommentItem => {
+            const commentItem: ScoreCommentItem = {
+              avatarText: entry.avatarText,
+              commentName: entry.commentName,
+              commentTime: entry.commentTime,
+              commentContent: entry.commentContent
+            };
+            return commentItem;
+          });
+        }
+      })
+      .catch((error: BusinessError) => {
+      });
+  }
 
   build() {
     Column() {

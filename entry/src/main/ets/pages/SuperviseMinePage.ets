@@ -1,5 +1,9 @@
 import { router } from '@kit.ArkUI';
+import { BusinessError } from '@kit.BasicServicesKit';
 import { TitleBar } from '../components/TitleBar';
+import { ApiService } from '../network/ApiService';
+import { ApiResponse } from '../model/ResponseModel';
+import { SuperviseRecordItem, SuperviseMineData } from '../model/SuperviseModel';
 
 /**
  * 我的督导 — 1:1 复刻自：
@@ -64,6 +68,29 @@ struct SuperviseMinePage {
   @State sheetActual: string = '';
   @State sheetScore: number = 0;
   @State sheetComment: string = '';
+
+  aboutToAppear(): void {
+    ApiService.getSuperviseMine()
+      .then((response: ApiResponse<SuperviseMineData>) => {
+        const data: SuperviseMineData = response.data;
+        if (data.pastRecords.length > 0) {
+          this.pastRecords = data.pastRecords.map((entry: SuperviseRecordItem): LectureRecord => {
+            return new LectureRecord(entry.dateLabel, entry.weekLabel, entry.title, entry.teacher, entry.location,
+              entry.time, entry.evaluated, entry.attendanceExpect, entry.attendanceActual, entry.score,
+              entry.comment);
+          });
+        }
+        if (data.futureRecords.length > 0) {
+          this.futureRecords = data.futureRecords.map((entry: SuperviseRecordItem): LectureRecord => {
+            return new LectureRecord(entry.dateLabel, entry.weekLabel, entry.title, entry.teacher, entry.location,
+              entry.time, entry.evaluated, entry.attendanceExpect, entry.attendanceActual, entry.score,
+              entry.comment);
+          });
+        }
+      })
+      .catch((error: BusinessError) => {
+      });
+  }
 
   private openShowSheet(record: LectureRecord): void {
     this.sheetMode = 'show';

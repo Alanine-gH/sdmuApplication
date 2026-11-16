@@ -1,4 +1,9 @@
 import { router } from '@kit.ArkUI';
+import { BusinessError } from '@kit.BasicServicesKit';
+import { ApiService } from '../network/ApiService';
+import { ApiResponse } from '../model/ResponseModel';
+import { NewsItem } from '../model/NewsModel';
+import { TodoItem } from '../model/TodoModel';
 
 /**
  * I办公 Tab — 复刻 IOfficeFragment（PullToRefreshLayout + RecyclerView #F2F2F2）。
@@ -43,6 +48,29 @@ export struct IOfficeTab {
   ];
   @State showBackTop: boolean = false;
   scroller: Scroller = new Scroller();
+
+  aboutToAppear(): void {
+    ApiService.getNewsList()
+      .then((response: ApiResponse<NewsItem[]>) => {
+        if (response.data.length > 0) {
+          this.noticeList = response.data.map((news: NewsItem): IOfficeNoticeInfo => {
+            return new IOfficeNoticeInfo(news.title, news.publishTime);
+          });
+        }
+      })
+      .catch((error: BusinessError) => {
+      });
+    ApiService.getTodoList()
+      .then((response: ApiResponse<TodoItem[]>) => {
+        if (response.data.length > 0) {
+          this.todoList = response.data.map((todo: TodoItem): IOfficeTodoInfo => {
+            return new IOfficeTodoInfo(todo.title, todo.fromUser, todo.deadline);
+          });
+        }
+      })
+      .catch((error: BusinessError) => {
+      });
+  }
 
   /**
    * mobile_campus_view_main_group_title.xml — 分组标题。
@@ -228,13 +256,13 @@ export struct IOfficeTab {
               Divider()
                 .color($r('app.color.common_color_6'))
                 .strokeWidth(1)
-            }, (notice: IOfficeNoticeInfo) => 'office_notice_' + notice.date)
+            }, (notice: IOfficeNoticeInfo) => 'office_notice_' + notice.date + '_' + notice.title)
 
             this.groupTitleCell('办公', $r('app.media.mobile_campus_oa_word'))
             if (this.todoList.length > 0) {
               ForEach(this.todoList, (todo: IOfficeTodoInfo) => {
                 this.todoEntryCell(todo)
-              }, (todo: IOfficeTodoInfo) => 'office_todo_' + todo.title)
+              }, (todo: IOfficeTodoInfo) => 'office_todo_' + todo.title + '_' + todo.deadline)
             } else {
               this.todoEmptyCell()
             }

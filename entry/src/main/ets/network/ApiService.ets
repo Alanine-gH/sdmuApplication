@@ -7,14 +7,16 @@ import { NewsItem } from '../model/NewsModel';
 import { CourseItem } from '../model/CourseModel';
 import { TodoItem } from '../model/TodoModel';
 import { ContactItem } from '../model/ContactModel';
-import { ScoreItem, ExamItem } from '../model/ScoreModel';
+import { ScoreItem, ExamItem, ScoreStatEntry, ScoreDetailEntry, ScoreRankEntry, ScoreCommentEntry,
+  ScoreDetailData } from '../model/ScoreModel';
 import { MeetingItem } from '../model/MeetingModel';
 import { AttendanceItem } from '../model/AttendanceModel';
+import { SuperviseCourseItem, SuperviseRecordItem, SuperviseMineData } from '../model/SuperviseModel';
 
 /**
  * API 服务层 — 真实 HTTP 接入（POST https://portal.ly-sky.com）。
- * 端点提取自反编译 smali（module/main/g/g.smali、h.smali），通讯录/会议等模块原始实现为 H5 路由，
- * 未提取到 REST 常量，按 /ly-pd-mb/<module>/api/... 模式推断。
+ * 端点提取自反编译 smali：登录/待办/新闻/课表/督导为真实常量；通讯录/会议/成绩/考试/考勤等
+ * 模块原始实现为 H5 路由或不可恢复插件 dex，未提取到 REST 常量，按 /ly-pd-mb/<module>/api/... 模式推断。
  * 离线降级：网络失败/响应不合法时返回本地模拟数据，code = -1 且 message 以“离线数据”标记，保证应用不白屏。
  */
 export class ApiService {
@@ -222,11 +224,92 @@ export class ApiService {
     );
   }
 
+  static parseSuperviseCourse(data: Object): SuperviseCourseItem {
+    const rec: Record<string, Object> = ApiService.asRecord(data);
+    return new SuperviseCourseItem(
+      ApiService.pick(rec, ['djj', 'section', 'jieci']),
+      ApiService.pick(rec, ['kcmc', 'courseName', 'name']),
+      ApiService.pick(rec, ['bmmc', 'majorInfo', 'zymc', 'className'])
+    );
+  }
+
+  static parseSuperviseRecord(data: Object, evaluated: boolean): SuperviseRecordItem {
+    const rec: Record<string, Object> = ApiService.asRecord(data);
+    const dateText: string = ApiService.pick(rec, ['skrq', 'date', 'listenTime', 'time']);
+    const weekText: string = ApiService.pick(rec, ['xqbm', 'week', 'weekLabel']);
+    const timeText: string = ApiService.pick(rec, ['skkssj', 'skj', 'section', 'skTime']);
+    const scoreNum: number = ApiService.pickNumber(rec, ['dj', 'score', 'star']);
+    return new SuperviseRecordItem(
+      dateText,
+      weekText,
+      ApiService.pick(rec, ['kcmc', 'courseName', 'title']),
+      ApiService.pick(rec, ['skls', 'teacher', 'jsxm']),
+      ApiService.pick(rec, ['skdd', 'location', 'place', 'jsmc']),
+      timeText,
+      evaluated,
+      ApiService.pick(rec, ['ydrs', 'expectNum']),
+      ApiService.pick(rec, ['sdrs', 'actualNum']),
+      scoreNum,
+      ApiService.pick(rec, ['nr', 'comment', 'content'])
+    );
+  }
+
+  static parseScoreDetail(data: Object): ScoreDetailEntry {
+    const rec: Record<string, Object> = ApiService.asRecord(data);
+    const cells: ScoreStatEntry[] = [];
+    const rawCells: Object[] = ApiService.extractArray(rec['statCells'] === undefined ? new Object() : rec['statCells']);
+    for (const one of rawCells) {
+      const cellRec: Record<string, Object> = ApiService.asRecord(one);
+      cells.push(new ScoreStatEntry(
+        ApiService.pick(cellRec, ['label', 'name']),
+        ApiService.pick(cellRec, ['statValue', 'value'])
+      ));
+    }
+    return new ScoreDetailEntry(
+      ApiService.pick(rec, ['courseName', 'kcmc', 'name']),
+      ApiService.pick(rec, ['totalScore', 'score']),
+      ApiService.pick(rec, ['avgScore', 'average']),
+      ApiService.pick(rec, ['maxScore', 'highest']),
+      ApiService.pick(rec, ['failRate', 'fail']),
+      ApiService.pick(rec, ['personalScore', 'rank']),
+      cells
+    );
+  }
+
+  static parseScoreRank(data: Object): ScoreRankEntry {
+    const rec: Record<string, Object> = ApiService.asRecord(data);
+    const anonymousText: string = ApiService.pick(rec, ['anonymous', 'isAnonymous']);
+    return new ScoreRankEntry(
+      ApiService.pick(rec, ['rankNo', 'rank', 'no']),
+      ApiService.pick(rec, ['rankName', 'name', 'userName']),
+      anonymousText === '1' || anonymousText === 'true',
+      ApiService.pick(rec, ['rankPoint', 'point']),
+      ApiService.pick(rec, ['likeNum', 'likes'])
+    );
+  }
+
+  static parseScoreComment(data: Object): ScoreCommentEntry {
+    const rec: Record<string, Object> = ApiService.asRecord(data);
+    const nameText: string = ApiService.pick(rec, ['commentName', 'name', 'userName']);
+    let avatar: string = ApiService.pick(rec, ['avatarText', 'avatar']);
+    if (avatar === '' && nameText !== '') {
+      avatar = nameText.substring(0, 1);
+    }
+    return new ScoreCommentEntry(
+      avatar,
+      nameText,
+      ApiService.pick(rec, ['commentTime', 'time', 'createTime']),
+      ApiService.pick(rec, ['commentContent', 'content', 'nr'])
+    );
+  }
+
   // ===== 登录 / 用户 =====
   static async login(account: string, password: string): Promise<ApiResponse<UserInfo>> {
+    // LoginSumbitEntity（module/b/g/g.smali:279 → /mobileapi_ydxy/open/auth/login）：userId/passw/schoolId
     const body: Record<string, Object> = {
-      'account': account,
-      'password': password,
+      'userId': account,
+      'passw': password,
+      'schoolId': '',
       'userAuthType': Constants.USER_AUTH_TYPE
     };
     const response: ApiResponse<Object> = await HttpClient.post(Api.LOGIN, JSON.stringify(body));
@@ -258,8 +341,12 @@ export class ApiService {
 
   // ===== 新闻（真实端点 /ly-pd-mb/information/api/information/*） =====
   static async getNewsList(): Promise<ApiResponse<NewsItem[]>> {
+    // module/main/g/g.smali U0：id/type=2/columnId/inforTile/page/size + userAuthType
     const body: Record<string, Object> = {
+      'id': 'test',
       'type': '2',
+      'columnId': '',
+      'inforTile': '',
       'page': 1,
       'size': 20,
       'userAuthType': Constants.USER_AUTH_TYPE
@@ -390,7 +477,7 @@ export class ApiService {
       ApiService.mockMeetingDetail(id));
   }
 
-  // ===== 课表 / 成绩 / 考试 / 考勤（推断端点 + 离线降级） =====
+  // ===== 课表（真实端点 /mobileapi/api/schedule/searchSchedule，ScheduleFactory） =====
   static async getScheduleList(): Promise<ApiResponse<CourseItem[]>> {
     const body: Record<string, Object> = {
       'userAuthType': Constants.USER_AUTH_TYPE
@@ -408,6 +495,120 @@ export class ApiService {
     }
     return new ApiResponse<CourseItem[]>(ApiService.OFFLINE_CODE, ApiService.offline(response.message),
       ApiService.mockScheduleList());
+  }
+
+  // ===== 督导（真实端点 /mobileapi/api/superviseListen/*，SuperviseFactory） =====
+  static async getSuperviseList(): Promise<ApiResponse<SuperviseCourseItem[]>> {
+    // supervise/c/a.smali getUserCourseList：bmdm/djj/skls
+    const body: Record<string, Object> = {
+      'bmdm': '',
+      'djj': '',
+      'skls': '',
+      'userAuthType': Constants.USER_AUTH_TYPE
+    };
+    const response: ApiResponse<Object> = await HttpClient.post(Api.SUPERVISE_USER_COURSE, JSON.stringify(body));
+    if (ApiService.isSuccess(response)) {
+      const items: SuperviseCourseItem[] = [];
+      const raw: Object[] = ApiService.extractArray(response.data);
+      for (const one of raw) {
+        items.push(ApiService.parseSuperviseCourse(one));
+      }
+      if (items.length > 0) {
+        return new ApiResponse<SuperviseCourseItem[]>(response.code, response.message, items);
+      }
+    }
+    return new ApiResponse<SuperviseCourseItem[]>(ApiService.OFFLINE_CODE, ApiService.offline(response.message),
+      ApiService.mockSuperviseList());
+  }
+
+  static async getSuperviseMine(): Promise<ApiResponse<SuperviseMineData>> {
+    // supervise/c/a.smali：getStaleListening（已督导）/ getNotListening（未督导）
+    const body: Record<string, Object> = {
+      'userAuthType': Constants.USER_AUTH_TYPE
+    };
+    const staleResponse: ApiResponse<Object> =
+      await HttpClient.post(Api.SUPERVISE_STALE_LISTENING, JSON.stringify(body));
+    const notResponse: ApiResponse<Object> =
+      await HttpClient.post(Api.SUPERVISE_NOT_LISTENING, JSON.stringify(body));
+    const staleOk: boolean = ApiService.isSuccess(staleResponse);
+    const notOk: boolean = ApiService.isSuccess(notResponse);
+    if (staleOk || notOk) {
+      const pastRecords: SuperviseRecordItem[] = [];
+      const futureRecords: SuperviseRecordItem[] = [];
+      if (staleOk) {
+        const raw: Object[] = ApiService.extractArray(staleResponse.data);
+        for (const one of raw) {
+          pastRecords.push(ApiService.parseSuperviseRecord(one, true));
+        }
+      }
+      if (notOk) {
+        const raw: Object[] = ApiService.extractArray(notResponse.data);
+        for (const one of raw) {
+          futureRecords.push(ApiService.parseSuperviseRecord(one, false));
+        }
+      }
+      if (pastRecords.length > 0 || futureRecords.length > 0) {
+        const message: string = staleResponse.message !== '' ? staleResponse.message : notResponse.message;
+        return new ApiResponse<SuperviseMineData>(staleResponse.code, message,
+          new SuperviseMineData(pastRecords, futureRecords));
+      }
+    }
+    const failMessage: string = staleResponse.message !== '' ? staleResponse.message : notResponse.message;
+    return new ApiResponse<SuperviseMineData>(ApiService.OFFLINE_CODE, ApiService.offline(failMessage),
+      ApiService.mockSuperviseMine());
+  }
+
+  // ===== 成绩详情 / 课评（推断端点 + 离线降级） =====
+  static async getScoreDetail(): Promise<ApiResponse<ScoreDetailData>> {
+    const body: Record<string, Object> = {
+      'userAuthType': Constants.USER_AUTH_TYPE
+    };
+    const response: ApiResponse<Object> = await HttpClient.post(Api.SCORE_DETAIL, JSON.stringify(body));
+    if (ApiService.isSuccess(response)) {
+      const rec: Record<string, Object> = ApiService.asRecord(response.data);
+      const detailList: ScoreDetailEntry[] = [];
+      const rawDetails: Object[] = ApiService.extractArray(rec['detailList'] === undefined ?
+        response.data : rec['detailList']);
+      for (const one of rawDetails) {
+        detailList.push(ApiService.parseScoreDetail(one));
+      }
+      const rankList: ScoreRankEntry[] = [];
+      const rawRanks: Object[] = ApiService.extractArray(rec['rankList'] === undefined ? new Object() : rec['rankList']);
+      for (const one of rawRanks) {
+        rankList.push(ApiService.parseScoreRank(one));
+      }
+      const commentList: ScoreCommentEntry[] = [];
+      const rawComments: Object[] = ApiService.extractArray(rec['commentList'] === undefined ?
+        new Object() : rec['commentList']);
+      for (const one of rawComments) {
+        commentList.push(ApiService.parseScoreComment(one));
+      }
+      if (detailList.length > 0 || rankList.length > 0 || commentList.length > 0) {
+        return new ApiResponse<ScoreDetailData>(response.code, response.message,
+          new ScoreDetailData(detailList, rankList, commentList));
+      }
+    }
+    return new ApiResponse<ScoreDetailData>(ApiService.OFFLINE_CODE, ApiService.offline(response.message),
+      ApiService.mockScoreDetail());
+  }
+
+  static async getScoreComments(): Promise<ApiResponse<ScoreCommentEntry[]>> {
+    const body: Record<string, Object> = {
+      'userAuthType': Constants.USER_AUTH_TYPE
+    };
+    const response: ApiResponse<Object> = await HttpClient.post(Api.SCORE_COMMENTS, JSON.stringify(body));
+    if (ApiService.isSuccess(response)) {
+      const items: ScoreCommentEntry[] = [];
+      const raw: Object[] = ApiService.extractArray(response.data);
+      for (const one of raw) {
+        items.push(ApiService.parseScoreComment(one));
+      }
+      if (items.length > 0) {
+        return new ApiResponse<ScoreCommentEntry[]>(response.code, response.message, items);
+      }
+    }
+    return new ApiResponse<ScoreCommentEntry[]>(ApiService.OFFLINE_CODE, ApiService.offline(response.message),
+      ApiService.mockScoreComments());
   }
 
   static async getScoreList(): Promise<ApiResponse<ScoreItem[]>> {
@@ -629,6 +830,74 @@ export class ApiService {
       new AttendanceItem('A6', '体育(三)', '正常', '2026-11-10 10:00', '课堂考勤', '体育馆'),
       new AttendanceItem('A7', '数据库原理', '正常', '2026-11-07 16:00', '课堂考勤', '明德楼408'),
       new AttendanceItem('A8', 'Java程序设计', '迟到', '2026-11-06 19:00', '晚自习考勤', '实训楼305')
+    ];
+    return list;
+  }
+
+  static mockSuperviseList(): SuperviseCourseItem[] {
+    const list: SuperviseCourseItem[] = [
+      new SuperviseCourseItem('1-2节', '高等数学（下）', '数学与统计学院 · 2024级数学与应用数学'),
+      new SuperviseCourseItem('3-4节', '大学英语（四）', '外国语学院 · 2023级英语专业'),
+      new SuperviseCourseItem('6-7节', '数据结构', '计算机学院 · 2024级软件工程'),
+      new SuperviseCourseItem('8-9节', '毛泽东思想和中国特色社会主义理论体系概论', '马克思主义学院 · 2023级思想政治教育'),
+      new SuperviseCourseItem('10-11节', '大学物理（下）', '物理与电子工程学院 · 2024级应用物理学')
+    ];
+    return list;
+  }
+
+  static mockSuperviseMine(): SuperviseMineData {
+    const pastRecords: SuperviseRecordItem[] = [
+      new SuperviseRecordItem('11-09', '周一', '高等数学（下）', '张建国', '明理楼B302', '08:30-10:00', true, '56', '54', 4,
+        '教学目标明确，重点突出；板书规范，推导过程完整。课堂互动稍显不足，建议增加随堂提问环节。'),
+      new SuperviseRecordItem('11-05', '周四', '数据结构', '李慧敏', '计算机楼A215', '14:00-15:40', true, '48', '47', 5,
+        '案例驱动教学，思路清晰，代码演示到位，学生参与度高，整体效果优秀。'),
+      new SuperviseRecordItem('11-02', '周一', '大学英语（四）', '王雪梅', '外语楼208', '10:00-11:40', true, '50', '46', 3,
+        '语音语调标准，课堂氛围活跃；部分学生注意力不集中，建议加强课堂管理。')
+    ];
+    const futureRecords: SuperviseRecordItem[] = [
+      new SuperviseRecordItem('11-16', '周一', '大学物理（下）', '赵国强', '实验楼C105', '16:00-17:40',
+        false, '', '', 0, ''),
+      new SuperviseRecordItem('11-18', '周三', '线性代数', '陈立群', '明理楼B410', '08:00-09:40', false, '', '', 0, ''),
+      new SuperviseRecordItem('11-20', '周五', '教育学原理', '孙美玲', '文科楼302', '14:00-15:40', false, '', '', 0, '')
+    ];
+    return new SuperviseMineData(pastRecords, futureRecords);
+  }
+
+  static mockScoreDetail(): ScoreDetailData {
+    const detailList: ScoreDetailEntry[] = [
+      new ScoreDetailEntry('高等数学（下）', '92', '76.5', '98', '3.2%', '第5名', [
+        new ScoreStatEntry('学分', '5.0'),
+        new ScoreStatEntry('绩点', '4.0'),
+        new ScoreStatEntry('平时成绩', '90'),
+        new ScoreStatEntry('期末成绩', '93')
+      ]),
+      new ScoreDetailEntry('大学英语（四）', '85', '79.8', '96', '1.5%', '第12名', [
+        new ScoreStatEntry('学分', '3.0'),
+        new ScoreStatEntry('绩点', '3.5'),
+        new ScoreStatEntry('平时成绩', '88'),
+        new ScoreStatEntry('期末成绩', '83')
+      ])
+    ];
+    const rankList: ScoreRankEntry[] = [
+      new ScoreRankEntry('1', '李思远', false, '绩点 4.0 / 98分', '32'),
+      new ScoreRankEntry('2', '匿名同学', true, '绩点 3.9 / 96分', '18'),
+      new ScoreRankEntry('5', '我', false, '绩点 4.0 / 92分', '6'),
+      new ScoreRankEntry('8', '王晓明', false, '绩点 3.7 / 90分', '4')
+    ];
+    const commentList: ScoreCommentEntry[] = ApiService.mockScoreComments();
+    return new ScoreDetailData(detailList, rankList, commentList);
+  }
+
+  static mockScoreComments(): ScoreCommentEntry[] {
+    const list: ScoreCommentEntry[] = [
+      new ScoreCommentEntry('张', '张同学', '2026-06-28',
+        '老师讲课很细致，例题覆盖全面，考前把错题过了一遍基本就稳了。'),
+      new ScoreCommentEntry('匿', '匿名同学', '2026-06-30',
+        '平时作业量适中，期末难度比往年低一些，认真复习拿高分不难。'),
+      new ScoreCommentEntry('刘', '刘同学', '2026-07-02',
+        '签到要求比较严，别缺勤；作业按时交，占总评不少。'),
+      new ScoreCommentEntry('陈', '陈同学', '2026-07-05',
+        '课程内容偏理论，建议课前预习一遍课件，上课会轻松很多。')
     ];
     return list;
   }

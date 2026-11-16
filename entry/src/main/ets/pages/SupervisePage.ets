@@ -1,4 +1,8 @@
 import { router } from '@kit.ArkUI';
+import { BusinessError } from '@kit.BasicServicesKit';
+import { ApiService } from '../network/ApiService';
+import { ApiResponse } from '../model/ResponseModel';
+import { SuperviseCourseItem } from '../model/SuperviseModel';
 
 /**
  * 督导主页 — 1:1 复刻自：
@@ -52,6 +56,19 @@ struct SupervisePage {
     new SuperviseItem('10-11节', '大学物理（下）', '物理与电子工程学院 · 2024级应用物理学')
   ];
   @State showTips: boolean = false;
+
+  aboutToAppear(): void {
+    ApiService.getSuperviseList()
+      .then((response: ApiResponse<SuperviseCourseItem[]>) => {
+        if (response.data.length > 0) {
+          this.superviseList = response.data.map((entry: SuperviseCourseItem): SuperviseItem => {
+            return new SuperviseItem(entry.section, entry.courseTitle, entry.majorInfo);
+          });
+        }
+      })
+      .catch((error: BusinessError) => {
+      });
+  }
 
   private toggleWeekDay(target: SuperviseWeekDay): void {
     this.weekDays = this.weekDays.map((day: SuperviseWeekDay): SuperviseWeekDay => {
@@ -199,7 +216,7 @@ struct SupervisePage {
               .alignItems(VerticalAlign.Center)
               .backgroundColor($r('app.color.main_bg'))
             }
-          }, (item: SuperviseItem) => item.section)
+          }, (item: SuperviseItem) => item.section + '_' + item.courseTitle)
         }
         .width('100%')
         .height('100%')

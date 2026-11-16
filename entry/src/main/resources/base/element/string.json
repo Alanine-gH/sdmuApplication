@@ -31,6 +31,322 @@
     {
       "name": "approximate_location_reason",
       "value": "用于获取大致位置信息"
+    },
+    {
+      "name": "school_account",
+      "value": "请输入您的账号"
+    },
+    {
+      "name": "password",
+      "value": "请输入您的密码"
+    },
+    {
+      "name": "login_label",
+      "value": "登录"
+    },
+    {
+      "name": "privacy_agree",
+      "value": "同意"
+    },
+    {
+      "name": "privacy_policy",
+      "value": "《隐私政策》"
+    },
+    {
+      "name": "service_policy",
+      "value": "《服务协议》"
+    },
+    {
+      "name": "privacy_and",
+      "value": "和"
+    },
+    {
+      "name": "report_noun",
+      "value": "报告"
+    },
+    {
+      "name": "app_label",
+      "value": "应用"
+    },
+    {
+      "name": "school_community",
+      "value": "校圈"
+    },
+    {
+      "name": "my",
+      "value": "我的"
+    },
+    {
+      "name": "logout",
+      "value": "退出登录"
+    },
+    {
+      "name": "mobile_campus_file_manage",
+      "value": "下载文件管理"
+    },
+    {
+      "name": "mobile_campus_setting",
+      "value": "设置"
+    },
+    {
+      "name": "mine_title",
+      "value": "我的"
+    },
+    {
+      "name": "download_address",
+      "value": "下载地址"
+    },
+    {
+      "name": "modify_password",
+      "value": "修改密码"
+    },
+    {
+      "name": "opinion_feedback",
+      "value": "意见反馈"
+    },
+    {
+      "name": "home_tab",
+      "value": "首页"
+    },
+    {
+      "name": "timetable",
+      "value": "课表"
+    },
+    {
+      "name": "schedule_page",
+      "value": "我的课表"
+    },
+    {
+      "name": "score_page",
+      "value": "我的成绩"
+    },
+    {
+      "name": "exam_page",
+      "value": "考试安排"
+    },
+    {
+      "name": "contact_page",
+      "value": "通讯录"
+    },
+    {
+      "name": "attendance_page",
+      "value": "考勤记录"
+    },
+    {
+      "name": "meeting_page",
+      "value": "会议"
+    },
+    {
+      "name": "todo_page",
+      "value": "待办事项"
+    },
+    {
+      "name": "news_page",
+      "value": "新闻公告"
+    },
+    {
+      "name": "personal_detail",
+      "value": "个人资料"
+    },
+    {
+      "name": "news_center_title",
+      "value": "动态"
+    },
+    {
+      "name": "view_more",
+      "value": "查看更多"
+    },
+    {
+      "name": "news_detail_title",
+      "value": "资讯"
+    },
+    {
+      "name": "contact_search_hint",
+      "value": "输入姓名、电话号码搜索"
+    },
+    {
+      "name": "contact_yellow_page",
+      "value": "校园黄页"
+    },
+    {
+      "name": "make_a_call",
+      "value": "打电话"
+    },
+    {
+      "name": "common_phone_section",
+      "value": "常用电话"
+    },
+    {
+      "name": "meeting_main_title",
+      "value": "会议安排"
+    },
+    {
+      "name": "meeting_topic",
+      "value": "会议主题"
+    },
+    {
+      "name": "meeting_time",
+      "value": "会议时间"
+    },
+    {
+      "name": "meeting_local",
+      "value": "会议地点"
+    },
+    {
+      "name": "meeting_compere_person",
+      "value": "会议主持"
+    },
+    {
+      "name": "meeting_must_attend",
+      "value": "必须参加"
+    },
+    {
+      "name": "meeting_report_tag",
+      "value": "报告"
+    },
+    {
+      "name": "meeting_staff_situation",
+      "value": "查看参会情况"
+    },
+    {
+      "name": "meeting_expand",
+      "value": "展开"
+    },
+    {
+      "name": "meeting_collapse",
+      "value": "收起"
+    },
+    {
+      "name": "meeting_no_file",
+      "value": "暂无附件"
+    },
+    {
+      "name": "todo_search_hint",
+      "value": "输入标题进行搜索..."
+    },
+    {
+      "name": "todo_sort_all",
+      "value": "全部"
+    },
+    {
+      "name": "todo_tab_all",
+      "value": "全部"
+    },
+    {
+      "name": "todo_tab_undo",
+      "value": "待办"
+    },
+    {
+      "name": "todo_tab_done",
+      "value": "已办"
+    },
+    {
+      "name": "todo_empty_text",
+      "value": "暂无待办事务"
+    },
+    {
+      "name": "true_name",
+      "value": "姓名"
+    },
+    {
+      "name": "academy",
+      "value": "学院"
+    },
+    {
+      "name": "profession",
+      "value": "专业"
+    },
+    {
+      "name": "student_class",
+      "value": "班级"
+    },
+    {
+      "name": "note",
+      "value": "备注"
+    },
+    {
+      "name": "follow",
+      "value": "关注"
+    },
+    {
+      "name": "meeting_attach_label",
+      "value": "会议材料"
+    },
+    {
+      "name": "remain",
+      "value": "剩余"
+    },
+    {
+      "name": "day",
+      "value": "天"
+    },
+    {
+      "name": "examination_my_exam_tag",
+      "value": "教务提供"
+    },
+    {
+      "name": "score_view_detail",
+      "value": "查看学生具体成绩"
+    },
+    {
+      "name": "timetable_empty",
+      "value": "无课程安排"
+    },
+    {
+      "name": "schedule_current_week",
+      "value": "当前周"
+    },
+    {
+      "name": "attendance_tab_detail",
+      "value": "考勤详情"
+    },
+    {
+      "name": "attendance_tab_stats",
+      "value": "考勤统计"
+    },
+    {
+      "name": "icampus_today_course_title",
+      "value": "今日课表"
+    },
+    {
+      "name": "schedule_module_title",
+      "value": "我的日程"
+    },
+    {
+      "name": "schedule_empty_text",
+      "value": "暂未添加日程"
+    },
+    {
+      "name": "campus_apps_title",
+      "value": "校园应用"
+    },
+    {
+      "name": "usage_add_desktop",
+      "value": "添加至桌面"
+    },
+    {
+      "name": "ioffice_message_title",
+      "value": "消息通知"
+    },
+    {
+      "name": "ioffice_oa_notice_title",
+      "value": "OA通知"
+    },
+    {
+      "name": "ioffice_office_hall_title",
+      "value": "办事大厅"
+    },
+    {
+      "name": "no_data_text",
+      "value": "暂无数据"
+    },
+    {
+      "name": "publish_date_label",
+      "value": "发布日期："
+    },
+    {
+      "name": "schedule_importance_tag",
+      "value": "重要"
     }
   ]
 }

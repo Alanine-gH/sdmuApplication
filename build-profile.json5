@@ -1,6 +1,20 @@
 {
   "app": {
-    "signingConfigs": [],
+    "signingConfigs": [
+      {
+        "name": "default",
+        "type": "HarmonyOS",
+        "material": {
+          "certpath": "C:\\Users\\Administrator\\.ohos\\config\\default_sdmuApplication_NLFw7veBde7CAAE-NoTm21BoOAlGw57bsuVn_DAdhS8=.cer",
+          "keyAlias": "debugKey",
+          "keyPassword": "0000001BA31D662A48554ECFEC147F43DB00C2529134D03ADBF39CC938E8FDEF230F755E96CFFED6C03A0C",
+          "profile": "C:\\Users\\Administrator\\.ohos\\config\\default_sdmuApplication_NLFw7veBde7CAAE-NoTm21BoOAlGw57bsuVn_DAdhS8=.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "C:\\Users\\Administrator\\.ohos\\config\\default_sdmuApplication_NLFw7veBde7CAAE-NoTm21BoOAlGw57bsuVn_DAdhS8=.p12",
+          "storePassword": "0000001BCA6759770FDE34F15CF758AC77FB972FA94A7A577810D893C443BB502FF0095E85916F9A947FD1"
+        }
+      }
+    ],
     "products": [
       {
         "name": "default",

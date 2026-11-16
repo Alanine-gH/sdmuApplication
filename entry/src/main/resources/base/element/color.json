@@ -6,15 +6,15 @@
     },
     {
       "name": "sdmu_primary",
-      "value": "#1677FF"
+      "value": "#97000C"
     },
     {
       "name": "sdmu_primary_dark",
-      "value": "#0958D9"
+      "value": "#97000C"
     },
     {
       "name": "sdmu_bg",
-      "value": "#F5F6F8"
+      "value": "#F2F2F2"
     },
     {
       "name": "sdmu_card_bg",
@@ -26,7 +26,7 @@
     },
     {
       "name": "sdmu_text_secondary",
-      "value": "#666666"
+      "value": "#555555"
     },
     {
       "name": "sdmu_text_hint",
@@ -34,7 +34,7 @@
     },
     {
       "name": "sdmu_divider",
-      "value": "#EEEEEE"
+      "value": "#E7E7E7"
     },
     {
       "name": "sdmu_success",
@@ -46,7 +46,319 @@
     },
     {
       "name": "sdmu_danger",
-      "value": "#FF4D4F"
+      "value": "#E96161"
+    },
+    {
+      "name": "mobile_campus_primary_color",
+      "value": "#97000C"
+    },
+    {
+      "name": "main_bg",
+      "value": "#FFFFFF"
+    },
+    {
+      "name": "mobile_campus_bg_color",
+      "value": "#F2F2F2"
+    },
+    {
+      "name": "common_color_1",
+      "value": "#333333"
+    },
+    {
+      "name": "common_color_2",
+      "value": "#555555"
+    },
+    {
+      "name": "common_color_3",
+      "value": "#999999"
+    },
+    {
+      "name": "common_color_5",
+      "value": "#E7E7E7"
+    },
+    {
+      "name": "ybg_blue",
+      "value": "#18B4ED"
+    },
+    {
+      "name": "login_divider",
+      "value": "#E5E5E5"
+    },
+    {
+      "name": "user_job_gray",
+      "value": "#7D7D7D"
+    },
+    {
+      "name": "logout_red",
+      "value": "#E96161"
+    },
+    {
+      "name": "tab_unselected",
+      "value": "#808080"
+    },
+    {
+      "name": "menu_divider",
+      "value": "#DFE4EA"
+    },
+    {
+      "name": "white",
+      "value": "#FFFFFF"
+    },
+    {
+      "name": "common_color_6",
+      "value": "#F2F2F2"
+    },
+    {
+      "name": "common_color_24",
+      "value": "#CCCCCC"
+    },
+    {
+      "name": "blue_default",
+      "value": "#1B68B7"
+    },
+    {
+      "name": "ybg_dark_blue",
+      "value": "#295998"
+    },
+    {
+      "name": "explain_color",
+      "value": "#999999"
+    },
+    {
+      "name": "update_dialog_divider",
+      "value": "#E0E0E0"
+    },
+    {
+      "name": "hint_color_4",
+      "value": "#CECECE"
+    },
+    {
+      "name": "black",
+      "value": "#000000"
+    },
+    {
+      "name": "common_color_4",
+      "value": "#CECECE"
+    },
+    {
+      "name": "mobile_campus_center_news_green",
+      "value": "#7DEEAE"
+    },
+    {
+      "name": "news_list_item_divider",
+      "value": "#F5F5F5"
+    },
+    {
+      "name": "mobile_campus_banner_title_bg",
+      "value": "#B2FFFFFF"
+    },
+    {
+      "name": "mobile_campus_contact_search_hint",
+      "value": "#B2BDC8"
+    },
+    {
+      "name": "mobile_campus_contact_search_border",
+      "value": "#DADBDF"
+    },
+    {
+      "name": "mobile_campus_todo_empty_text",
+      "value": "#8F9FAF"
+    },
+    {
+      "name": "mobile_campus_meeting_must_attend_text",
+      "value": "#C80D28"
+    },
+    {
+      "name": "mobile_campus_meeting_must_attend_border",
+      "value": "#E20909"
+    },
+    {
+      "name": "mobile_campus_primary_color_default",
+      "value": "#1B68B7"
+    },
+    {
+      "name": "mobile_campus_contact_phone_text",
+      "value": "#1B68B7"
+    },
+    {
+      "name": "mobile_campus_todo_tag_red",
+      "value": "#C80D28"
+    },
+    {
+      "name": "mobile_campus_todo_tag_blue",
+      "value": "#1B68B7"
+    },
+    {
+      "name": "mobile_campus_todo_tag_green",
+      "value": "#52C41A"
+    },
+    {
+      "name": "mobile_campus_todo_tag_orange",
+      "value": "#FAAD14"
+    },
+    {
+      "name": "common_color_7",
+      "value": "#18B4ED"
+    },
+    {
+      "name": "common_color_31",
+      "value": "#666666"
+    },
+    {
+      "name": "common_color_33",
+      "value": "#D0D0D0"
+    },
+    {
+      "name": "mobile_campus_score_common_color1",
+      "value": "#3267B1"
+    },
+    {
+      "name": "ybg_grey",
+      "value": "#747474"
+    },
+    {
+      "name": "attendance_enable_color",
+      "value": "#388CFC"
+    },
+    {
+      "name": "attendance_tag_bg",
+      "value": "#DDECFF"
+    },
+    {
+      "name": "timetable_empty_color",
+      "value": "#8F9FAF"
+    },
+    {
+      "name": "mobile_campus_schedule_color6",
+      "value": "#3A3A3A"
+    },
+    {
+      "name": "mobile_campus_schedule_color7",
+      "value": "#FF6C6C"
+    },
+    {
+      "name": "mobile_campus_schedule_color8",
+      "value": "#57C06B"
+    },
+    {
+      "name": "mobile_campus_schedule_color9",
+      "value": "#1B68B7"
+    },
+    {
+      "name": "mobile_campus_schedule_color11",
+      "value": "#696969"
+    },
+    {
+      "name": "mobile_campus_schedule_color17",
+      "value": "#67B438"
+    },
+    {
+      "name": "mobile_campus_schedule_color19",
+      "value": "#EDF2F7"
+    },
+    {
+      "name": "oa_issue_blue",
+      "value": "#3A92ED"
+    },
+    {
+      "name": "oa_issue_group_title",
+      "value": "#A9A9A9"
+    },
+    {
+      "name": "oa_issue_group_bg",
+      "value": "#F1F1F1"
+    },
+    {
+      "name": "oa_issue_delete_red",
+      "value": "#E60012"
+    },
+    {
+      "name": "mobile_campus_push_bg",
+      "value": "#EEF6FF"
+    },
+    {
+      "name": "mobile_campus_push_text",
+      "value": "#587494"
+    },
+    {
+      "name": "mobile_campus_exam_card_bg",
+      "value": "#F5F7FA"
+    },
+    {
+      "name": "mobile_campus_exam_text",
+      "value": "#5C5C5C"
+    },
+    {
+      "name": "mobile_campus_schedule_color2",
+      "value": "#B2BDC9"
+    },
+    {
+      "name": "mobile_campus_schedule_important",
+      "value": "#FF5151"
+    },
+    {
+      "name": "mobile_campus_schedule_text",
+      "value": "#5D5D5D"
+    },
+    {
+      "name": "mobile_campus_unify_todo_empty_text",
+      "value": "#BBD2E3"
+    },
+    {
+      "name": "mobile_campus_todo_unread",
+      "value": "#FF0000"
+    },
+    {
+      "name": "edit_hint_color",
+      "value": "#B8C0C9"
+    },
+    {
+      "name": "mobile_campus_schedule_confirm_blue",
+      "value": "#1B68B6"
+    },
+    {
+      "name": "ybg_orange",
+      "value": "#FF8900"
+    },
+    {
+      "name": "timetable_per_blue",
+      "value": "#52BEFF"
+    },
+    {
+      "name": "timetable_per_red",
+      "value": "#FF9999"
+    },
+    {
+      "name": "ybg_white",
+      "value": "#FFFFFF"
+    },
+    {
+      "name": "score_rank_red",
+      "value": "#FF6161"
+    },
+    {
+      "name": "mobile_campus_school_introduction_background_color",
+      "value": "#537DE3"
+    },
+    {
+      "name": "mobile_campus_school_song_background_color",
+      "value": "#C2C2C2"
+    },
+    {
+      "name": "mobile_campus_school_motto_background_color",
+      "value": "#DAC267"
+    },
+    {
+      "name": "mobile_campus_school_college_background_color",
+      "value": "#CFAF6B"
+    },
+    {
+      "name": "mobile_campus_school_logo_background_color",
+      "value": "#7CA7D3"
+    },
+    {
+      "name": "mobile_campus_school_history_background_color",
+      "value": "#B6B6B6"
     }
   ]
 }
