@@ -69,8 +69,8 @@ export class CryptoUtil {
   static async encryptRSA(plain: string, publicKeyB64: string): Promise<string> {
     const asyKeyGenerator: cryptoFramework.AsyKeyGenerator = cryptoFramework.createAsyKeyGenerator('RSA1024');
     const pubBlob: cryptoFramework.DataBlob = { data: CryptoUtil.base64ToBytes(publicKeyB64) };
-    const emptyBlob: cryptoFramework.DataBlob = { data: new Uint8Array() };
-    const keyPair: cryptoFramework.KeyPair = await asyKeyGenerator.convertKey(emptyBlob, pubBlob);
+    // 私钥传null（只有公钥，官方范例convertKey(pubKeyBlob, null)）
+    const keyPair: cryptoFramework.KeyPair = await asyKeyGenerator.convertKey(pubBlob, null);
     const cipher: cryptoFramework.Cipher = cryptoFramework.createCipher('RSA1024|PKCS1');
     cipher.initSync(cryptoFramework.CryptoMode.ENCRYPT_MODE, keyPair.pubKey, null);
     const plainBlob: cryptoFramework.DataBlob = { data: CryptoUtil.stringToBytes(plain) };
@@ -87,5 +87,6 @@ export class CryptoUtil {
     return CryptoUtil.encryptRSA(json, Constants.RSA_PUBLIC_KEY);
   }
 }
+
 
 
