@@ -17,6 +17,10 @@ export class Constants {
   static readonly UNIQUE_CODE: string = 'd6b720d3-5784-4a32-b7f9-6a1d17b0a666';
   static readonly DEVICE_ID: string = '141ffcc5e67bf4a5';
   static readonly DEVICE_MODEL: string = '25060RK16C';
+  /** RSA-1024公钥（服务器 /open/security/asym/key Asym-Key:public 下发，与内存提取一致） */
+  static readonly RSA_PUBLIC_KEY: string = 'MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCAYYAF5a/+WuXTf3COIrH/Rtxy5qN3fr5hIlIAo3KpfudqooJuG4KpCjscpvmUvIelpbL88qPvqZn4yswnGPQqCyUKCzvaQ4LwxvyyMiGBhITYH2oELV4rZm9IJplbU7gqpkz/5o/Ysqe/qYaMUblxjt4f3X+FBFVBOCHRJ+m6YQIDAQAB';
+  /** key协商接口（GetKeyUtil.java 复刻） */
+  static readonly NEGOTIATE_PATH: string = '/mobileapi_ydxy/open/security/asym/key';
   static readonly PREF_NAME: string = 'sdmu_prefs';
   static readonly KEY_TOKEN: string = 'token';
   static readonly KEY_USER_ID: string = 'userId';
