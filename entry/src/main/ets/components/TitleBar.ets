@@ -1,7 +1,10 @@
 import { router } from '@kit.ArkUI';
 
 /**
- * 通用标题栏：左侧可选返回按钮 + 居中标题，底部细分隔线。
+ * 通用标题栏 — 1:1 复刻 toolbar_normal.xml
+ * 结构：LinearLayout 45vp 高（白底 main_bg）
+ *   - Toolbar 44vp：左侧返回、中央标题 16fp(px_to_dip_32/2) common_color_1 居中 maxLength 18
+ *   - divider_horizontal_grey_thin 细分隔线 0.5vp
  */
 @Component
 export struct TitleBar {
@@ -9,35 +12,47 @@ export struct TitleBar {
   @Prop showBack: boolean = true;
 
   build() {
-    Row() {
-      if (this.showBack) {
-        Text('＜')
-          .fontSize(22)
-          .fontColor($r('app.color.sdmu_text_primary'))
-          .width(40)
-          .height('100%')
+    Column() {
+      Row() {
+        if (this.showBack) {
+          Text('＜')
+            .fontSize(16)
+            .fontColor($r('app.color.common_color_1'))
+            .width(40)
+            .height('100%')
+            .textAlign(TextAlign.Center)
+            .margin({ left: 15 })
+            .onClick(() => {
+              router.back();
+            })
+        }
+        Text(this.title)
+          .fontSize(16)
+          .fontColor($r('app.color.common_color_1'))
+          .layoutWeight(1)
           .textAlign(TextAlign.Center)
-          .onClick(() => {
-            router.back();
-          })
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        if (this.showBack) {
+          Blank()
+            .width(40)
+        } else {
+          Blank()
+            .width(16)
+        }
       }
-      Text(this.title)
-        .fontSize(18)
-        .fontWeight(FontWeight.Bold)
-        .fontColor($r('app.color.sdmu_text_primary'))
-        .layoutWeight(1)
-        .textAlign(TextAlign.Center)
-        .maxLines(1)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
-      if (this.showBack) {
-        Blank().width(40)
-      } else {
-        Blank().width(16)
-      }
+      .width('100%')
+      .height(44)
+      .alignItems(VerticalAlign.Center)
+      .backgroundColor($r('app.color.main_bg'))
+
+      Divider()
+        .color($r('app.color.common_color_5'))
+        .strokeWidth(0.5)
+        .width('100%')
     }
     .width('100%')
-    .height(50)
-    .backgroundColor($r('app.color.sdmu_card_bg'))
-    .border({ width: { bottom: 1 }, color: $r('app.color.sdmu_divider') })
+    .height(45)
+    .backgroundColor($r('app.color.main_bg'))
   }
 }

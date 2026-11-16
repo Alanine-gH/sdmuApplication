@@ -1,3 +1,6 @@
+import { HttpClient } from './HttpClient';
+import { Api } from './Api';
+import { Constants } from '../data/Constants';
 import { ApiResponse } from '../model/ResponseModel';
 import { UserInfo } from '../model/UserModel';
 import { NewsItem } from '../model/NewsModel';
@@ -9,25 +12,469 @@ import { MeetingItem } from '../model/MeetingModel';
 import { AttendanceItem } from '../model/AttendanceModel';
 
 /**
- * API 服务层：当前服务器不可达，所有方法直接返回本地模拟数据（成功状态）。
- * 保留 HttpClient 引用供后续真实接入时替换。
+ * API 服务层 — 真实 HTTP 接入（POST https://portal.ly-sky.com）。
+ * 端点提取自反编译 smali（module/main/g/g.smali、h.smali），通讯录/会议等模块原始实现为 H5 路由，
+ * 未提取到 REST 常量，按 /ly-pd-mb/<module>/api/... 模式推断。
+ * 离线降级：网络失败/响应不合法时返回本地模拟数据，code = -1 且 message 以“离线数据”标记，保证应用不白屏。
  */
 export class ApiService {
+  private static readonly OFFLINE_CODE: number = -1;
+
+  // ===== 通用工具 =====
+  static isSuccess(resp: ApiResponse<Object>): boolean {
+    return resp.code === 0 || resp.code === 200;
+  }
+
+  static offline(message: string): string {
+    return '离线数据: ' + message;
+  }
+
+  static asRecord(data: Object): Record<string, Object> {
+    if (data === null || data === undefined || typeof data !== 'object') {
+      return {} as Record<string, Object>;
+    }
+    return data as Record<string, Object>;
+  }
+
+  static pick(rec: Record<string, Object>, keys: string[]): string {
+    for (const key of keys) {
+      const v: Object = rec[key];
+      if (typeof v === 'string') {
+        return v as string;
+      }
+      if (typeof v === 'number') {
+        return String(v as number);
+      }
+    }
+    return '';
+  }
+
+  static pickNumber(rec: Record<string, Object>, keys: string[]): number {
+    for (const key of keys) {
+      const v: Object = rec[key];
+      if (typeof v === 'number') {
+        return v as number;
+      }
+      if (typeof v === 'string') {
+        const n: number = Number(v as string);
+        if (!Number.isNaN(n)) {
+          return n;
+        }
+      }
+    }
+    return 0;
+  }
+
+  static extractArray(data: Object): Object[] {
+    if (data === null || data === undefined) {
+      return [];
+    }
+    if (Array.isArray(data)) {
+      return data as Object[];
+    }
+    const rec: Record<string, Object> = ApiService.asRecord(data);
+    const listKeys: string[] = ['list', 'rows', 'records', 'datas', 'data', 'content', 'todoList'];
+    for (const key of listKeys) {
+      const v: Object = rec[key];
+      if (Array.isArray(v)) {
+        return v as Object[];
+      }
+    }
+    return [];
+  }
+
+  // ===== 实体解析（按 smali Gson 模型字段推断） =====
+  static parseUser(data: Object): UserInfo {
+    const rec: Record<string, Object> = ApiService.asRecord(data);
+    return new UserInfo(
+      ApiService.pick(rec, ['userId', 'id', 'yyid']),
+      ApiService.pick(rec, ['name', 'trueName', 'userName']),
+      ApiService.pick(rec, ['studentNo', 'studentId', 'userNo']),
+      ApiService.pick(rec, ['className', 'class']),
+      ApiService.pick(rec, ['academy', 'college', 'department']),
+      ApiService.pick(rec, ['profession', 'major']),
+      ApiService.pick(rec, ['grade']),
+      ApiService.pick(rec, ['mobile', 'phone', 'tel']),
+      ApiService.pick(rec, ['email', 'mail']),
+      ApiService.pick(rec, ['avatar', 'photoUrl']),
+      ApiService.pick(rec, ['token', 'accessToken'])
+    );
+  }
+
+  static parseNews(data: Object): NewsItem {
+    const rec: Record<string, Object> = ApiService.asRecord(data);
+    return new NewsItem(
+      ApiService.pick(rec, ['id', 'inforId']),
+      ApiService.pick(rec, ['title', 'inforTile']),
+      ApiService.pick(rec, ['brief', 'summary', 'subTitle']),
+      ApiService.pick(rec, ['content', 'infoContent']),
+      ApiService.pick(rec, ['sourceName', 'source', 'author']),
+      ApiService.pick(rec, ['publishTime', 'createTime', 'time']),
+      ApiService.pick(rec, ['url']),
+      ApiService.pick(rec, ['imageUrl', 'coverUrl', 'picUrl']),
+      ApiService.pick(rec, ['columnId', 'inforType', 'category'])
+    );
+  }
+
+  static parseTodo(data: Object): TodoItem {
+    const rec: Record<string, Object> = ApiService.asRecord(data);
+    // UnifyTodoBean: todoId/title/state/sourceCode/arrivalTime/nodeName/applyPeopleName/url
+    const state: string = ApiService.pick(rec, ['state', 'status', 'todoState']);
+    let status: string = '0';
+    if (state === '1' || state === 'done' || state === '2' || state === 'end') {
+      status = '1';
+    }
+    const arrival: string = ApiService.pick(rec, ['arrivalTime', 'reachTime', 'time']);
+    return new TodoItem(
+      ApiService.pick(rec, ['todoId', 'id']),
+      ApiService.pick(rec, ['title', 'todoTitle']),
+      status,
+      ApiService.pick(rec, ['sourceCode', 'isDyOrYy']),
+      arrival,
+      ApiService.pick(rec, ['nodeName', 'currentNode']),
+      ApiService.pick(rec, ['applyPeopleName', 'applyPeople', 'fromUser']),
+      ApiService.pick(rec, ['url', 'content'])
+    );
+  }
+
+  static parseContact(data: Object): ContactItem {
+    const rec: Record<string, Object> = ApiService.asRecord(data);
+    return new ContactItem(
+      ApiService.pick(rec, ['id', 'contactId', 'userId']),
+      ApiService.pick(rec, ['name', 'teacherName', 'userName']),
+      ApiService.pick(rec, ['department', 'deptName', 'academy']),
+      ApiService.pick(rec, ['phone', 'mobile', 'tel']),
+      ApiService.pick(rec, ['email', 'mail']),
+      ApiService.pick(rec, ['position', 'career', 'duty']),
+      ApiService.pick(rec, ['avatar', 'photoUrl'])
+    );
+  }
+
+  static parseMeeting(data: Object): MeetingItem {
+    const rec: Record<string, Object> = ApiService.asRecord(data);
+    const state: string = ApiService.pick(rec, ['state', 'status', 'meetingState']);
+    let status: string = '0';
+    if (state === '1' || state === 'ing' || state === 'doing') {
+      status = '1';
+    } else if (state === '2' || state === 'end' || state === 'over') {
+      status = '2';
+    }
+    return new MeetingItem(
+      ApiService.pick(rec, ['id', 'meetingId', 'weekPlanId']),
+      ApiService.pick(rec, ['title', 'topic', 'meetingTitle']),
+      ApiService.pick(rec, ['time', 'startTime', 'meetingTime']),
+      ApiService.pick(rec, ['location', 'local', 'address']),
+      status,
+      ApiService.pick(rec, ['organizer', 'compereName', 'createName']),
+      ApiService.pick(rec, ['content', 'description', 'detail'])
+    );
+  }
+
+  static parseScore(data: Object): ScoreItem {
+    const rec: Record<string, Object> = ApiService.asRecord(data);
+    return new ScoreItem(
+      ApiService.pick(rec, ['id', 'scoreId']),
+      ApiService.pick(rec, ['name', 'courseName']),
+      ApiService.pickNumber(rec, ['score', 'totalScore']),
+      ApiService.pickNumber(rec, ['credit', 'credits']),
+      ApiService.pickNumber(rec, ['creditPoint', 'gpa']),
+      ApiService.pick(rec, ['term', 'schoolYear', 'xnxq']),
+      ApiService.pick(rec, ['type', 'courseType'])
+    );
+  }
+
+  static parseExam(data: Object): ExamItem {
+    const rec: Record<string, Object> = ApiService.asRecord(data);
+    return new ExamItem(
+      ApiService.pick(rec, ['id', 'examId']),
+      ApiService.pick(rec, ['name', 'courseName']),
+      ApiService.pick(rec, ['time', 'examTime', 'startTime']),
+      ApiService.pick(rec, ['location', 'examPlace', 'place']),
+      ApiService.pick(rec, ['type', 'examType'])
+    );
+  }
+
+  static parseCourse(data: Object): CourseItem {
+    const rec: Record<string, Object> = ApiService.asRecord(data);
+    return new CourseItem(
+      ApiService.pick(rec, ['id', 'courseId']),
+      ApiService.pick(rec, ['name', 'courseName', 'kcmc']),
+      ApiService.pick(rec, ['teacher', 'teacherName', 'jsxm']),
+      ApiService.pick(rec, ['place', 'classRoom', 'jsmc']),
+      ApiService.pick(rec, ['weeks', 'weekRange', 'zcd']),
+      ApiService.pickNumber(rec, ['day', 'weekDay', 'xqj']),
+      ApiService.pickNumber(rec, ['startNode', 'startSection', 'jc']),
+      ApiService.pickNumber(rec, ['endNode', 'endSection']),
+      ApiService.pickNumber(rec, ['credit', 'credits', 'xf']),
+      ApiService.pick(rec, ['type', 'courseType', 'kcxz'])
+    );
+  }
+
+  static parseAttendance(data: Object): AttendanceItem {
+    const rec: Record<string, Object> = ApiService.asRecord(data);
+    return new AttendanceItem(
+      ApiService.pick(rec, ['id', 'attendanceId']),
+      ApiService.pick(rec, ['name', 'courseName']),
+      ApiService.pick(rec, ['status', 'state', 'attendState']),
+      ApiService.pick(rec, ['time', 'createTime', 'checkTime']),
+      ApiService.pick(rec, ['type', 'attendType']),
+      ApiService.pick(rec, ['location', 'place', 'classRoom'])
+    );
+  }
+
+  // ===== 登录 / 用户 =====
   static async login(account: string, password: string): Promise<ApiResponse<UserInfo>> {
-    const user: UserInfo = new UserInfo(
-      'U20230001', '张明理', '20230001', '计算机2301班', '信息工程学院', '计算机科学与技术', '2023级',
-      '13800001234', 'zhangml@sdmu.edu.cn', '', 'mock-token-' + account);
-    return new ApiResponse<UserInfo>(0, 'success', user);
+    const body: Record<string, Object> = {
+      'account': account,
+      'password': password,
+      'userAuthType': Constants.USER_AUTH_TYPE
+    };
+    const response: ApiResponse<Object> = await HttpClient.post(Api.LOGIN, JSON.stringify(body));
+    if (ApiService.isSuccess(response)) {
+      const user: UserInfo = ApiService.parseUser(response.data);
+      if (user.name !== '') {
+        return new ApiResponse<UserInfo>(response.code, response.message, user);
+      }
+    }
+    return new ApiResponse<UserInfo>(ApiService.OFFLINE_CODE, ApiService.offline(response.message),
+      ApiService.mockUser(account));
   }
 
   static async getUserInfo(userId: string): Promise<ApiResponse<UserInfo>> {
-    const user: UserInfo = new UserInfo(
-      userId, '张明理', '20230001', '计算机2301班', '信息工程学院', '计算机科学与技术', '2023级',
-      '13800001234', 'zhangml@sdmu.edu.cn', '', 'mock-token');
-    return new ApiResponse<UserInfo>(0, 'success', user);
+    const body: Record<string, Object> = {
+      'yyid': userId,
+      'userAuthType': Constants.USER_AUTH_TYPE
+    };
+    const response: ApiResponse<Object> = await HttpClient.post(Api.USER_INFO, JSON.stringify(body));
+    if (ApiService.isSuccess(response)) {
+      const user: UserInfo = ApiService.parseUser(response.data);
+      if (user.name !== '') {
+        return new ApiResponse<UserInfo>(response.code, response.message, user);
+      }
+    }
+    return new ApiResponse<UserInfo>(ApiService.OFFLINE_CODE, ApiService.offline(response.message),
+      ApiService.mockUser('20230001'));
   }
 
+  // ===== 新闻（真实端点 /ly-pd-mb/information/api/information/*） =====
   static async getNewsList(): Promise<ApiResponse<NewsItem[]>> {
+    const body: Record<string, Object> = {
+      'type': '2',
+      'page': 1,
+      'size': 20,
+      'userAuthType': Constants.USER_AUTH_TYPE
+    };
+    const response: ApiResponse<Object> = await HttpClient.post(Api.NEWS_LIST, JSON.stringify(body));
+    if (ApiService.isSuccess(response)) {
+      const items: NewsItem[] = [];
+      const raw: Object[] = ApiService.extractArray(response.data);
+      for (const one of raw) {
+        items.push(ApiService.parseNews(one));
+      }
+      if (items.length > 0) {
+        return new ApiResponse<NewsItem[]>(response.code, response.message, items);
+      }
+    }
+    return new ApiResponse<NewsItem[]>(ApiService.OFFLINE_CODE, ApiService.offline(response.message),
+      ApiService.mockNewsList());
+  }
+
+  static async getNewsDetail(id: string): Promise<ApiResponse<NewsItem>> {
+    const body: Record<string, Object> = {
+      'id': id,
+      'type': '2',
+      'userAuthType': Constants.USER_AUTH_TYPE
+    };
+    const response: ApiResponse<Object> = await HttpClient.post(Api.NEWS_DETAIL, JSON.stringify(body));
+    if (ApiService.isSuccess(response)) {
+      const detail: NewsItem = ApiService.parseNews(response.data);
+      if (detail.title !== '') {
+        return new ApiResponse<NewsItem>(response.code, response.message, detail);
+      }
+    }
+    return new ApiResponse<NewsItem>(ApiService.OFFLINE_CODE, ApiService.offline(response.message),
+      ApiService.mockNewsDetail(id));
+  }
+
+  // ===== 待办（真实端点 /ly-pd-mb/todo/api/todo/client/*） =====
+  static async getTodoList(): Promise<ApiResponse<TodoItem[]>> {
+    const body: Record<string, Object> = {
+      'keyWord': '',
+      'page': 1,
+      'pageSize': 20,
+      'sourceCode': '',
+      'todoType': '',
+      'userAuthType': Constants.USER_AUTH_TYPE
+    };
+    const response: ApiResponse<Object> = await HttpClient.post(Api.TODO_LIST, JSON.stringify(body));
+    if (ApiService.isSuccess(response)) {
+      const items: TodoItem[] = [];
+      const raw: Object[] = ApiService.extractArray(response.data);
+      for (const one of raw) {
+        items.push(ApiService.parseTodo(one));
+      }
+      if (items.length > 0) {
+        return new ApiResponse<TodoItem[]>(response.code, response.message, items);
+      }
+    }
+    return new ApiResponse<TodoItem[]>(ApiService.OFFLINE_CODE, ApiService.offline(response.message),
+      ApiService.mockTodoList());
+  }
+
+  static async getTodoTabCount(sourceCode: string): Promise<ApiResponse<Object>> {
+    const body: Record<string, Object> = {
+      'sourceCode': sourceCode,
+      'userAuthType': Constants.USER_AUTH_TYPE
+    };
+    return HttpClient.post(Api.TODO_TAB_COUNT, JSON.stringify(body));
+  }
+
+  static async setTodoRead(todoId: string): Promise<ApiResponse<Object>> {
+    const form: string = 'todoId=' + todoId + '&isUnreadDoc=1&userAuthType=' + Constants.USER_AUTH_TYPE;
+    return HttpClient.postForm(Api.TODO_SET_READ, form);
+  }
+
+  // ===== 通讯录（推断端点 + 离线降级） =====
+  static async getContactList(): Promise<ApiResponse<ContactItem[]>> {
+    const body: Record<string, Object> = {
+      'userAuthType': Constants.USER_AUTH_TYPE
+    };
+    const response: ApiResponse<Object> = await HttpClient.post(Api.CONTACT_LIST, JSON.stringify(body));
+    if (ApiService.isSuccess(response)) {
+      const items: ContactItem[] = [];
+      const raw: Object[] = ApiService.extractArray(response.data);
+      for (const one of raw) {
+        items.push(ApiService.parseContact(one));
+      }
+      if (items.length > 0) {
+        return new ApiResponse<ContactItem[]>(response.code, response.message, items);
+      }
+    }
+    return new ApiResponse<ContactItem[]>(ApiService.OFFLINE_CODE, ApiService.offline(response.message),
+      ApiService.mockContactList());
+  }
+
+  // ===== 会议（推断端点 + 离线降级） =====
+  static async getMeetingList(): Promise<ApiResponse<MeetingItem[]>> {
+    const body: Record<string, Object> = {
+      'userAuthType': Constants.USER_AUTH_TYPE
+    };
+    const response: ApiResponse<Object> = await HttpClient.post(Api.MEETING_LIST, JSON.stringify(body));
+    if (ApiService.isSuccess(response)) {
+      const items: MeetingItem[] = [];
+      const raw: Object[] = ApiService.extractArray(response.data);
+      for (const one of raw) {
+        items.push(ApiService.parseMeeting(one));
+      }
+      if (items.length > 0) {
+        return new ApiResponse<MeetingItem[]>(response.code, response.message, items);
+      }
+    }
+    return new ApiResponse<MeetingItem[]>(ApiService.OFFLINE_CODE, ApiService.offline(response.message),
+      ApiService.mockMeetingList());
+  }
+
+  static async getMeetingDetail(id: string): Promise<ApiResponse<MeetingItem>> {
+    const body: Record<string, Object> = {
+      'id': id,
+      'userAuthType': Constants.USER_AUTH_TYPE
+    };
+    const response: ApiResponse<Object> = await HttpClient.post(Api.MEETING_DETAIL, JSON.stringify(body));
+    if (ApiService.isSuccess(response)) {
+      const detail: MeetingItem = ApiService.parseMeeting(response.data);
+      if (detail.title !== '') {
+        return new ApiResponse<MeetingItem>(response.code, response.message, detail);
+      }
+    }
+    return new ApiResponse<MeetingItem>(ApiService.OFFLINE_CODE, ApiService.offline(response.message),
+      ApiService.mockMeetingDetail(id));
+  }
+
+  // ===== 课表 / 成绩 / 考试 / 考勤（推断端点 + 离线降级） =====
+  static async getScheduleList(): Promise<ApiResponse<CourseItem[]>> {
+    const body: Record<string, Object> = {
+      'userAuthType': Constants.USER_AUTH_TYPE
+    };
+    const response: ApiResponse<Object> = await HttpClient.post(Api.SCHEDULE_LIST, JSON.stringify(body));
+    if (ApiService.isSuccess(response)) {
+      const items: CourseItem[] = [];
+      const raw: Object[] = ApiService.extractArray(response.data);
+      for (const one of raw) {
+        items.push(ApiService.parseCourse(one));
+      }
+      if (items.length > 0) {
+        return new ApiResponse<CourseItem[]>(response.code, response.message, items);
+      }
+    }
+    return new ApiResponse<CourseItem[]>(ApiService.OFFLINE_CODE, ApiService.offline(response.message),
+      ApiService.mockScheduleList());
+  }
+
+  static async getScoreList(): Promise<ApiResponse<ScoreItem[]>> {
+    const body: Record<string, Object> = {
+      'userAuthType': Constants.USER_AUTH_TYPE
+    };
+    const response: ApiResponse<Object> = await HttpClient.post(Api.SCORE_LIST, JSON.stringify(body));
+    if (ApiService.isSuccess(response)) {
+      const items: ScoreItem[] = [];
+      const raw: Object[] = ApiService.extractArray(response.data);
+      for (const one of raw) {
+        items.push(ApiService.parseScore(one));
+      }
+      if (items.length > 0) {
+        return new ApiResponse<ScoreItem[]>(response.code, response.message, items);
+      }
+    }
+    return new ApiResponse<ScoreItem[]>(ApiService.OFFLINE_CODE, ApiService.offline(response.message),
+      ApiService.mockScoreList());
+  }
+
+  static async getExamList(): Promise<ApiResponse<ExamItem[]>> {
+    const body: Record<string, Object> = {
+      'userAuthType': Constants.USER_AUTH_TYPE
+    };
+    const response: ApiResponse<Object> = await HttpClient.post(Api.EXAM_LIST, JSON.stringify(body));
+    if (ApiService.isSuccess(response)) {
+      const items: ExamItem[] = [];
+      const raw: Object[] = ApiService.extractArray(response.data);
+      for (const one of raw) {
+        items.push(ApiService.parseExam(one));
+      }
+      if (items.length > 0) {
+        return new ApiResponse<ExamItem[]>(response.code, response.message, items);
+      }
+    }
+    return new ApiResponse<ExamItem[]>(ApiService.OFFLINE_CODE, ApiService.offline(response.message),
+      ApiService.mockExamList());
+  }
+
+  static async getAttendanceList(): Promise<ApiResponse<AttendanceItem[]>> {
+    const body: Record<string, Object> = {
+      'userAuthType': Constants.USER_AUTH_TYPE
+    };
+    const response: ApiResponse<Object> = await HttpClient.post(Api.ATTENDANCE_LIST, JSON.stringify(body));
+    if (ApiService.isSuccess(response)) {
+      const items: AttendanceItem[] = [];
+      const raw: Object[] = ApiService.extractArray(response.data);
+      for (const one of raw) {
+        items.push(ApiService.parseAttendance(one));
+      }
+      if (items.length > 0) {
+        return new ApiResponse<AttendanceItem[]>(response.code, response.message, items);
+      }
+    }
+    return new ApiResponse<AttendanceItem[]>(ApiService.OFFLINE_CODE, ApiService.offline(response.message),
+      ApiService.mockAttendanceList());
+  }
+
+  // ===== 离线降级模拟数据 =====
+  static mockUser(account: string): UserInfo {
+    return new UserInfo('U20230001', '张明理', '20230001', '计算机2301班', '信息工程学院',
+      '计算机科学与技术', '2023级', '13800001234', 'zhangml@sdmu.edu.cn', '',
+      'mock-token-' + account);
+  }
+
+  static mockNewsList(): NewsItem[] {
     const list: NewsItem[] = [
       new NewsItem('N1', '学校召开2026年秋季学期教学工作部署会',
         '11月10日上午，学校在明德楼会议室召开2026年秋季学期教学工作部署会，校领导及各学院负责人参加会议。',
@@ -54,36 +501,21 @@ export class ApiService {
         '11月3日，学校产学研合作签约仪式在行政楼会议室举行。校长代表学校与12家企业代表签署合作协议，内容涵盖共建实习实训基地、联合培养应用型人才、协同开展技术攻关等多个方面。校长指出，深化产教融合、校企合作是应用型本科高校建设的必由之路。学校将以此次签约为契机，进一步创新合作机制，提升服务地方经济社会发展的能力。',
         '合作发展处', '2026-11-03 18:45', '', '', '校园动态')
     ];
-    return new ApiResponse<NewsItem[]>(0, 'success', list);
+    return list;
   }
 
-  static async getNewsDetail(id: string): Promise<ApiResponse<NewsItem>> {
-    const response: ApiResponse<NewsItem[]> = await ApiService.getNewsList();
+  static mockNewsDetail(id: string): NewsItem {
+    const list: NewsItem[] = ApiService.mockNewsList();
     let detail: NewsItem = new NewsItem(id, '新闻详情', '', '暂无详细内容', '', '', '', '', '');
-    for (const item of response.data) {
+    for (const item of list) {
       if (item.id === id) {
         detail = item;
       }
     }
-    return new ApiResponse<NewsItem>(0, 'success', detail);
+    return detail;
   }
 
-  static async getScheduleList(): Promise<ApiResponse<CourseItem[]>> {
-    const list: CourseItem[] = [
-      new CourseItem('C1', '高等数学(下)', '王立华', '明德楼201', '1-16周', 1, 1, 2, 4.0, '必修'),
-      new CourseItem('C2', '大学英语(三)', '李芳', '博文楼105', '1-16周', 2, 1, 2, 3.0, '必修'),
-      new CourseItem('C3', '数据结构', '赵建国', '实训楼302', '1-16周', 3, 3, 4, 4.0, '必修'),
-      new CourseItem('C4', '计算机网络', '陈晓燕', '明德楼315', '1-16周', 1, 3, 4, 3.5, '必修'),
-      new CourseItem('C5', '操作系统', '刘志强', '博文楼210', '1-16周', 2, 5, 6, 3.5, '必修'),
-      new CourseItem('C6', '体育(三)', '孙伟', '体育馆', '1-16周', 4, 3, 4, 1.0, '必修'),
-      new CourseItem('C7', '马克思主义基本原理', '周文静', '明德楼101', '1-16周', 5, 1, 2, 3.0, '必修'),
-      new CourseItem('C8', 'Java程序设计', '赵建国', '实训楼305', '1-16周', 4, 6, 7, 3.0, '选修'),
-      new CourseItem('C9', '数据库原理', '陈晓燕', '明德楼408', '1-16周', 3, 8, 9, 3.5, '必修')
-    ];
-    return new ApiResponse<CourseItem[]>(0, 'success', list);
-  }
-
-  static async getTodoList(): Promise<ApiResponse<TodoItem[]>> {
+  static mockTodoList(): TodoItem[] {
     const list: TodoItem[] = [
       new TodoItem('T1', '关于填报2026年度教师工作量统计表的通知', '0', '待办', '2026-11-20 17:00', '高', '教务处',
         '各位老师请于11月20日17:00前登录OA系统完成本年度工作量填报，逾期系统将关闭。'),
@@ -98,10 +530,10 @@ export class ApiService {
       new TodoItem('T6', '第十二周教学例会通知', '1', '已办', '2026-11-11 14:30', '中', '教务处',
         '请全体教学管理人员准时参加第十二周教学例会。')
     ];
-    return new ApiResponse<TodoItem[]>(0, 'success', list);
+    return list;
   }
 
-  static async getContactList(): Promise<ApiResponse<ContactItem[]>> {
+  static mockContactList(): ContactItem[] {
     const list: ContactItem[] = [
       new ContactItem('CT1', '张明理', '信息工程学院', '0531-88951001', 'zhangml@sdmu.edu.cn', '院长', ''),
       new ContactItem('CT2', '王立华', '信息工程学院', '0531-88951002', 'wanglh@sdmu.edu.cn', '副院长', ''),
@@ -114,38 +546,10 @@ export class ApiService {
       new ContactItem('CT9', '吴秀兰', '教务处', '0531-88954002', 'wuxl@sdmu.edu.cn', '科员', ''),
       new ContactItem('CT10', '郑海涛', '学生工作处', '0531-88955001', 'zhenght@sdmu.edu.cn', '副处长', '')
     ];
-    return new ApiResponse<ContactItem[]>(0, 'success', list);
+    return list;
   }
 
-  static async getScoreList(): Promise<ApiResponse<ScoreItem[]>> {
-    const list: ScoreItem[] = [
-      new ScoreItem('S1', '高等数学(上)', 92, 4.0, 3.9, '2025-2026-1', '必修'),
-      new ScoreItem('S2', '大学英语(二)', 85, 3.0, 3.5, '2025-2026-1', '必修'),
-      new ScoreItem('S3', 'C语言程序设计', 95, 4.0, 4.0, '2025-2026-1', '必修'),
-      new ScoreItem('S4', '大学物理', 78, 3.0, 2.8, '2025-2026-1', '必修'),
-      new ScoreItem('S5', '高等数学(下)', 88, 4.0, 3.7, '2025-2026-2', '必修'),
-      new ScoreItem('S6', '数据结构', 91, 4.0, 3.9, '2025-2026-2', '必修'),
-      new ScoreItem('S7', '大学英语(三)', 82, 3.0, 3.2, '2025-2026-2', '必修'),
-      new ScoreItem('S8', 'Web前端开发', 56, 3.0, 0.0, '2025-2026-2', '选修'),
-      new ScoreItem('S9', '线性代数', 90, 3.0, 3.8, '2026-2027-1', '必修'),
-      new ScoreItem('S10', '计算机网络', 87, 3.5, 3.5, '2026-2027-1', '必修')
-    ];
-    return new ApiResponse<ScoreItem[]>(0, 'success', list);
-  }
-
-  static async getExamList(): Promise<ApiResponse<ExamItem[]>> {
-    const list: ExamItem[] = [
-      new ExamItem('E1', '高等数学(下)', '2026-12-20 09:00-11:00', '明德楼201考场', '闭卷笔试'),
-      new ExamItem('E2', '数据结构', '2026-12-21 14:00-16:00', '实训楼302考场', '闭卷笔试'),
-      new ExamItem('E3', '大学英语(三)', '2026-12-22 09:00-11:00', '博文楼105考场', '闭卷笔试'),
-      new ExamItem('E4', '计算机网络', '2026-12-23 14:00-16:00', '明德楼315考场', '闭卷笔试'),
-      new ExamItem('E5', '操作系统', '2026-12-24 09:00-11:00', '博文楼210考场', '闭卷笔试'),
-      new ExamItem('E6', '数据库原理', '2026-12-25 14:00-16:00', '明德楼408考场', '闭卷笔试')
-    ];
-    return new ApiResponse<ExamItem[]>(0, 'success', list);
-  }
-
-  static async getMeetingList(): Promise<ApiResponse<MeetingItem[]>> {
+  static mockMeetingList(): MeetingItem[] {
     const list: MeetingItem[] = [
       new MeetingItem('M1', '2026年秋季学期期末教学工作部署会', '2026-11-18 14:30', '行政楼三楼会议室', '0',
         '教务处', '部署期末考试安排、成绩录入及下学期教学准备工作。请各学院教学负责人准时参加并做好会议记录。'),
@@ -158,21 +562,64 @@ export class ApiService {
       new MeetingItem('M5', '图书馆管理委员会年度会议', '2026-11-08 09:30', '图书馆会议室', '2',
         '图书馆', '总结年度工作，审议文献资源采购计划及延长开放时间方案。')
     ];
-    return new ApiResponse<MeetingItem[]>(0, 'success', list);
+    return list;
   }
 
-  static async getMeetingDetail(id: string): Promise<ApiResponse<MeetingItem>> {
-    const response: ApiResponse<MeetingItem[]> = await ApiService.getMeetingList();
+  static mockMeetingDetail(id: string): MeetingItem {
+    const list: MeetingItem[] = ApiService.mockMeetingList();
     let detail: MeetingItem = new MeetingItem(id, '会议详情', '', '', '2', '', '暂无详细内容');
-    for (const item of response.data) {
+    for (const item of list) {
       if (item.id === id) {
         detail = item;
       }
     }
-    return new ApiResponse<MeetingItem>(0, 'success', detail);
+    return detail;
   }
 
-  static async getAttendanceList(): Promise<ApiResponse<AttendanceItem[]>> {
+  static mockScheduleList(): CourseItem[] {
+    const list: CourseItem[] = [
+      new CourseItem('C1', '高等数学(下)', '王立华', '明德楼201', '1-16周', 1, 1, 2, 4.0, '必修'),
+      new CourseItem('C2', '大学英语(三)', '李芳', '博文楼105', '1-16周', 2, 1, 2, 3.0, '必修'),
+      new CourseItem('C3', '数据结构', '赵建国', '实训楼302', '1-16周', 3, 3, 4, 4.0, '必修'),
+      new CourseItem('C4', '计算机网络', '陈晓燕', '明德楼315', '1-16周', 1, 3, 4, 3.5, '必修'),
+      new CourseItem('C5', '操作系统', '刘志强', '博文楼210', '1-16周', 2, 5, 6, 3.5, '必修'),
+      new CourseItem('C6', '体育(三)', '孙伟', '体育馆', '1-16周', 4, 3, 4, 1.0, '必修'),
+      new CourseItem('C7', '马克思主义基本原理', '周文静', '明德楼101', '1-16周', 5, 1, 2, 3.0, '必修'),
+      new CourseItem('C8', 'Java程序设计', '赵建国', '实训楼305', '1-16周', 4, 6, 7, 3.0, '选修'),
+      new CourseItem('C9', '数据库原理', '陈晓燕', '明德楼408', '1-16周', 3, 8, 9, 3.5, '必修')
+    ];
+    return list;
+  }
+
+  static mockScoreList(): ScoreItem[] {
+    const list: ScoreItem[] = [
+      new ScoreItem('S1', '高等数学(上)', 92, 4.0, 3.9, '2025-2026-1', '必修'),
+      new ScoreItem('S2', '大学英语(二)', 85, 3.0, 3.5, '2025-2026-1', '必修'),
+      new ScoreItem('S3', 'C语言程序设计', 95, 4.0, 4.0, '2025-2026-1', '必修'),
+      new ScoreItem('S4', '大学物理', 78, 3.0, 2.8, '2025-2026-1', '必修'),
+      new ScoreItem('S5', '高等数学(下)', 88, 4.0, 3.7, '2025-2026-2', '必修'),
+      new ScoreItem('S6', '数据结构', 91, 4.0, 3.9, '2025-2026-2', '必修'),
+      new ScoreItem('S7', '大学英语(三)', 82, 3.0, 3.2, '2025-2026-2', '必修'),
+      new ScoreItem('S8', 'Web前端开发', 56, 3.0, 0.0, '2025-2026-2', '选修'),
+      new ScoreItem('S9', '线性代数', 90, 3.0, 3.8, '2026-2027-1', '必修'),
+      new ScoreItem('S10', '计算机网络', 87, 3.5, 3.5, '2026-2027-1', '必修')
+    ];
+    return list;
+  }
+
+  static mockExamList(): ExamItem[] {
+    const list: ExamItem[] = [
+      new ExamItem('E1', '高等数学(下)', '2026-12-20 09:00-11:00', '明德楼201考场', '闭卷笔试'),
+      new ExamItem('E2', '数据结构', '2026-12-21 14:00-16:00', '实训楼302考场', '闭卷笔试'),
+      new ExamItem('E3', '大学英语(三)', '2026-12-22 09:00-11:00', '博文楼105考场', '闭卷笔试'),
+      new ExamItem('E4', '计算机网络', '2026-12-23 14:00-16:00', '明德楼315考场', '闭卷笔试'),
+      new ExamItem('E5', '操作系统', '2026-12-24 09:00-11:00', '博文楼210考场', '闭卷笔试'),
+      new ExamItem('E6', '数据库原理', '2026-12-25 14:00-16:00', '明德楼408考场', '闭卷笔试')
+    ];
+    return list;
+  }
+
+  static mockAttendanceList(): AttendanceItem[] {
     const list: AttendanceItem[] = [
       new AttendanceItem('A1', '数据结构', '正常', '2026-11-14 08:00', '课堂考勤', '实训楼302'),
       new AttendanceItem('A2', '高等数学(下)', '正常', '2026-11-13 08:00', '课堂考勤', '明德楼201'),
@@ -183,6 +630,6 @@ export class ApiService {
       new AttendanceItem('A7', '数据库原理', '正常', '2026-11-07 16:00', '课堂考勤', '明德楼408'),
       new AttendanceItem('A8', 'Java程序设计', '迟到', '2026-11-06 19:00', '晚自习考勤', '实训楼305')
     ];
-    return new ApiResponse<AttendanceItem[]>(0, 'success', list);
+    return list;
   }
 }

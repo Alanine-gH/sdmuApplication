@@ -1,30 +1,37 @@
 import { router } from '@kit.ArkUI';
 import { ApiService } from '../network/ApiService';
 import { NewsItem } from '../model/NewsModel';
-import { TitleBar } from '../components/TitleBar';
-import { LoadingView } from '../components/LoadingView';
 import { EmptyView } from '../components/EmptyView';
 
 /**
- * 新闻详情页。
+ * 新闻详情页 — 按反编译布局 1:1 复刻 mobile_campus_fragment_news.xml（资讯页）：
+ *   根 LinearLayout vertical：background=@color/mobile_campus_bg_color、fill_parent
+ *   - 顶部 RelativeLayout 45.0dip=45vp 白底：ivBack / 居中标题“资讯” / ivRefresh
+ *   - ProgressBar：3.0dip=3vp 横向进度条（progressDrawable=mobile_campus_progress：白底 + 主色进度）
+ *   - mWebView：layout_weight=1、白底 —— 以本地文本渲染新闻正文（后续接真实 URL 时替换为 Web 组件）
  */
 @Entry
 @Component
 struct NewsDetailPage {
   @State news: NewsItem = new NewsItem('', '', '', '', '', '', '', '', '');
   @State isLoading: boolean = true;
+  private newsId: string = '';
 
   aboutToAppear(): void {
     const params: object = router.getParams();
-    let newsId: string = '';
     if (params !== null && params !== undefined) {
       const record = params as Record<string, Object>;
       const idValue: Object = record['id'];
       if (typeof idValue === 'string') {
-        newsId = idValue as string;
+        this.newsId = idValue as string;
       }
     }
-    ApiService.getNewsDetail(newsId)
+    this.loadDetail();
+  }
+
+  loadDetail(): void {
+    this.isLoading = true;
+    ApiService.getNewsDetail(this.newsId)
       .then((response) => {
         this.news = response.data;
         this.isLoading = false;
@@ -34,49 +41,129 @@ struct NewsDetailPage {
       });
   }
 
+  /**
+   * mobile_campus_fragment_news.xml 顶部 RelativeLayout：
+   * background=@color/white、layout_height=45.0dip=45vp。
+   */
+  @Builder
+  detailToolbar() {
+    Row() {
+      // ivBack：layout_width=70.0dip=70vp、layout_height=45vp、paddingTop/Bottom=12.0dip=12vp、
+      // src=@mipmap/icon_back_black、layout_alignParentLeft=true
+      // （XML 中 visibility=invisible 为 Tab 内场景；详情页需要返回，此处显示并响应点击）
+      Row() {
+        Image($r('app.media.icon_back_black'))
+          .height(21)
+          .objectFit(ImageFit.Contain)
+      }
+      .width(70)
+      .height(45)
+      .padding({ top: 12, bottom: 12 })
+      .alignItems(VerticalAlign.Center)
+      .onClick(() => {
+        router.back();
+      })
+      // 标题 TextView：textSize=18.0sp=18fp、textColor=@color/common_color_1、
+      // gravity=center、fill_parent、text="资讯"
+      Text($r('app.string.news_detail_title'))
+        .fontSize(18)
+        .fontColor($r('app.color.common_color_1'))
+        .textAlign(TextAlign.Center)
+        .layoutWeight(1)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+      // ivRefresh：paddingLeft/Right=15.0dip=15vp、paddingTop/Bottom=12.0dip=12vp、
+      // src=@mipmap/icon_refresh_black、layout_alignParentRight=true
+      Row() {
+        Image($r('app.media.icon_refresh_black'))
+          .height(21)
+          .objectFit(ImageFit.Contain)
+      }
+      .height(45)
+      .padding({ left: 15, right: 15, top: 12, bottom: 12 })
+      .alignItems(VerticalAlign.Center)
+      .onClick(() => {
+        this.loadDetail();
+      })
+    }
+    .width('100%')
+    .height(45)
+    .backgroundColor($r('app.color.white'))
+  }
+
   build() {
+    // 根 LinearLayout vertical：background=@color/mobile_campus_bg_color、fill_parent
     Column() {
-      TitleBar({ title: '新闻详情', showBack: true })
+      this.detailToolbar()
       if (this.isLoading) {
-        LoadingView()
+        // progressBar：layout_height=3.0dip=3vp、style=progressBarStyleHorizontal、max=100、
+        // progressDrawable=@drawable/mobile_campus_progress（#ffffffff 背景 + @color/mobile_campus_primary_color 进度）
+        Progress({ value: 60, total: 100, type: ProgressType.Linear })
+          .width('100%')
+          .height(3)
+          .color($r('app.color.mobile_campus_primary_color'))
+          .backgroundColor($r('app.color.white'))
+          .borderRadius(0)
+        // mWebView：background=@color/white、layout_weight=1（加载中为空白页）
+        Column() {
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .backgroundColor($r('app.color.white'))
       } else {
         if (this.news.id === '') {
-          EmptyView({ tipText: '内容不存在' })
+          // MultiStateView msv_emptyView=empty_view
+          Column() {
+            EmptyView({ tipText: '内容不存在' })
+          }
+          .width('100%')
+          .layoutWeight(1)
+          .backgroundColor($r('app.color.white'))
         } else {
+          // mWebView：background=@color/white、layout_weight=1 —— 正文以本地文本渲染
+          // （下方文章排版无对应 XML 属性，对应 WebView 内 HTML 正文样式）
           Scroll() {
-            Column({ space: 12 }) {
+            Column() {
               Text(this.news.title)
-                .fontSize(20)
+                .fontSize(18)
                 .fontWeight(FontWeight.Bold)
-                .fontColor($r('app.color.sdmu_text_primary'))
+                .fontColor($r('app.color.common_color_1'))
+                .lineHeight(30)
+                .width('100%')
               Row() {
                 Text(this.news.source)
                   .fontSize(12)
-                  .fontColor($r('app.color.sdmu_text_hint'))
+                  .fontColor($r('app.color.common_color_3'))
                 Blank()
                 Text(this.news.publishTime)
                   .fontSize(12)
-                  .fontColor($r('app.color.sdmu_text_hint'))
+                  .fontColor($r('app.color.common_color_3'))
               }
               .width('100%')
+              .margin({ top: 10, bottom: 10 })
               Divider()
-                .color($r('app.color.sdmu_divider'))
+                .color($r('app.color.common_color_6'))
+                .strokeWidth(1)
+                .width('100%')
               Text(this.news.content)
                 .fontSize(15)
-                .lineHeight(26)
-                .fontColor($r('app.color.sdmu_text_secondary'))
+                .lineHeight(28)
+                .fontColor($r('app.color.common_color_2'))
                 .width('100%')
+                .margin({ top: 12 })
             }
             .alignItems(HorizontalAlign.Start)
             .padding(16)
           }
+          .width('100%')
           .layoutWeight(1)
+          .backgroundColor($r('app.color.white'))
           .scrollBar(BarState.Off)
         }
       }
     }
     .width('100%')
     .height('100%')
-    .backgroundColor($r('app.color.sdmu_bg'))
+    .backgroundColor($r('app.color.mobile_campus_bg_color'))
   }
 }

@@ -4,7 +4,7 @@ import { ApiResponse } from '../model/ResponseModel';
 import { Constants } from '../data/Constants';
 
 interface ApiRawData {
-  code: number;
+  code: Object;
   message: string;
   data: Object;
 }
@@ -19,28 +19,32 @@ interface HttpHeaderBag {
  */
 export class HttpClient {
   static async get(path: string): Promise<ApiResponse<Object>> {
-    return HttpClient.request(path, http.RequestMethod.GET, '');
+    return HttpClient.request(path, http.RequestMethod.GET, '', 'application/json');
   }
 
   static async post(path: string, body: string): Promise<ApiResponse<Object>> {
-    return HttpClient.request(path, http.RequestMethod.POST, body);
+    return HttpClient.request(path, http.RequestMethod.POST, body, 'application/json');
   }
 
-  static async request(path: string, method: http.RequestMethod, body: string): Promise<ApiResponse<Object>> {
+  static async postForm(path: string, formBody: string): Promise<ApiResponse<Object>> {
+    return HttpClient.request(path, http.RequestMethod.POST, formBody, 'application/x-www-form-urlencoded');
+  }
+
+  static async request(path: string, method: http.RequestMethod, body: string, contentType: string): Promise<ApiResponse<Object>> {
     const client: http.HttpRequest = http.createHttp();
     try {
       const options: http.HttpRequestOptions = {
         method: method,
         extraData: body,
-        header: { 'Content-Type': 'application/json' } as HttpHeaderBag,
+        header: { 'Content-Type': contentType } as HttpHeaderBag,
         expectDataType: http.HttpDataType.STRING,
         connectTimeout: 10000,
         readTimeout: 10000
       };
-      const response: http.HttpResponse = await client.request(Constants.BASE_URL + path, options);
+      const response: http.HttpResponse = await client.request(Constants.SOCKET_HOST + path, options);
       if (response.responseCode === 200) {
         const raw = JSON.parse(response.result as string) as ApiRawData;
-        return new ApiResponse<Object>(raw.code, raw.message, raw.data);
+        return new ApiResponse<Object>(HttpClient.normalizeCode(raw.code), raw.message, raw.data);
       }
       return new ApiResponse<Object>(-1, 'HTTP ' + response.responseCode, new Object());
     } catch (error) {
@@ -49,5 +53,15 @@ export class HttpClient {
     } finally {
       client.destroy();
     }
+  }
+
+  static normalizeCode(raw: Object): number {
+    if (typeof raw === 'number') {
+      return raw as number;
+    }
+    if (typeof raw === 'string') {
+      return Number(raw as string);
+    }
+    return -1;
   }
 }
