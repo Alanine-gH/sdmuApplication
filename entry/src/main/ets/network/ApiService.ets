@@ -339,24 +339,18 @@ export class ApiService {
       ApiService.mockUser('20230001'));
   }
 
-  // ===== 新闻（真实端点 /ly-pd-mb/information/api/information/*） =====
+  // ===== 新闻（H5明文接口 /thirdpart_ydxy/boda/news/list，2026-11-16 抓包验证返回真实数据） =====
   static async getNewsList(): Promise<ApiResponse<NewsItem[]>> {
-    // module/main/g/g.smali U0：id/type=2/columnId/inforTile/page/size + userAuthType
-    const body: Record<string, Object> = {
-      'id': 'test',
-      'type': '2',
-      'columnId': '',
-      'inforTile': '',
-      'page': 1,
-      'size': 20,
-      'userAuthType': Constants.USER_AUTH_TYPE
-    };
-    const response: ApiResponse<Object> = await HttpClient.post(Api.NEWS_LIST, JSON.stringify(body));
+    // H5接口：GET /thirdpart_ydxy/boda/news/list?contentID=1418094565&currentPage=1&pageSize=20
+    // 返回明文JSON：{"code":"0","msg":"ok","data":[{date,picurl,treeid,author,id,title,url}...]}
+    const path: string = '/thirdpart_ydxy/boda/news/list?contentID=1418094565&userID=&myOwner=1418094565' +
+      '&myContentId=197475&currentPage=1&pageSize=20';
+    const response: ApiResponse<Object> = await HttpClient.get(path);
     if (ApiService.isSuccess(response)) {
       const items: NewsItem[] = [];
       const raw: Object[] = ApiService.extractArray(response.data);
       for (const one of raw) {
-        items.push(ApiService.parseNews(one));
+        items.push(ApiService.parseH5News(one));
       }
       if (items.length > 0) {
         return new ApiResponse<NewsItem[]>(response.code, response.message, items);
@@ -364,6 +358,22 @@ export class ApiService {
     }
     return new ApiResponse<NewsItem[]>(ApiService.OFFLINE_CODE, ApiService.offline(response.message),
       ApiService.mockNewsList());
+  }
+
+  /** H5新闻条目解析：{date,picurl,treeid,author,id,title,url} → NewsItem */
+  static parseH5News(one: Object): NewsItem {
+    const rec: Record<string, Object> = one as Record<string, Object>;
+    const pickStr = (key: string): string => {
+      const v: Object = rec[key];
+      return typeof v === 'string' ? v as string : '';
+    };
+    const id: string = pickStr('id');
+    const title: string = pickStr('title');
+    const date: string = pickStr('date');
+    const url: string = pickStr('url');
+    const picurl: string = pickStr('picurl');
+    const author: string = pickStr('author');
+    return new NewsItem(id, title, title, '', author === '' ? '学校要闻' : author, date, url, picurl, '学校要闻');
   }
 
   static async getNewsDetail(id: string): Promise<ApiResponse<NewsItem>> {

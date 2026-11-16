@@ -11,13 +11,35 @@ interface ApiRawData {
 
 interface HttpHeaderBag {
   'Content-Type': string;
+  'Access-Token': string;
+  'Unique-Code': string;
+  'AppType': string;
 }
 
 /**
- * HTTP 网络封装：基于 @kit.NetworkKit 的 http 模块。
- * 服务器可能不可达，所有异常均被捕获并转换为错误状态的 ApiResponse，不会抛出未捕获异常。
+ * HTTP 网络封装 — 按安卓版抓包协议复刻（2026-11-16 验证）：
+ *   Host: http://mcp.sdmu.edu.cn:8081（校园内网）
+ *   必带请求头：
+ *     Access-Token: {"clientVersion":"3.2.0","deviceId":"...","deviceModel":"...",
+ *                    "sessionKey":"...","userId":"...","userType":"","xxdm":""}
+ *     Unique-Code: <UUID>
+ *     AppType: ydxy
+ * 服务器可能不可达（非校园网环境），所有异常均被捕获并转换为错误状态的 ApiResponse。
  */
 export class HttpClient {
+  static buildAccessToken(userId: string): string {
+    const token: Record<string, string> = {
+      'clientVersion': Constants.CLIENT_VERSION,
+      'deviceId': Constants.DEVICE_ID,
+      'deviceModel': Constants.DEVICE_MODEL,
+      'sessionKey': Constants.SESSION_KEY,
+      'userId': userId,
+      'userType': '',
+      'xxdm': ''
+    };
+    return JSON.stringify(token);
+  }
+
   static async get(path: string): Promise<ApiResponse<Object>> {
     return HttpClient.request(path, http.RequestMethod.GET, '', 'application/json');
   }
@@ -33,10 +55,16 @@ export class HttpClient {
   static async request(path: string, method: http.RequestMethod, body: string, contentType: string): Promise<ApiResponse<Object>> {
     const client: http.HttpRequest = http.createHttp();
     try {
+      const headerBag: HttpHeaderBag = {
+        'Content-Type': contentType,
+        'Access-Token': HttpClient.buildAccessToken(''),
+        'Unique-Code': Constants.UNIQUE_CODE,
+        'AppType': Constants.APP_TYPE
+      };
       const options: http.HttpRequestOptions = {
         method: method,
         extraData: body,
-        header: { 'Content-Type': contentType } as HttpHeaderBag,
+        header: headerBag as object as Record<string, string>,
         expectDataType: http.HttpDataType.STRING,
         connectTimeout: 10000,
         readTimeout: 10000
