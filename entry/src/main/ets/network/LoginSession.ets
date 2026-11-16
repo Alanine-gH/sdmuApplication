@@ -1,4 +1,4 @@
-import { util } from '@kit.ArkTS';
+﻿import { util } from '@kit.ArkTS';
 import { HttpClient } from './HttpClient';
 import { CryptoUtil } from './CryptoUtil';
 import { ApiResponse } from '../model/ResponseModel';
@@ -22,6 +22,8 @@ export class LoginSession {
   static onlyCode: string = '';
   /** 登录后的session_key */
   static sessionKey: string = '';
+  /** 用户类型（登录响应userType） */
+  static userType: string = '';
 
   private static randomUuid(): string {
     const bytes: Uint8Array = new Uint8Array(16);
@@ -109,6 +111,7 @@ export class LoginSession {
       return typeof v === 'string' ? v as string : '';
     };
     LoginSession.sessionKey = pick('session_key');
+    LoginSession.userType = pick('userType') === '' ? '1' : pick('userType');
     return new UserInfo(
       pick('userId'),
       pick('userName'),
@@ -124,3 +127,5 @@ export class LoginSession {
     );
   }
 }
+
+

@@ -1,4 +1,5 @@
-﻿import { http } from '@kit.NetworkKit';
+﻿import { LoginSession } from './LoginSession';
+import { http } from '@kit.NetworkKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { ApiResponse } from '../model/ResponseModel';
 import { Constants } from '../data/Constants';
@@ -32,10 +33,10 @@ export class HttpClient {
       'clientVersion': Constants.CLIENT_VERSION,
       'deviceId': Constants.DEVICE_ID,
       'deviceModel': Constants.DEVICE_MODEL,
-      'sessionKey': Constants.SESSION_KEY,
+      'sessionKey': LoginSession.sessionKey === '' ? Constants.SESSION_KEY : LoginSession.sessionKey,
       'userId': userId,
-      'userType': '',
-      'xxdm': ''
+      'userType': LoginSession.userType === '' ? '1' : LoginSession.userType,
+      'xxdm': 'sdmu'
     };
     return JSON.stringify(token);
   }
@@ -135,4 +136,6 @@ export class HttpClient {
     return -1;
   }
 }
+
+
 
