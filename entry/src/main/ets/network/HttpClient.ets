@@ -83,6 +83,46 @@ export class HttpClient {
     }
   }
 
+  /**
+   * 原始请求（协商/登录专用）：
+   * 支持自定义 Unique-Code 与 Asym-Key 头（安卓 GetKeyUtil/LoginModel 协议）
+   */
+  static async requestRaw(path: string, method: string, body: string, contentType: string,
+    uniqueCode: string, asymKey: string): Promise<ApiResponse<Object>> {
+    const client: http.HttpRequest = http.createHttp();
+    try {
+      const header: Record<string, string> = {
+        'Content-Type': contentType,
+        'Access-Token': HttpClient.buildAccessToken(''),
+        'Unique-Code': uniqueCode,
+        'AppType': Constants.APP_TYPE
+      };
+      if (asymKey !== '') {
+        header['Asym-Key'] = asymKey;
+      }
+      const reqMethod: http.RequestMethod = method === 'POST' ? http.RequestMethod.POST : http.RequestMethod.GET;
+      const options: http.HttpRequestOptions = {
+        method: reqMethod,
+        extraData: body,
+        header: header,
+        expectDataType: http.HttpDataType.STRING,
+        connectTimeout: 10000,
+        readTimeout: 10000
+      };
+      const response: http.HttpResponse = await client.request(Constants.SOCKET_HOST + path, options);
+      if (response.responseCode === 200) {
+        const raw = JSON.parse(response.result as string) as ApiRawData;
+        return new ApiResponse<Object>(HttpClient.normalizeCode(raw.code), raw.message, raw.data);
+      }
+      return new ApiResponse<Object>(-1, 'HTTP ' + response.responseCode, new Object());
+    } catch (error) {
+      const err = error as BusinessError;
+      return new ApiResponse<Object>(-1, '网络请求失败: ' + err.message, new Object());
+    } finally {
+      client.destroy();
+    }
+  }
+
   static normalizeCode(raw: Object): number {
     if (typeof raw === 'number') {
       return raw as number;

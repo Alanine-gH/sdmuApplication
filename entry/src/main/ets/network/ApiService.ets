@@ -1,4 +1,5 @@
-import { HttpClient } from './HttpClient';
+﻿import { HttpClient } from './HttpClient';
+import { LoginSession } from './LoginSession';
 import { Api } from './Api';
 import { Constants } from '../data/Constants';
 import { ApiResponse } from '../model/ResponseModel';
@@ -305,21 +306,13 @@ export class ApiService {
 
   // ===== 登录 / 用户 =====
   static async login(account: string, password: string): Promise<ApiResponse<UserInfo>> {
-    // LoginSumbitEntity（module/b/g/g.smali:279 → /mobileapi_ydxy/open/auth/login）：userId/passw/schoolId
-    const body: Record<string, Object> = {
-      'userId': account,
-      'passw': password,
-      'schoolId': '',
-      'userAuthType': Constants.USER_AUTH_TYPE
-    };
-    const response: ApiResponse<Object> = await HttpClient.post(Api.LOGIN, JSON.stringify(body));
-    if (ApiService.isSuccess(response)) {
-      const user: UserInfo = ApiService.parseUser(response.data);
-      if (user.name !== '') {
-        return new ApiResponse<UserInfo>(response.code, response.message, user);
-      }
+    // 真实登录链路（2026-11-16 服务器全链路验证通过）：
+    // key协商 → onlyCode → AES加密完整LoginSumbitEntity → /open/auth/login → 解密响应拿真实用户信息
+    const resp: ApiResponse<UserInfo> = await LoginSession.login(account, password);
+    if (resp.code === 0 && resp.data.name !== '') {
+      return resp;
     }
-    return new ApiResponse<UserInfo>(ApiService.OFFLINE_CODE, ApiService.offline(response.message),
+    return new ApiResponse<UserInfo>(ApiService.OFFLINE_CODE, ApiService.offline(resp.message),
       ApiService.mockUser(account));
   }
 
@@ -912,3 +905,4 @@ export class ApiService {
     return list;
   }
 }
+
