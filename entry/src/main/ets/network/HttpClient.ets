@@ -1,4 +1,4 @@
-import { http } from '@kit.NetworkKit';
+﻿import { http } from '@kit.NetworkKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { ApiResponse } from '../model/ResponseModel';
 import { Constants } from '../data/Constants';
@@ -63,7 +63,7 @@ export class HttpClient {
       };
       const options: http.HttpRequestOptions = {
         method: method,
-        extraData: body,
+        extraData: method === http.RequestMethod.POST ? body : undefined,
         header: headerBag as object as Record<string, string>,
         expectDataType: http.HttpDataType.STRING,
         connectTimeout: 10000,
@@ -86,6 +86,7 @@ export class HttpClient {
   /**
    * 原始请求（协商/登录专用）：
    * 支持自定义 Unique-Code 与 Asym-Key 头（安卓 GetKeyUtil/LoginModel 协议）
+   * 修复：GET不带extraData（鸿蒙http带extraData的GET会异常）；带安卓User-Agent避免服务器WAF 401
    */
   static async requestRaw(path: string, method: string, body: string, contentType: string,
     uniqueCode: string, asymKey: string): Promise<ApiResponse<Object>> {
@@ -95,7 +96,8 @@ export class HttpClient {
         'Content-Type': contentType,
         'Access-Token': HttpClient.buildAccessToken(''),
         'Unique-Code': uniqueCode,
-        'AppType': Constants.APP_TYPE
+        'AppType': Constants.APP_TYPE,
+        'User-Agent': 'Dalvik/2.1.0 (Linux; U; Android 14; 25060RK16C Build/UQ1A.240205.11101510)'
       };
       if (asymKey !== '') {
         header['Asym-Key'] = asymKey;
@@ -103,7 +105,7 @@ export class HttpClient {
       const reqMethod: http.RequestMethod = method === 'POST' ? http.RequestMethod.POST : http.RequestMethod.GET;
       const options: http.HttpRequestOptions = {
         method: reqMethod,
-        extraData: body,
+        extraData: reqMethod === http.RequestMethod.POST ? body : undefined,
         header: header,
         expectDataType: http.HttpDataType.STRING,
         connectTimeout: 10000,
@@ -114,10 +116,10 @@ export class HttpClient {
         const raw = JSON.parse(response.result as string) as ApiRawData;
         return new ApiResponse<Object>(HttpClient.normalizeCode(raw.code), raw.message, raw.data);
       }
-      return new ApiResponse<Object>(-1, 'HTTP ' + response.responseCode, new Object());
+      return new ApiResponse<Object>(-1, 'HTTP ' + response.responseCode + ' @' + path, new Object());
     } catch (error) {
       const err = error as BusinessError;
-      return new ApiResponse<Object>(-1, '网络请求失败: ' + err.message, new Object());
+      return new ApiResponse<Object>(-1, '网络请求失败: ' + err.message + ' @' + path, new Object());
     } finally {
       client.destroy();
     }
@@ -133,3 +135,4 @@ export class HttpClient {
     return -1;
   }
 }
+
