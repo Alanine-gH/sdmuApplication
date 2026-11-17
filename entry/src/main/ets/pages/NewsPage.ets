@@ -1,9 +1,11 @@
 import { router } from '@kit.ArkUI';
 import { ApiService } from '../network/ApiService';
+import { ApiResponse } from '../model/ResponseModel';
 import { NewsItem } from '../model/NewsModel';
 import { TitleBar } from '../components/TitleBar';
 import { EmptyView } from '../components/EmptyView';
 import { LoadingView } from '../components/LoadingView';
+import { BusinessError } from '@kit.BasicServicesKit';
 
 /**
  * 新闻列表页 — 按反编译布局 1:1 复刻 mobile_campus_activity_news.xml：
@@ -20,11 +22,17 @@ struct NewsPage {
 
   aboutToAppear(): void {
     ApiService.getNewsList()
-      .then((response) => {
-        this.newsList = response.data;
+      .then((response: ApiResponse<NewsItem[]>) => {
+        const data: NewsItem[] = response.data;
+        if (data.length > 0) {
+          this.newsList = data;
+        } else if (response.code !== 0) {
+          console.info('NewsPage degrade: code=' + response.code + ' msg=' + response.message);
+        }
         this.isLoading = false;
       })
-      .catch(() => {
+      .catch((error: BusinessError) => {
+        console.info('NewsPage load fail: ' + error.message);
         this.newsList = [];
         this.isLoading = false;
       });

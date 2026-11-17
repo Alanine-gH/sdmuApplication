@@ -8,6 +8,9 @@ import { TitleBar } from '../components/TitleBar';
  *   2. 上课时间行（白底 padding 15vp）
  *   3. 成绩区块（挂科率/平均分/历史最高分/最高分保持者）
  *   4. 授课恩师 / 上课学生行 + 男女生比例块
+ *
+ * 数据源：无服务器接口 — ApiService 未提供课程详情/挂科率/男女比例等统计端点，
+ * 且本页未从路由接收课程参数，页面数据为内置示例数据，未接 ApiService。
  */
 class CourseDetailInfo {
   courseName: string = '';

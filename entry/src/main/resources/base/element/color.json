@@ -359,6 +359,130 @@
     {
       "name": "mobile_campus_school_history_background_color",
       "value": "#B6B6B6"
+    },
+    {
+      "name": "common_color_32",
+      "value": "#707070"
+    },
+    {
+      "name": "color_all",
+      "value": "#1B68B6"
+    },
+    {
+      "name": "link_color",
+      "value": "#5A7CAB"
+    },
+    {
+      "name": "market_sale_color",
+      "value": "#EB5D2A"
+    },
+    {
+      "name": "market_closed_color",
+      "value": "#5EC78F"
+    },
+    {
+      "name": "market_search_hint",
+      "value": "#B5B5B5"
+    },
+    {
+      "name": "common_color_35",
+      "value": "#B8C0C9"
+    },
+    {
+      "name": "common_color_36",
+      "value": "#DFE4EA"
+    },
+    {
+      "name": "ybg_red",
+      "value": "#FF6C6C"
+    },
+    {
+      "name": "sport_steps_blue",
+      "value": "#3A7DF0"
+    },
+    {
+      "name": "sport_steps_header_green",
+      "value": "#7FC573"
+    },
+    {
+      "name": "sport_steps_header_blue",
+      "value": "#BDEBED"
+    },
+    {
+      "name": "sport_rank_number",
+      "value": "#D5DDE5"
+    },
+    {
+      "name": "sport_history_item_bg",
+      "value": "#F8F8F8"
+    },
+    {
+      "name": "message_page_bg",
+      "value": "#E5E5E5"
+    },
+    {
+      "name": "message_title_color",
+      "value": "#252525"
+    },
+    {
+      "name": "report_rank_gold",
+      "value": "#FFAA00"
+    },
+    {
+      "name": "report_rank_silver",
+      "value": "#C0C0C0"
+    },
+    {
+      "name": "report_rank_bronze",
+      "value": "#CD7F32"
+    },
+    {
+      "name": "report_rate_green",
+      "value": "#57C06B"
+    },
+    {
+      "name": "timetable_text",
+      "value": "#2F2F2F"
+    },
+    {
+      "name": "inspection_divider",
+      "value": "#E2E2E2"
+    },
+    {
+      "name": "inspection_desc_gray",
+      "value": "#B8B8B8"
+    },
+    {
+      "name": "inspection_more_green",
+      "value": "#92D860"
+    },
+    {
+      "name": "mobile_campus_schedule_color3",
+      "value": "#5D5D5D"
+    },
+    {
+      "name": "mobile_campus_schedule_color4",
+      "value": "#E96161"
+    },
+    {
+      "name": "ybg_black",
+      "value": "#000000"
+    },
+    {
+      "name": "color_checked_err",
+      "value": "#EB5757"
+    },
+    {
+      "name": "finger_blue",
+      "value": "#1790FF"
+    },
+    {
+      "name": "finger_cancel_blue",
+      "value": "#4B749A"
+    },
+    {
+      "name": "read_dot_bg",
+      "value": "#FF0000"
     }
   ]
 }

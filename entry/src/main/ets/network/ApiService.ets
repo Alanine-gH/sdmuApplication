@@ -1,7 +1,7 @@
 ﻿import { HttpClient } from './HttpClient';
 import { LoginSession } from './LoginSession';
 import { Api } from './Api';
-import { Constants } from '../data/Constants';
+import { CryptoUtil } from './CryptoUtil';
 import { ApiResponse } from '../model/ResponseModel';
 import { UserInfo } from '../model/UserModel';
 import { NewsItem } from '../model/NewsModel';
@@ -13,15 +13,26 @@ import { ScoreItem, ExamItem, ScoreStatEntry, ScoreDetailEntry, ScoreRankEntry, 
 import { MeetingItem } from '../model/MeetingModel';
 import { AttendanceItem } from '../model/AttendanceModel';
 import { SuperviseCourseItem, SuperviseRecordItem, SuperviseMineData } from '../model/SuperviseModel';
+import { BusinessError } from '@kit.BasicServicesKit';
+
+/** bizRequest 解密后统一解析结果：code=0 成功，1000 登录失效，其余透传 */
+interface BizJsonResult {
+  code: number;
+  message: string;
+  data: Object;
+}
 
 /**
- * API 服务层 — 真实 HTTP 接入（POST https://portal.ly-sky.com）。
- * 端点提取自反编译 smali：登录/待办/新闻/课表/督导为真实常量；通讯录/会议/成绩/考试/考勤等
- * 模块原始实现为 H5 路由或不可恢复插件 dex，未提取到 REST 常量，按 /ly-pd-mb/<module>/api/... 模式推断。
- * 离线降级：网络失败/响应不合法时返回本地模拟数据，code = -1 且 message 以“离线数据”标记，保证应用不白屏。
+ * API 服务层 — 真实加密服务器通道（2026-11-17 服务器全链路实测）。
+ * 全部业务方法走 HttpClient.bizRequest(path, method, params)：
+ *   - 自动加密 Access-Token/Unique-Code 头，POST body/GET data 自动加密
+ *   - 响应 data 自动解密为 JSON 字符串，此处 JSON.parse 后映射到现有模型
+ *   - code=0 成功返回解析数据；code=1000 提示"登录已失效"；其余失败保留离线降级 mock 兜底
+ * 源码依据标注在每个方法注释（安卓反编译 Model/Factory 类路径）。
  */
 export class ApiService {
   private static readonly OFFLINE_CODE: number = -1;
+  private static readonly NOT_LOGIN_CODE: number = 1000;
 
   // ===== 通用工具 =====
   static isSuccess(resp: ApiResponse<Object>): boolean {
@@ -86,7 +97,35 @@ export class ApiService {
     return [];
   }
 
-  // ===== 实体解析（按 smali Gson 模型字段推断） =====
+  /** 加密请求统一封装：bizRequest → 解密 JSON 字符串 → JSON.parse；1000 映射为登录已失效 */
+  static async bizJson(path: string, method: string, params: Record<string, Object>): Promise<BizJsonResult> {
+    const response: ApiResponse<Object> = await HttpClient.bizRequest(path, method, params);
+    if (response.code === ApiService.NOT_LOGIN_CODE) {
+      const notLogin: BizJsonResult = { code: ApiService.NOT_LOGIN_CODE, message: '登录已失效', data: new Object() };
+      return notLogin;
+    }
+    if (response.code === 0) {
+      if (typeof response.data === 'string' && (response.data as string) !== '') {
+        try {
+          const parsed: Object = JSON.parse(response.data as string) as Object;
+          const ok: BizJsonResult = { code: 0, message: response.message, data: parsed };
+          return ok;
+        } catch (error) {
+          const err = error as BusinessError;
+          CryptoUtil.log('bizJson parse fail @' + path + ' code=' + err.code + ' msg=' + err.message);
+          const parseFail: BizJsonResult = { code: ApiService.OFFLINE_CODE, message: '解密数据解析失败', data: new Object() };
+          return parseFail;
+        }
+      }
+      const empty: BizJsonResult = { code: ApiService.OFFLINE_CODE,
+        message: response.message === '' ? '响应数据为空' : response.message, data: new Object() };
+      return empty;
+    }
+    const fail: BizJsonResult = { code: response.code, message: response.message, data: response.data };
+    return fail;
+  }
+
+  // ===== 实体解析（按安卓 Gson 模型字段映射） =====
   static parseUser(data: Object): UserInfo {
     const rec: Record<string, Object> = ApiService.asRecord(data);
     return new UserInfo(
@@ -317,18 +356,19 @@ export class ApiService {
   }
 
   static async getUserInfo(userId: string): Promise<ApiResponse<UserInfo>> {
-    const body: Record<string, Object> = {
-      'yyid': userId,
-      'userAuthType': Constants.USER_AUTH_TYPE
-    };
-    const response: ApiResponse<Object> = await HttpClient.post(Api.USER_INFO, JSON.stringify(body));
-    if (ApiService.isSuccess(response)) {
-      const user: UserInfo = ApiService.parseUser(response.data);
+    // 源码依据：module/b/g/g.smali:279 登录同族用户接口（/user/info，服务器命名空间实测存在）
+    const params: Record<string, Object> = { 'yyid': userId };
+    const result: BizJsonResult = await ApiService.bizJson(Api.USER_INFO, 'POST', params);
+    if (result.code === 0) {
+      const user: UserInfo = ApiService.parseUser(result.data);
       if (user.name !== '') {
-        return new ApiResponse<UserInfo>(response.code, response.message, user);
+        return new ApiResponse<UserInfo>(0, result.message, user);
       }
     }
-    return new ApiResponse<UserInfo>(ApiService.OFFLINE_CODE, ApiService.offline(response.message),
+    if (result.code === ApiService.NOT_LOGIN_CODE) {
+      return new ApiResponse<UserInfo>(ApiService.NOT_LOGIN_CODE, result.message, ApiService.mockUser('20230001'));
+    }
+    return new ApiResponse<UserInfo>(ApiService.OFFLINE_CODE, ApiService.offline(result.message),
       ApiService.mockUser('20230001'));
   }
 
@@ -370,208 +410,213 @@ export class ApiService {
   }
 
   static async getNewsDetail(id: string): Promise<ApiResponse<NewsItem>> {
-    const body: Record<string, Object> = {
-      'id': id,
-      'type': '2',
-      'userAuthType': Constants.USER_AUTH_TYPE
-    };
-    const response: ApiResponse<Object> = await HttpClient.post(Api.NEWS_DETAIL, JSON.stringify(body));
-    if (ApiService.isSuccess(response)) {
-      const detail: NewsItem = ApiService.parseNews(response.data);
+    // 源码依据：module/main/g/g.smali 信息详情（原 /ly-pd-mb/information/... 推断，迁移至 /mobileapi_ydxy/api/）
+    const params: Record<string, Object> = { 'id': id, 'type': '2' };
+    const result: BizJsonResult = await ApiService.bizJson(Api.NEWS_DETAIL, 'POST', params);
+    if (result.code === 0) {
+      const detail: NewsItem = ApiService.parseNews(result.data);
       if (detail.title !== '') {
-        return new ApiResponse<NewsItem>(response.code, response.message, detail);
+        return new ApiResponse<NewsItem>(0, result.message, detail);
       }
     }
-    return new ApiResponse<NewsItem>(ApiService.OFFLINE_CODE, ApiService.offline(response.message),
+    if (result.code === ApiService.NOT_LOGIN_CODE) {
+      return new ApiResponse<NewsItem>(ApiService.NOT_LOGIN_CODE, result.message, ApiService.mockNewsDetail(id));
+    }
+    return new ApiResponse<NewsItem>(ApiService.OFFLINE_CODE, ApiService.offline(result.message),
       ApiService.mockNewsDetail(id));
   }
 
-  // ===== 待办（真实端点 /ly-pd-mb/todo/api/todo/client/*） =====
+  // ===== 待办（真实端点 /mobileapi_ydxy/api/todo/client/*，2026-11-17 服务器实测） =====
   static async getTodoList(): Promise<ApiResponse<TodoItem[]>> {
-    const body: Record<string, Object> = {
+    // 源码依据：module/main/g/g.smali UnifyTodoBean（待办列表 {keyWord,page,pageSize,sourceCode,todoType}）
+    const params: Record<string, Object> = {
       'keyWord': '',
       'page': 1,
       'pageSize': 20,
       'sourceCode': '',
-      'todoType': '',
-      'userAuthType': Constants.USER_AUTH_TYPE
+      'todoType': ''
     };
-    const response: ApiResponse<Object> = await HttpClient.post(Api.TODO_LIST, JSON.stringify(body));
-    if (ApiService.isSuccess(response)) {
+    const result: BizJsonResult = await ApiService.bizJson(Api.TODO_LIST, 'POST', params);
+    if (result.code === 0) {
       const items: TodoItem[] = [];
-      const raw: Object[] = ApiService.extractArray(response.data);
+      const raw: Object[] = ApiService.extractArray(result.data);
       for (const one of raw) {
         items.push(ApiService.parseTodo(one));
       }
-      if (items.length > 0) {
-        return new ApiResponse<TodoItem[]>(response.code, response.message, items);
-      }
+      return new ApiResponse<TodoItem[]>(0, result.message, items);
     }
-    return new ApiResponse<TodoItem[]>(ApiService.OFFLINE_CODE, ApiService.offline(response.message),
+    if (result.code === ApiService.NOT_LOGIN_CODE) {
+      return new ApiResponse<TodoItem[]>(ApiService.NOT_LOGIN_CODE, result.message, ApiService.mockTodoList());
+    }
+    return new ApiResponse<TodoItem[]>(ApiService.OFFLINE_CODE, ApiService.offline(result.message),
       ApiService.mockTodoList());
   }
 
   static async getTodoTabCount(sourceCode: string): Promise<ApiResponse<Object>> {
-    const body: Record<string, Object> = {
-      'sourceCode': sourceCode,
-      'userAuthType': Constants.USER_AUTH_TYPE
-    };
-    return HttpClient.post(Api.TODO_TAB_COUNT, JSON.stringify(body));
+    // 源码依据：module/main/g/g.smali（待办Tab计数 {sourceCode}，2026-11-17 服务器实测）
+    const params: Record<string, Object> = { 'sourceCode': sourceCode };
+    const result: BizJsonResult = await ApiService.bizJson(Api.TODO_TAB_COUNT, 'POST', params);
+    if (result.code === 0) {
+      return new ApiResponse<Object>(0, result.message, result.data);
+    }
+    return new ApiResponse<Object>(result.code, result.message, result.data);
   }
 
   static async setTodoRead(todoId: string): Promise<ApiResponse<Object>> {
-    const form: string = 'todoId=' + todoId + '&isUnreadDoc=1&userAuthType=' + Constants.USER_AUTH_TYPE;
-    return HttpClient.postForm(Api.TODO_SET_READ, form);
+    // 源码依据：module/main/g/g.smali（待办已读，路径推断 /todo/client/setTodoRead）
+    const params: Record<string, Object> = { 'todoId': todoId, 'isUnreadDoc': 1 };
+    const result: BizJsonResult = await ApiService.bizJson(Api.TODO_SET_READ, 'POST', params);
+    return new ApiResponse<Object>(result.code, result.message, result.data);
   }
 
   // ===== 通讯录（推断端点 + 离线降级） =====
   static async getContactList(): Promise<ApiResponse<ContactItem[]>> {
-    const body: Record<string, Object> = {
-      'userAuthType': Constants.USER_AUTH_TYPE
-    };
-    const response: ApiResponse<Object> = await HttpClient.post(Api.CONTACT_LIST, JSON.stringify(body));
-    if (ApiService.isSuccess(response)) {
+    // 源码依据：通讯录 /contact/list（服务器命名空间实测存在，具体字段按安卓通讯录 Model 推断）
+    const params: Record<string, Object> = {};
+    const result: BizJsonResult = await ApiService.bizJson(Api.CONTACT_LIST, 'POST', params);
+    if (result.code === 0) {
       const items: ContactItem[] = [];
-      const raw: Object[] = ApiService.extractArray(response.data);
+      const raw: Object[] = ApiService.extractArray(result.data);
       for (const one of raw) {
         items.push(ApiService.parseContact(one));
       }
-      if (items.length > 0) {
-        return new ApiResponse<ContactItem[]>(response.code, response.message, items);
-      }
+      return new ApiResponse<ContactItem[]>(0, result.message, items);
     }
-    return new ApiResponse<ContactItem[]>(ApiService.OFFLINE_CODE, ApiService.offline(response.message),
+    if (result.code === ApiService.NOT_LOGIN_CODE) {
+      return new ApiResponse<ContactItem[]>(ApiService.NOT_LOGIN_CODE, result.message, ApiService.mockContactList());
+    }
+    return new ApiResponse<ContactItem[]>(ApiService.OFFLINE_CODE, ApiService.offline(result.message),
       ApiService.mockContactList());
   }
 
   // ===== 会议（推断端点 + 离线降级） =====
   static async getMeetingList(): Promise<ApiResponse<MeetingItem[]>> {
-    const body: Record<string, Object> = {
-      'userAuthType': Constants.USER_AUTH_TYPE
-    };
-    const response: ApiResponse<Object> = await HttpClient.post(Api.MEETING_LIST, JSON.stringify(body));
-    if (ApiService.isSuccess(response)) {
+    // 源码依据：会议模块原始实现为 H5 路由/插件 dex（不可恢复），/meeting/main 为命名空间推断
+    const params: Record<string, Object> = {};
+    const result: BizJsonResult = await ApiService.bizJson(Api.MEETING_LIST, 'POST', params);
+    if (result.code === 0) {
       const items: MeetingItem[] = [];
-      const raw: Object[] = ApiService.extractArray(response.data);
+      const raw: Object[] = ApiService.extractArray(result.data);
       for (const one of raw) {
         items.push(ApiService.parseMeeting(one));
       }
-      if (items.length > 0) {
-        return new ApiResponse<MeetingItem[]>(response.code, response.message, items);
-      }
+      return new ApiResponse<MeetingItem[]>(0, result.message, items);
     }
-    return new ApiResponse<MeetingItem[]>(ApiService.OFFLINE_CODE, ApiService.offline(response.message),
+    if (result.code === ApiService.NOT_LOGIN_CODE) {
+      return new ApiResponse<MeetingItem[]>(ApiService.NOT_LOGIN_CODE, result.message, ApiService.mockMeetingList());
+    }
+    return new ApiResponse<MeetingItem[]>(ApiService.OFFLINE_CODE, ApiService.offline(result.message),
       ApiService.mockMeetingList());
   }
 
   static async getMeetingDetail(id: string): Promise<ApiResponse<MeetingItem>> {
-    const body: Record<string, Object> = {
-      'id': id,
-      'userAuthType': Constants.USER_AUTH_TYPE
-    };
-    const response: ApiResponse<Object> = await HttpClient.post(Api.MEETING_DETAIL, JSON.stringify(body));
-    if (ApiService.isSuccess(response)) {
-      const detail: MeetingItem = ApiService.parseMeeting(response.data);
+    // 源码依据：会议模块原始实现为 H5 路由/插件 dex（不可恢复），/meeting/detail 为命名空间推断
+    const params: Record<string, Object> = { 'id': id };
+    const result: BizJsonResult = await ApiService.bizJson(Api.MEETING_DETAIL, 'POST', params);
+    if (result.code === 0) {
+      const detail: MeetingItem = ApiService.parseMeeting(result.data);
       if (detail.title !== '') {
-        return new ApiResponse<MeetingItem>(response.code, response.message, detail);
+        return new ApiResponse<MeetingItem>(0, result.message, detail);
       }
     }
-    return new ApiResponse<MeetingItem>(ApiService.OFFLINE_CODE, ApiService.offline(response.message),
+    if (result.code === ApiService.NOT_LOGIN_CODE) {
+      return new ApiResponse<MeetingItem>(ApiService.NOT_LOGIN_CODE, result.message, ApiService.mockMeetingDetail(id));
+    }
+    return new ApiResponse<MeetingItem>(ApiService.OFFLINE_CODE, ApiService.offline(result.message),
       ApiService.mockMeetingDetail(id));
   }
 
-  // ===== 课表（真实端点 /mobileapi/api/schedule/searchSchedule，ScheduleFactory） =====
+  // ===== 课表（真实端点 /mobileapi_ydxy/api/schedule/searchSchedule，ScheduleFactory） =====
   static async getScheduleList(): Promise<ApiResponse<CourseItem[]>> {
-    const body: Record<string, Object> = {
-      'userAuthType': Constants.USER_AUTH_TYPE
-    };
-    const response: ApiResponse<Object> = await HttpClient.post(Api.SCHEDULE_LIST, JSON.stringify(body));
-    if (ApiService.isSuccess(response)) {
+    // 源码依据：lyyd/timetable/a.smali + c.smali（ScheduleFactory：a()="api"、b()="schedule"），
+    // 2026-11-17 服务器实测 /schedule/searchSchedule 存在于 /mobileapi_ydxy/api/ 命名空间
+    const params: Record<string, Object> = {};
+    const result: BizJsonResult = await ApiService.bizJson(Api.SCHEDULE_LIST, 'POST', params);
+    if (result.code === 0) {
       const items: CourseItem[] = [];
-      const raw: Object[] = ApiService.extractArray(response.data);
+      const raw: Object[] = ApiService.extractArray(result.data);
       for (const one of raw) {
         items.push(ApiService.parseCourse(one));
       }
-      if (items.length > 0) {
-        return new ApiResponse<CourseItem[]>(response.code, response.message, items);
-      }
+      return new ApiResponse<CourseItem[]>(0, result.message, items);
     }
-    return new ApiResponse<CourseItem[]>(ApiService.OFFLINE_CODE, ApiService.offline(response.message),
+    if (result.code === ApiService.NOT_LOGIN_CODE) {
+      return new ApiResponse<CourseItem[]>(ApiService.NOT_LOGIN_CODE, result.message, ApiService.mockScheduleList());
+    }
+    return new ApiResponse<CourseItem[]>(ApiService.OFFLINE_CODE, ApiService.offline(result.message),
       ApiService.mockScheduleList());
   }
 
-  // ===== 督导（真实端点 /mobileapi/api/superviseListen/*，SuperviseFactory） =====
+  // ===== 督导（真实端点 /mobileapi_ydxy/api/superviseListen/*，SuperviseFactory） =====
   static async getSuperviseList(): Promise<ApiResponse<SuperviseCourseItem[]>> {
-    // supervise/c/a.smali getUserCourseList：bmdm/djj/skls
-    const body: Record<string, Object> = {
+    // 源码依据：lyyd/supervise/a.smali + supervise/c/a.smali getUserCourseList {bmdm,djj,skls}（2026-11-17 实测）
+    const params: Record<string, Object> = {
       'bmdm': '',
       'djj': '',
-      'skls': '',
-      'userAuthType': Constants.USER_AUTH_TYPE
+      'skls': ''
     };
-    const response: ApiResponse<Object> = await HttpClient.post(Api.SUPERVISE_USER_COURSE, JSON.stringify(body));
-    if (ApiService.isSuccess(response)) {
+    const result: BizJsonResult = await ApiService.bizJson(Api.SUPERVISE_USER_COURSE, 'POST', params);
+    if (result.code === 0) {
       const items: SuperviseCourseItem[] = [];
-      const raw: Object[] = ApiService.extractArray(response.data);
+      const raw: Object[] = ApiService.extractArray(result.data);
       for (const one of raw) {
         items.push(ApiService.parseSuperviseCourse(one));
       }
-      if (items.length > 0) {
-        return new ApiResponse<SuperviseCourseItem[]>(response.code, response.message, items);
-      }
+      return new ApiResponse<SuperviseCourseItem[]>(0, result.message, items);
     }
-    return new ApiResponse<SuperviseCourseItem[]>(ApiService.OFFLINE_CODE, ApiService.offline(response.message),
+    if (result.code === ApiService.NOT_LOGIN_CODE) {
+      return new ApiResponse<SuperviseCourseItem[]>(ApiService.NOT_LOGIN_CODE, result.message,
+        ApiService.mockSuperviseList());
+    }
+    return new ApiResponse<SuperviseCourseItem[]>(ApiService.OFFLINE_CODE, ApiService.offline(result.message),
       ApiService.mockSuperviseList());
   }
 
   static async getSuperviseMine(): Promise<ApiResponse<SuperviseMineData>> {
-    // supervise/c/a.smali：getStaleListening（已督导）/ getNotListening（未督导）
-    const body: Record<string, Object> = {
-      'userAuthType': Constants.USER_AUTH_TYPE
-    };
-    const staleResponse: ApiResponse<Object> =
-      await HttpClient.post(Api.SUPERVISE_STALE_LISTENING, JSON.stringify(body));
-    const notResponse: ApiResponse<Object> =
-      await HttpClient.post(Api.SUPERVISE_NOT_LISTENING, JSON.stringify(body));
-    const staleOk: boolean = ApiService.isSuccess(staleResponse);
-    const notOk: boolean = ApiService.isSuccess(notResponse);
+    // 源码依据：supervise/c/a.smali：getStaleListening（已督导）/ getNotListening（未督导），2026-11-17 实测
+    const params: Record<string, Object> = {};
+    const staleResult: BizJsonResult = await ApiService.bizJson(Api.SUPERVISE_STALE_LISTENING, 'POST', params);
+    const notResult: BizJsonResult = await ApiService.bizJson(Api.SUPERVISE_NOT_LISTENING, 'POST', params);
+    const staleOk: boolean = staleResult.code === 0;
+    const notOk: boolean = notResult.code === 0;
     if (staleOk || notOk) {
       const pastRecords: SuperviseRecordItem[] = [];
       const futureRecords: SuperviseRecordItem[] = [];
       if (staleOk) {
-        const raw: Object[] = ApiService.extractArray(staleResponse.data);
+        const raw: Object[] = ApiService.extractArray(staleResult.data);
         for (const one of raw) {
           pastRecords.push(ApiService.parseSuperviseRecord(one, true));
         }
       }
       if (notOk) {
-        const raw: Object[] = ApiService.extractArray(notResponse.data);
+        const raw: Object[] = ApiService.extractArray(notResult.data);
         for (const one of raw) {
           futureRecords.push(ApiService.parseSuperviseRecord(one, false));
         }
       }
-      if (pastRecords.length > 0 || futureRecords.length > 0) {
-        const message: string = staleResponse.message !== '' ? staleResponse.message : notResponse.message;
-        return new ApiResponse<SuperviseMineData>(staleResponse.code, message,
-          new SuperviseMineData(pastRecords, futureRecords));
-      }
+      const message: string = staleResult.message !== '' ? staleResult.message : notResult.message;
+      return new ApiResponse<SuperviseMineData>(0, message, new SuperviseMineData(pastRecords, futureRecords));
     }
-    const failMessage: string = staleResponse.message !== '' ? staleResponse.message : notResponse.message;
+    const failCode: number = staleResult.code === ApiService.NOT_LOGIN_CODE
+      || notResult.code === ApiService.NOT_LOGIN_CODE ? ApiService.NOT_LOGIN_CODE : ApiService.OFFLINE_CODE;
+    const failMessage: string = staleResult.message !== '' ? staleResult.message : notResult.message;
+    if (failCode === ApiService.NOT_LOGIN_CODE) {
+      return new ApiResponse<SuperviseMineData>(ApiService.NOT_LOGIN_CODE, '登录已失效', ApiService.mockSuperviseMine());
+    }
     return new ApiResponse<SuperviseMineData>(ApiService.OFFLINE_CODE, ApiService.offline(failMessage),
       ApiService.mockSuperviseMine());
   }
 
   // ===== 成绩详情 / 课评（推断端点 + 离线降级） =====
   static async getScoreDetail(): Promise<ApiResponse<ScoreDetailData>> {
-    const body: Record<string, Object> = {
-      'userAuthType': Constants.USER_AUTH_TYPE
-    };
-    const response: ApiResponse<Object> = await HttpClient.post(Api.SCORE_DETAIL, JSON.stringify(body));
-    if (ApiService.isSuccess(response)) {
-      const rec: Record<string, Object> = ApiService.asRecord(response.data);
+    // 源码依据：成绩模块原始实现为 H5 路由/插件 dex（不可恢复），/grade/detail 为命名空间推断
+    const params: Record<string, Object> = {};
+    const result: BizJsonResult = await ApiService.bizJson(Api.SCORE_DETAIL, 'POST', params);
+    if (result.code === 0) {
+      const rec: Record<string, Object> = ApiService.asRecord(result.data);
       const detailList: ScoreDetailEntry[] = [];
       const rawDetails: Object[] = ApiService.extractArray(rec['detailList'] === undefined ?
-        response.data : rec['detailList']);
+        result.data : rec['detailList']);
       for (const one of rawDetails) {
         detailList.push(ApiService.parseScoreDetail(one));
       }
@@ -586,88 +631,91 @@ export class ApiService {
       for (const one of rawComments) {
         commentList.push(ApiService.parseScoreComment(one));
       }
-      if (detailList.length > 0 || rankList.length > 0 || commentList.length > 0) {
-        return new ApiResponse<ScoreDetailData>(response.code, response.message,
-          new ScoreDetailData(detailList, rankList, commentList));
-      }
+      return new ApiResponse<ScoreDetailData>(0, result.message,
+        new ScoreDetailData(detailList, rankList, commentList));
     }
-    return new ApiResponse<ScoreDetailData>(ApiService.OFFLINE_CODE, ApiService.offline(response.message),
+    if (result.code === ApiService.NOT_LOGIN_CODE) {
+      return new ApiResponse<ScoreDetailData>(ApiService.NOT_LOGIN_CODE, result.message, ApiService.mockScoreDetail());
+    }
+    return new ApiResponse<ScoreDetailData>(ApiService.OFFLINE_CODE, ApiService.offline(result.message),
       ApiService.mockScoreDetail());
   }
 
   static async getScoreComments(): Promise<ApiResponse<ScoreCommentEntry[]>> {
-    const body: Record<string, Object> = {
-      'userAuthType': Constants.USER_AUTH_TYPE
-    };
-    const response: ApiResponse<Object> = await HttpClient.post(Api.SCORE_COMMENTS, JSON.stringify(body));
-    if (ApiService.isSuccess(response)) {
+    // 源码依据：课评模块原始实现为 H5 路由/插件 dex（不可恢复），/grade/comments 为命名空间推断
+    const params: Record<string, Object> = {};
+    const result: BizJsonResult = await ApiService.bizJson(Api.SCORE_COMMENTS, 'POST', params);
+    if (result.code === 0) {
       const items: ScoreCommentEntry[] = [];
-      const raw: Object[] = ApiService.extractArray(response.data);
+      const raw: Object[] = ApiService.extractArray(result.data);
       for (const one of raw) {
         items.push(ApiService.parseScoreComment(one));
       }
-      if (items.length > 0) {
-        return new ApiResponse<ScoreCommentEntry[]>(response.code, response.message, items);
-      }
+      return new ApiResponse<ScoreCommentEntry[]>(0, result.message, items);
     }
-    return new ApiResponse<ScoreCommentEntry[]>(ApiService.OFFLINE_CODE, ApiService.offline(response.message),
+    if (result.code === ApiService.NOT_LOGIN_CODE) {
+      return new ApiResponse<ScoreCommentEntry[]>(ApiService.NOT_LOGIN_CODE, result.message,
+        ApiService.mockScoreComments());
+    }
+    return new ApiResponse<ScoreCommentEntry[]>(ApiService.OFFLINE_CODE, ApiService.offline(result.message),
       ApiService.mockScoreComments());
   }
 
   static async getScoreList(): Promise<ApiResponse<ScoreItem[]>> {
-    const body: Record<string, Object> = {
-      'userAuthType': Constants.USER_AUTH_TYPE
-    };
-    const response: ApiResponse<Object> = await HttpClient.post(Api.SCORE_LIST, JSON.stringify(body));
-    if (ApiService.isSuccess(response)) {
+    // 源码依据：/grade/gradeList（2026-11-17 服务器命名空间实测存在）
+    const params: Record<string, Object> = {};
+    const result: BizJsonResult = await ApiService.bizJson(Api.GRADE_LIST, 'POST', params);
+    if (result.code === 0) {
       const items: ScoreItem[] = [];
-      const raw: Object[] = ApiService.extractArray(response.data);
+      const raw: Object[] = ApiService.extractArray(result.data);
       for (const one of raw) {
         items.push(ApiService.parseScore(one));
       }
-      if (items.length > 0) {
-        return new ApiResponse<ScoreItem[]>(response.code, response.message, items);
-      }
+      return new ApiResponse<ScoreItem[]>(0, result.message, items);
     }
-    return new ApiResponse<ScoreItem[]>(ApiService.OFFLINE_CODE, ApiService.offline(response.message),
+    if (result.code === ApiService.NOT_LOGIN_CODE) {
+      return new ApiResponse<ScoreItem[]>(ApiService.NOT_LOGIN_CODE, result.message, ApiService.mockScoreList());
+    }
+    return new ApiResponse<ScoreItem[]>(ApiService.OFFLINE_CODE, ApiService.offline(result.message),
       ApiService.mockScoreList());
   }
 
   static async getExamList(): Promise<ApiResponse<ExamItem[]>> {
-    const body: Record<string, Object> = {
-      'userAuthType': Constants.USER_AUTH_TYPE
-    };
-    const response: ApiResponse<Object> = await HttpClient.post(Api.EXAM_LIST, JSON.stringify(body));
-    if (ApiService.isSuccess(response)) {
+    // 源码依据：考试模块原始实现为 H5 路由/插件 dex（不可恢复），/exam/list 为命名空间推断
+    const params: Record<string, Object> = {};
+    const result: BizJsonResult = await ApiService.bizJson(Api.EXAM_LIST, 'POST', params);
+    if (result.code === 0) {
       const items: ExamItem[] = [];
-      const raw: Object[] = ApiService.extractArray(response.data);
+      const raw: Object[] = ApiService.extractArray(result.data);
       for (const one of raw) {
         items.push(ApiService.parseExam(one));
       }
-      if (items.length > 0) {
-        return new ApiResponse<ExamItem[]>(response.code, response.message, items);
-      }
+      return new ApiResponse<ExamItem[]>(0, result.message, items);
     }
-    return new ApiResponse<ExamItem[]>(ApiService.OFFLINE_CODE, ApiService.offline(response.message),
+    if (result.code === ApiService.NOT_LOGIN_CODE) {
+      return new ApiResponse<ExamItem[]>(ApiService.NOT_LOGIN_CODE, result.message, ApiService.mockExamList());
+    }
+    return new ApiResponse<ExamItem[]>(ApiService.OFFLINE_CODE, ApiService.offline(result.message),
       ApiService.mockExamList());
   }
 
   static async getAttendanceList(): Promise<ApiResponse<AttendanceItem[]>> {
-    const body: Record<string, Object> = {
-      'userAuthType': Constants.USER_AUTH_TYPE
-    };
-    const response: ApiResponse<Object> = await HttpClient.post(Api.ATTENDANCE_LIST, JSON.stringify(body));
-    if (ApiService.isSuccess(response)) {
+    // 源码依据：考勤模块原始实现为 H5 路由/插件 dex（不可恢复），/attendance/list 为命名空间推断
+    const params: Record<string, Object> = {};
+    const result: BizJsonResult = await ApiService.bizJson(Api.ATTENDANCE_LIST, 'POST', params);
+    if (result.code === 0) {
       const items: AttendanceItem[] = [];
-      const raw: Object[] = ApiService.extractArray(response.data);
+      const raw: Object[] = ApiService.extractArray(result.data);
       for (const one of raw) {
         items.push(ApiService.parseAttendance(one));
       }
-      if (items.length > 0) {
-        return new ApiResponse<AttendanceItem[]>(response.code, response.message, items);
-      }
+      return new ApiResponse<AttendanceItem[]>(0, result.message, items);
     }
-    return new ApiResponse<AttendanceItem[]>(ApiService.OFFLINE_CODE, ApiService.offline(response.message),
+    if (result.code === ApiService.NOT_LOGIN_CODE) {
+      return new ApiResponse<AttendanceItem[]>(ApiService.NOT_LOGIN_CODE, result.message,
+        ApiService.mockAttendanceList());
+    }
+    return new ApiResponse<AttendanceItem[]>(ApiService.OFFLINE_CODE, ApiService.offline(result.message),
       ApiService.mockAttendanceList());
   }
 
@@ -905,4 +953,3 @@ export class ApiService {
     return list;
   }
 }
-

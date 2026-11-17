@@ -1,7 +1,9 @@
 import { ApiService } from '../network/ApiService';
+import { ApiResponse } from '../model/ResponseModel';
 import { UserInfo } from '../model/UserModel';
 import { TitleBar } from '../components/TitleBar';
 import { LoadingView } from '../components/LoadingView';
+import { BusinessError } from '@kit.BasicServicesKit';
 
 interface InfoRow {
   rowId: string;
@@ -21,16 +23,29 @@ struct PersonalDetailPage {
   @State user: UserInfo = new UserInfo('', '', '', '', '', '', '', '', '', '', '');
   @State isLoading: boolean = true;
   @State isOffline: boolean = false;
+  @State offlineReason: string = '';
 
   aboutToAppear(): void {
     ApiService.getUserInfo('20230001')
-      .then((response) => {
-        this.user = response.data;
-        this.isOffline = response.code === -1;
+      .then((response: ApiResponse<UserInfo>) => {
+        const data: UserInfo = response.data;
+        if (data.name !== '') {
+          this.user = data;
+        }
+        if (response.code !== 0) {
+          this.isOffline = true;
+          this.offlineReason = response.message;
+        } else {
+          this.isOffline = false;
+          this.offlineReason = '';
+        }
         this.isLoading = false;
       })
-      .catch(() => {
+      .catch((error: BusinessError) => {
+        console.info('PersonalDetailPage load fail: ' + error.message);
         this.user = new UserInfo('', '暂无数据', '', '', '', '', '', '', '', '', '');
+        this.isOffline = true;
+        this.offlineReason = '网络请求失败: ' + error.message;
         this.isLoading = false;
       });
   }
@@ -149,7 +164,7 @@ struct PersonalDetailPage {
             }, (infoRow: InfoRow) => infoRow.rowId)
 
             if (this.isOffline) {
-              Text('离线数据: 服务器不可达，当前展示本地模拟数据')
+              Text('离线降级（' + this.offlineReason + '），当前展示本地模拟数据')
                 .fontSize(12)
                 .fontColor($r('app.color.mobile_campus_primary_color_default'))
                 .width('100%')

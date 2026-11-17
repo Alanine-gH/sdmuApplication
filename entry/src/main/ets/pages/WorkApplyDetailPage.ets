@@ -1,3 +1,4 @@
+// 数据源：无服务器接口，OA申请详情/审批节点数据为内置示例数据（离线演示用），未接 ApiService。
 import { TitleBar } from '../components/TitleBar';
 
 class WorkApplyNode {

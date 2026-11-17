@@ -1,3 +1,4 @@
+// 数据源：无服务器接口 — ApiService 未提供课评发布端点，发布为本地模拟（未接 ApiService）。
 import { TitleBar } from '../components/TitleBar';
 
 @Entry

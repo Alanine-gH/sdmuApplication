@@ -1,4 +1,4 @@
-import { router } from '@kit.ArkUI';
+﻿import { router } from '@kit.ArkUI';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
@@ -53,6 +53,7 @@ class ICampusExamInfo {
 
 @Component
 export struct ICampusTab {
+  // 离线降级内置数据：课表接口（getScheduleList）失败时展示的示例课程
   @State courseList: ICampusCourseInfo[] = [
     new ICampusCourseInfo('01', '高等数学（下）', '教学楼A301  08:00-09:40'),
     new ICampusCourseInfo('02', '大学英语（四）', '外语楼B203  10:00-11:40'),
@@ -64,6 +65,7 @@ export struct ICampusTab {
     new ICampusAppInfo('考试', $r('app.media.examination_table'), 'pages/ExamPage'),
     new ICampusAppInfo('考勤', $r('app.media.attendance_time'), 'pages/AttendancePage')
   ];
+  // 离线降级内置数据：考试接口（getExamList）失败时展示的示例考试
   @State examList: ICampusExamInfo[] = [
     new ICampusExamInfo('高等数学（下）', '2026-01-08 09:00-11:00', '第一教学楼A201'),
     new ICampusExamInfo('数据结构', '2026-01-10 14:00-16:00', '第二教学楼B105')
@@ -85,8 +87,12 @@ export struct ICampusTab {
             return new ICampusCourseInfo(numText, course.name, locationText);
           });
         }
+        if (!ApiService.isSuccess(response)) {
+          this.getUIContext().getPromptAction().showToast({ message: '课表加载失败，已展示离线数据：' + response.message });
+        }
       })
       .catch((error: BusinessError) => {
+        this.getUIContext().getPromptAction().showToast({ message: '课表加载失败，已展示离线数据：' + (error as BusinessError).message });
       });
     ApiService.getExamList()
       .then((response: ApiResponse<ExamItem[]>) => {
@@ -95,8 +101,12 @@ export struct ICampusTab {
             return new ICampusExamInfo(exam.courseName, exam.time, exam.location);
           });
         }
+        if (!ApiService.isSuccess(response)) {
+          this.getUIContext().getPromptAction().showToast({ message: '考试安排加载失败，已展示离线数据：' + response.message });
+        }
       })
       .catch((error: BusinessError) => {
+        this.getUIContext().getPromptAction().showToast({ message: '考试安排加载失败，已展示离线数据：' + (error as BusinessError).message });
       });
   }
 

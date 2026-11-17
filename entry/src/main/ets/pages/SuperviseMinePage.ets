@@ -72,6 +72,9 @@ struct SuperviseMinePage {
   aboutToAppear(): void {
     ApiService.getSuperviseMine()
       .then((response: ApiResponse<SuperviseMineData>) => {
+        if (response.code !== 0) {
+          console.info('SuperviseMinePage degrade: code=' + response.code + ' msg=' + response.message);
+        }
         const data: SuperviseMineData = response.data;
         if (data.pastRecords.length > 0) {
           this.pastRecords = data.pastRecords.map((entry: SuperviseRecordItem): LectureRecord => {
@@ -89,6 +92,7 @@ struct SuperviseMinePage {
         }
       })
       .catch((error: BusinessError) => {
+        console.info('SuperviseMinePage load fail: ' + error.message);
       });
   }
 

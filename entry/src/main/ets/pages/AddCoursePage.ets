@@ -3,6 +3,9 @@ import { TitleBar } from '../components/TitleBar';
 /**
  * 添加课程页 — 1:1 复刻 mobile_campus_schedule_activity_add_course.xml
  * 结构：RelativeLayout(#F2F2F2) + toolbar_normal + 表单 + 底部提交按钮
+ *
+ * 数据源：无服务器接口 — ApiService 未提供添加课程端点，
+ * 表单为本地默认值、提交为本地模拟，未接 ApiService。
  */
 class AddCourseForm {
   courseName: string = '';

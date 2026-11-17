@@ -1,4 +1,4 @@
-import { router } from '@kit.ArkUI';
+﻿import { router } from '@kit.ArkUI';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
@@ -38,9 +38,11 @@ class IOfficeTodoInfo {
 
 @Component
 export struct IOfficeTab {
+  // 离线降级内置数据：新闻接口（getNewsList）失败时展示的示例公告
   @State noticeList: IOfficeNoticeInfo[] = [
     new IOfficeNoticeInfo('关于2026年寒假放假及下学期开学安排的通知', '2026-11-10')
   ];
+  // 离线降级内置数据：待办接口（getTodoList）失败时展示的示例待办
   @State todoList: IOfficeTodoInfo[] = [
     new IOfficeTodoInfo('教职工年度考核表填报', '人事处', '2026-11-20 17:30'),
     new IOfficeTodoInfo('实验室安全隐患排查整改', '教务处', '2026-11-25 12:00'),
@@ -57,8 +59,12 @@ export struct IOfficeTab {
             return new IOfficeNoticeInfo(news.title, news.publishTime);
           });
         }
+        if (!ApiService.isSuccess(response)) {
+          this.getUIContext().getPromptAction().showToast({ message: '公告加载失败，已展示离线数据：' + response.message });
+        }
       })
       .catch((error: BusinessError) => {
+        this.getUIContext().getPromptAction().showToast({ message: '公告加载失败，已展示离线数据：' + (error as BusinessError).message });
       });
     ApiService.getTodoList()
       .then((response: ApiResponse<TodoItem[]>) => {
@@ -67,8 +73,12 @@ export struct IOfficeTab {
             return new IOfficeTodoInfo(todo.title, todo.fromUser, todo.deadline);
           });
         }
+        if (!ApiService.isSuccess(response)) {
+          this.getUIContext().getPromptAction().showToast({ message: '待办加载失败，已展示离线数据：' + response.message });
+        }
       })
       .catch((error: BusinessError) => {
+        this.getUIContext().getPromptAction().showToast({ message: '待办加载失败，已展示离线数据：' + (error as BusinessError).message });
       });
   }
 

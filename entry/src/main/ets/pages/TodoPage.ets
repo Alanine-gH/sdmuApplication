@@ -1,5 +1,7 @@
 import { ApiService } from '../network/ApiService';
+import { ApiResponse } from '../model/ResponseModel';
 import { TodoItem } from '../model/TodoModel';
+import { BusinessError } from '@kit.BasicServicesKit';
 import { TitleBar } from '../components/TitleBar';
 import { LoadingView } from '../components/LoadingView';
 
@@ -26,18 +28,33 @@ struct TodoPage {
   @State sortLabel: string = '全部';
   @State isLoading: boolean = true;
   @State isOffline: boolean = false;
+  @State offlineReason: string = '';
 
   aboutToAppear(): void {
     ApiService.getTodoList()
-      .then((response) => {
-        this.allTodos = response.data;
-        this.isOffline = response.code === -1;
+      .then((response: ApiResponse<TodoItem[]>) => {
+        const data: TodoItem[] = response.data;
+        if (data.length > 0) {
+          this.allTodos = data;
+        } else if (response.code !== 0) {
+          console.info('TodoPage degrade: code=' + response.code + ' msg=' + response.message);
+        }
+        if (response.code !== 0) {
+          this.isOffline = true;
+          this.offlineReason = response.message;
+        } else {
+          this.isOffline = false;
+          this.offlineReason = '';
+        }
         this.applyFilter();
         this.isLoading = false;
       })
-      .catch(() => {
+      .catch((error: BusinessError) => {
+        console.info('TodoPage load fail: ' + error.message);
         this.allTodos = [];
         this.shownTodos = [];
+        this.isOffline = true;
+        this.offlineReason = '网络请求失败: ' + error.message;
         this.isLoading = false;
       });
   }
@@ -207,7 +224,7 @@ struct TodoPage {
             .width('100%')
 
           if (this.isOffline) {
-            Text('离线数据: 服务器不可达，当前展示本地模拟数据')
+            Text('离线降级（' + this.offlineReason + '），当前展示本地模拟数据')
               .fontSize(12)
               .fontColor($r('app.color.mobile_campus_primary_color_default'))
               .width('100%')

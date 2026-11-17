@@ -1,6 +1,8 @@
 import { router } from '@kit.ArkUI';
 import { ApiService } from '../network/ApiService';
+import { ApiResponse } from '../model/ResponseModel';
 import { MeetingItem } from '../model/MeetingModel';
+import { BusinessError } from '@kit.BasicServicesKit';
 import { TitleBar } from '../components/TitleBar';
 import { EmptyView } from '../components/EmptyView';
 import { LoadingView } from '../components/LoadingView';
@@ -21,14 +23,20 @@ struct MeetingPage {
 
   aboutToAppear(): void {
     ApiService.getMeetingList()
-      .then((response) => {
-        this.allGroups = MeetingPage.buildGroups(response.data);
-        if (this.allGroups.length > 0) {
-          this.expandedId = this.allGroups[0].groupId;
+      .then((response: ApiResponse<MeetingItem[]>) => {
+        const data: MeetingItem[] = response.data;
+        if (data.length > 0) {
+          this.allGroups = MeetingPage.buildGroups(data);
+          if (this.allGroups.length > 0) {
+            this.expandedId = this.allGroups[0].groupId;
+          }
+        } else if (response.code !== 0) {
+          console.info('MeetingPage degrade: code=' + response.code + ' msg=' + response.message);
         }
         this.isLoading = false;
       })
-      .catch(() => {
+      .catch((error: BusinessError) => {
+        console.info('MeetingPage load fail: ' + error.message);
         this.allGroups = [];
         this.isLoading = false;
       });

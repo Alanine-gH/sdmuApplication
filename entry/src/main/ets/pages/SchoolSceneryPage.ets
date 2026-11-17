@@ -1,3 +1,4 @@
+// 数据源：无服务器接口，页面数据为内置示例数据（离线演示用），未接 ApiService。
 import { TitleBar } from '../components/TitleBar';
 
 /** 校园风光条目模型 */

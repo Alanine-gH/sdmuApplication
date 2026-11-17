@@ -1,3 +1,4 @@
+// 数据源：无服务器接口，OA办事详情/流程节点数据为内置示例数据（离线演示用），未接 ApiService。
 import { TitleBar } from '../components/TitleBar';
 
 class OaIssueSummaryItem {

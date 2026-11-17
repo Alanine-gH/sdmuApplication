@@ -1,5 +1,7 @@
 import { ApiService } from '../network/ApiService';
+import { ApiResponse } from '../model/ResponseModel';
 import { AttendanceItem } from '../model/AttendanceModel';
+import { BusinessError } from '@kit.BasicServicesKit';
 import { TitleBar } from '../components/TitleBar';
 import { EmptyView } from '../components/EmptyView';
 import { LoadingView } from '../components/LoadingView';
@@ -81,13 +83,19 @@ struct AttendancePage {
 
   aboutToAppear(): void {
     ApiService.getAttendanceList()
-      .then((response) => {
-        this.records = response.data;
-        this.buildGroups();
-        this.buildStats();
+      .then((response: ApiResponse<AttendanceItem[]>) => {
+        const data: AttendanceItem[] = response.data;
+        if (data.length > 0) {
+          this.records = data;
+          this.buildGroups();
+          this.buildStats();
+        } else if (response.code !== 0) {
+          console.info('AttendancePage degrade: code=' + response.code + ' msg=' + response.message);
+        }
         this.isLoading = false;
       })
-      .catch(() => {
+      .catch((error: BusinessError) => {
+        console.info('AttendancePage load fail: ' + error.message);
         this.records = [];
         this.groups = [];
         this.statEntries = [];

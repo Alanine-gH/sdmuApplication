@@ -211,6 +211,9 @@ struct StudentScoreDetailPage {
   aboutToAppear(): void {
     ApiService.getScoreDetail()
       .then((response: ApiResponse<ScoreDetailData>) => {
+        if (response.code !== 0) {
+          console.info('StudentScoreDetailPage degrade: code=' + response.code + ' msg=' + response.message);
+        }
         const data: ScoreDetailData = response.data;
         if (data.detailList.length > 0) {
           this.detailList = data.detailList.map((entry: ScoreDetailEntry): ScoreDetailItem => {
@@ -255,6 +258,7 @@ struct StudentScoreDetailPage {
         }
       })
       .catch((error: BusinessError) => {
+        console.info('StudentScoreDetailPage load fail: ' + error.message);
       });
   }
 

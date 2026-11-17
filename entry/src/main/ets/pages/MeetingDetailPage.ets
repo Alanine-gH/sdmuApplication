@@ -1,6 +1,8 @@
 import { router } from '@kit.ArkUI';
 import { ApiService } from '../network/ApiService';
+import { ApiResponse } from '../model/ResponseModel';
 import { MeetingItem } from '../model/MeetingModel';
+import { BusinessError } from '@kit.BasicServicesKit';
 import { TitleBar } from '../components/TitleBar';
 import { LoadingView } from '../components/LoadingView';
 import { EmptyView } from '../components/EmptyView';
@@ -17,6 +19,7 @@ struct MeetingDetailPage {
   @State meeting: MeetingItem = new MeetingItem('', '', '', '', '2', '', '');
   @State isLoading: boolean = true;
   @State isOffline: boolean = false;
+  @State offlineReason: string = '';
 
   aboutToAppear(): void {
     const params: object = router.getParams();
@@ -29,12 +32,24 @@ struct MeetingDetailPage {
       }
     }
     ApiService.getMeetingDetail(meetingId)
-      .then((response) => {
-        this.meeting = response.data;
-        this.isOffline = response.code === -1;
+      .then((response: ApiResponse<MeetingItem>) => {
+        const data: MeetingItem = response.data;
+        if (data.title !== '') {
+          this.meeting = data;
+        }
+        if (response.code !== 0) {
+          this.isOffline = true;
+          this.offlineReason = response.message;
+        } else {
+          this.isOffline = false;
+          this.offlineReason = '';
+        }
         this.isLoading = false;
       })
-      .catch(() => {
+      .catch((error: BusinessError) => {
+        console.info('MeetingDetailPage load fail: ' + error.message);
+        this.isOffline = true;
+        this.offlineReason = '网络请求失败: ' + error.message;
         this.isLoading = false;
       });
   }
@@ -60,7 +75,7 @@ struct MeetingDetailPage {
           EmptyView({ tipText: '内容不存在' })
         } else {
           if (this.isOffline) {
-            Text('离线数据: 服务器不可达，当前展示本地模拟数据')
+            Text('离线降级（' + this.offlineReason + '），当前展示本地模拟数据')
               .fontSize(12)
               .fontColor($r('app.color.mobile_campus_primary_color_default'))
               .width('100%')

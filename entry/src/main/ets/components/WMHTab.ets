@@ -1,4 +1,4 @@
-import { router } from '@kit.ArkUI';
+﻿import { router } from '@kit.ArkUI';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
@@ -48,6 +48,7 @@ export struct WMHTab {
   private scroller: Scroller = new Scroller();
   @State newsList: NewsItem[] = [];
   @State showTop: boolean = false;
+  // 离线降级内置数据：课表接口（getScheduleList）失败时展示的示例课程
   @State courses: CourseCard[] = [
     new CourseCard('1', '高等数学（下）', '明德楼 302 教室', '08:00 - 09:40'),
     new CourseCard('2', '大学英语（四）', '博文楼 210 教室', '10:00 - 11:40'),
@@ -70,8 +71,12 @@ export struct WMHTab {
         if (response.data.length > 0) {
           this.newsList = response.data;
         }
+        if (!ApiService.isSuccess(response)) {
+          this.getUIContext().getPromptAction().showToast({ message: '新闻加载失败，已展示离线数据：' + response.message });
+        }
       })
       .catch((error: BusinessError) => {
+        this.getUIContext().getPromptAction().showToast({ message: '新闻加载失败，已展示离线数据：' + (error as BusinessError).message });
         this.newsList = [];
       });
     ApiService.getScheduleList()
@@ -82,8 +87,12 @@ export struct WMHTab {
             return new CourseCard(course.sectionStart.toString(), course.name, course.location, timeText);
           });
         }
+        if (!ApiService.isSuccess(response)) {
+          this.getUIContext().getPromptAction().showToast({ message: '课表加载失败，已展示离线数据：' + response.message });
+        }
       })
       .catch((error: BusinessError) => {
+        this.getUIContext().getPromptAction().showToast({ message: '课表加载失败，已展示离线数据：' + (error as BusinessError).message });
       });
   }
 
@@ -362,7 +371,7 @@ export struct WMHTab {
             this.noticeCard(this.newsList[0])
           }
 
-          // 今日课表卡（本地内置数据）
+          // 今日课表卡（ApiService.getScheduleList，失败降级到内置数据）
           ForEach(this.courses, (course: CourseCard) => {
             this.scheduleCard(course)
           }, (course: CourseCard) => 'course_' + course.num + '_' + course.title)

@@ -1,5 +1,7 @@
 import { ApiService } from '../network/ApiService';
+import { ApiResponse } from '../model/ResponseModel';
 import { ScoreItem } from '../model/ScoreModel';
+import { BusinessError } from '@kit.BasicServicesKit';
 import { TitleBar } from '../components/TitleBar';
 import { EmptyView } from '../components/EmptyView';
 import { LoadingView } from '../components/LoadingView';
@@ -48,12 +50,18 @@ struct ScorePage {
 
   aboutToAppear(): void {
     ApiService.getScoreList()
-      .then((response) => {
-        this.scoreList = response.data;
-        this.buildGroups();
+      .then((response: ApiResponse<ScoreItem[]>) => {
+        const data: ScoreItem[] = response.data;
+        if (data.length > 0) {
+          this.scoreList = data;
+          this.buildGroups();
+        } else if (response.code !== 0) {
+          console.info('ScorePage degrade: code=' + response.code + ' msg=' + response.message);
+        }
         this.isLoading = false;
       })
-      .catch(() => {
+      .catch((error: BusinessError) => {
+        console.info('ScorePage load fail: ' + error.message);
         this.scoreList = [];
         this.groups = [];
         this.isLoading = false;

@@ -1,6 +1,8 @@
 import { TitleBar } from '../components/TitleBar';
 import { ApiService } from '../network/ApiService';
+import { ApiResponse } from '../model/ResponseModel';
 import { CourseItem } from '../model/CourseModel';
+import { BusinessError } from '@kit.BasicServicesKit';
 
 /**
  * 课表页 — 1:1 复刻 mobile_campus_timetable_activity_index.xml
@@ -69,10 +71,16 @@ struct SchedulePage {
     this.todayWeek = week;
     this.applyWeek(week);
     ApiService.getScheduleList()
-      .then((response) => {
-        this.courseList = response.data;
+      .then((response: ApiResponse<CourseItem[]>) => {
+        const data: CourseItem[] = response.data;
+        if (data.length > 0) {
+          this.courseList = data;
+        } else if (response.code !== 0) {
+          console.info('SchedulePage degrade: code=' + response.code + ' msg=' + response.message);
+        }
       })
-      .catch(() => {
+      .catch((error: BusinessError) => {
+        console.info('SchedulePage load fail: ' + error.message);
         this.courseList = [];
       });
   }

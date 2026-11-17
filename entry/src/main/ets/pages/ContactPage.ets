@@ -1,5 +1,7 @@
 import { ApiService } from '../network/ApiService';
+import { ApiResponse } from '../model/ResponseModel';
 import { ContactItem } from '../model/ContactModel';
+import { BusinessError } from '@kit.BasicServicesKit';
 import { TitleBar } from '../components/TitleBar';
 import { EmptyView } from '../components/EmptyView';
 import { LoadingView } from '../components/LoadingView';
@@ -44,15 +46,21 @@ struct ContactPage {
     ];
     this.commonPhones = phones;
     ApiService.getContactList()
-      .then((response) => {
-        this.allGroups = ContactPage.buildGroups(response.data);
-        this.shownGroups = this.allGroups;
-        if (this.shownGroups.length > 0) {
-          this.expandedDept = this.shownGroups[0].department;
+      .then((response: ApiResponse<ContactItem[]>) => {
+        const data: ContactItem[] = response.data;
+        if (data.length > 0) {
+          this.allGroups = ContactPage.buildGroups(data);
+          this.shownGroups = this.allGroups;
+          if (this.shownGroups.length > 0) {
+            this.expandedDept = this.shownGroups[0].department;
+          }
+        } else if (response.code !== 0) {
+          console.info('ContactPage degrade: code=' + response.code + ' msg=' + response.message);
         }
         this.isLoading = false;
       })
-      .catch(() => {
+      .catch((error: BusinessError) => {
+        console.info('ContactPage load fail: ' + error.message);
         this.allGroups = [];
         this.shownGroups = [];
         this.isLoading = false;

@@ -1,5 +1,7 @@
 import { ApiService } from '../network/ApiService';
+import { ApiResponse } from '../model/ResponseModel';
 import { ExamItem } from '../model/ScoreModel';
+import { BusinessError } from '@kit.BasicServicesKit';
 import { TitleBar } from '../components/TitleBar';
 import { EmptyView } from '../components/EmptyView';
 import { LoadingView } from '../components/LoadingView';
@@ -30,11 +32,17 @@ struct ExamPage {
 
   aboutToAppear(): void {
     ApiService.getExamList()
-      .then((response) => {
-        this.examList = response.data;
+      .then((response: ApiResponse<ExamItem[]>) => {
+        const data: ExamItem[] = response.data;
+        if (data.length > 0) {
+          this.examList = data;
+        } else if (response.code !== 0) {
+          console.info('ExamPage degrade: code=' + response.code + ' msg=' + response.message);
+        }
         this.isLoading = false;
       })
-      .catch(() => {
+      .catch((error: BusinessError) => {
+        console.info('ExamPage load fail: ' + error.message);
         this.examList = [];
         this.isLoading = false;
       });

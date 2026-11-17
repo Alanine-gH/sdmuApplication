@@ -60,6 +60,9 @@ struct SupervisePage {
   aboutToAppear(): void {
     ApiService.getSuperviseList()
       .then((response: ApiResponse<SuperviseCourseItem[]>) => {
+        if (response.code !== 0) {
+          console.info('SupervisePage degrade: code=' + response.code + ' msg=' + response.message);
+        }
         if (response.data.length > 0) {
           this.superviseList = response.data.map((entry: SuperviseCourseItem): SuperviseItem => {
             return new SuperviseItem(entry.section, entry.courseTitle, entry.majorInfo);
@@ -67,6 +70,7 @@ struct SupervisePage {
         }
       })
       .catch((error: BusinessError) => {
+        console.info('SupervisePage load fail: ' + error.message);
       });
   }
 
