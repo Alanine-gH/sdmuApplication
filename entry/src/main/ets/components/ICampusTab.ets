@@ -1,332 +1,330 @@
-﻿import { router } from '@kit.ArkUI';
+import { router } from '@kit.ArkUI';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { CourseItem, sectionTimeLabel } from '../model/CourseModel';
-import { ExamItem } from '../model/ScoreModel';
 
 /**
- * I校园 Tab — 复刻 mobile_campus_fragment_icampus.xml：
- * 白底容器 paddingTop 9vp(px_to_dip_18) + 滚动区 #F2F2F2 + 右下角回顶按钮(mobile_campus_top, margin 8dip)。
- * 内容模块：
- *   - mobile_campus_view_main_schedule.xml（今日课表卡）
- *   - mobile_campus_view_main_group_title.xml（分组标题）
- *   - mobile_campus_view_main_app.xml（应用条目：icon 32dip、名称15fp粗体#333333）
- *   - examination_tag.xml（"教务提供"标签：10fp白字蓝底圆角）
+ * I校园 Tab — 按 APK 实拍（mobile_campus_fragment_icampus 运行态）逐块复刻：
+ *   1. 我的课表卡：teal 表格图标 + "我的课表"17fp + "第N周"14fp灰 + 右侧"更多"；
+ *      课程行 = 左时间列(开始时间20fp黑 / 结束+下课 12fp灰) + 右侧(课程名 20fp / 📍教室 14fp灰)；
+ *      右下"添加至桌面 ?"。
+ *   2. 今日日程/会议卡：黄色日历图标 + 标题 + 右"更多"；周历一~日（今日红圆白字，周末灰）；
+ *      浅灰圆角空态框"—— 暂未添加日程 ——"。
  */
 
-class ICampusCourseInfo {
-  num: string;
-  title: string;
-  location: string;
-
-  constructor(num: string, title: string, location: string) {
-    this.num = num;
-    this.title = title;
-    this.location = location;
-  }
-}
-
-class ICampusAppInfo {
-  name: string;
-  icon: Resource;
-  url: string;
-
-  constructor(name: string, icon: Resource, url: string) {
-    this.name = name;
-    this.icon = icon;
-    this.url = url;
-  }
-}
-
-class ICampusExamInfo {
-  subject: string;
-  time: string;
-  place: string;
-
-  constructor(subject: string, time: string, place: string) {
-    this.subject = subject;
-    this.time = time;
-    this.place = place;
-  }
+/** 当前/下一节课信息 */
+class NextCourse {
+  startLabel: string = '';
+  endLabel: string = '';
+  name: string = '';
+  location: string = '';
+  has: boolean = false;
 }
 
 @Component
 export struct ICampusTab {
-  // 离线降级内置数据：课表接口（getScheduleList）失败时展示的示例课程
-  @State courseList: ICampusCourseInfo[] = [
-    new ICampusCourseInfo('01', '高等数学（下）', '教学楼A301  08:00-09:40'),
-    new ICampusCourseInfo('02', '大学英语（四）', '外语楼B203  10:00-11:40'),
-    new ICampusCourseInfo('03', '数据结构', '实验楼C105  14:00-15:40')
-  ];
-  @State appList: ICampusAppInfo[] = [
-    new ICampusAppInfo('课表', $r('app.media.mobile_campus_icon_calendar'), 'pages/SchedulePage'),
-    new ICampusAppInfo('成绩', $r('app.media.average_score'), 'pages/ScorePage'),
-    new ICampusAppInfo('考试', $r('app.media.examination_table'), 'pages/ExamPage'),
-    new ICampusAppInfo('考勤', $r('app.media.attendance_time'), 'pages/AttendancePage')
-  ];
-  // 离线降级内置数据：考试接口（getExamList）失败时展示的示例考试
-  @State examList: ICampusExamInfo[] = [
-    new ICampusExamInfo('高等数学（下）', '2026-01-08 09:00-11:00', '第一教学楼A201'),
-    new ICampusExamInfo('数据结构', '2026-01-10 14:00-16:00', '第二教学楼B105')
-  ];
-  @State showBackTop: boolean = false;
+  @State nextCourse: NextCourse = new NextCourse();
+  /** 周历：本周七天 {label: '一'..'日', date: 16..22, isToday, isWeekend} */
+  @State weekDays: WeekDay[] = [];
+  /** 当前周次（第13周） */
+  @State weekNo: number = 13;
   scroller: Scroller = new Scroller();
 
   aboutToAppear(): void {
+    this.buildWeekDays();
     ApiService.getScheduleList()
       .then((response: ApiResponse<CourseItem[]>) => {
         if (response.data.length > 0) {
-          let index: number = 0;
-          this.courseList = response.data.map((course: CourseItem): ICampusCourseInfo => {
-            index = index + 1;
-            const numText: string = index < 10 ? '0' + index.toString() : index.toString();
-            const timeText: string = sectionTimeLabel(course.sectionStart, course.sectionEnd);
-            const locationText: string = timeText !== '' ?
-              course.location + '  ' + timeText : course.location;
-            return new ICampusCourseInfo(numText, course.name, locationText);
-          });
-        }
-        if (!ApiService.isSuccess(response)) {
-          this.getUIContext().getPromptAction().showToast({ message: '课表加载失败，已展示离线数据：' + response.message });
+          this.pickNextCourse(response.data);
         }
       })
       .catch((error: BusinessError) => {
-        this.getUIContext().getPromptAction().showToast({ message: '课表加载失败，已展示离线数据：' + (error as BusinessError).message });
-      });
-    ApiService.getExamList()
-      .then((response: ApiResponse<ExamItem[]>) => {
-        if (response.data.length > 0) {
-          this.examList = response.data.map((exam: ExamItem): ICampusExamInfo => {
-            return new ICampusExamInfo(exam.courseName, exam.time, exam.location);
-          });
-        }
-        if (!ApiService.isSuccess(response)) {
-          this.getUIContext().getPromptAction().showToast({ message: '考试安排加载失败，已展示离线数据：' + response.message });
-        }
-      })
-      .catch((error: BusinessError) => {
-        this.getUIContext().getPromptAction().showToast({ message: '考试安排加载失败，已展示离线数据：' + (error as BusinessError).message });
+        hilog.info(0x0000, 'ICampus', 'load fail: %{public}s', (error as BusinessError).message);
       });
   }
 
-  /**
-   * mobile_campus_view_main_group_title.xml — 分组标题。
-   * 高 px_to_dip_80=40vp、padding 左右 px_to_dip_24=12vp、
-   * 标题 px_to_sp_30=15fp @color/mobile_campus_primary_color、drawableLeft + drawablePadding px_to_dip_16=8vp。
-   */
-  @Builder
-  groupTitleCell(title: string, icon: Resource) {
-    Column() {
-      Row() {
-        Image(icon)
-          .width(20)
-          .height(20)
-        Text(title)
-          .fontSize(15)
-          .fontColor($r('app.color.mobile_campus_primary_color'))
-          .margin({ left: 8 })
+  /** 生成本周周历（周一为起点） */
+  private buildWeekDays(): void {
+    const labels: string[] = ['一', '二', '三', '四', '五', '六', '日'];
+    const now: Date = new Date();
+    // 周一=1..周日=7
+    const dayIdx: number = now.getDay() === 0 ? 7 : now.getDay();
+    const monday: Date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (dayIdx - 1));
+    const days: WeekDay[] = [];
+    for (let i = 0; i < 7; i++) {
+      const d: Date = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
+      days.push(new WeekDay(labels[i], d.getDate(), i + 1 === dayIdx, i >= 5));
+    }
+    this.weekDays = days;
+    // 学期起始周一 2026-09-07（与 SchedulePage 同源），推算当前周次
+    const termStart: Date = new Date(2026, 8, 7);
+    const diffDays: number = Math.floor((monday.getTime() - termStart.getTime()) / 86400000);
+    this.weekNo = Math.floor(diffDays / 7) + 1;
+  }
+
+  /** 从周课表里挑出当前/下一节课 */
+  private pickNextCourse(courses: CourseItem[]): void {
+    const now: Date = new Date();
+    const nowMin: number = now.getHours() * 60 + now.getMinutes();
+    const dayIdx: number = now.getDay() === 0 ? 7 : now.getDay();
+    // searchSchedule 返回整周课表，按 dayOfWeek 过滤出今天的课
+    const today: CourseItem[] = courses.filter((c: CourseItem): boolean => {
+      return c.dayOfWeek === dayIdx;
+    });
+    const list: CourseItem[] = today.length > 0 ? today : courses;
+    let picked: CourseItem | null = null;
+    for (const c of list) {
+      // 第1节 08:00 起，每节 45min + 10min 课间
+      const startMin: number = 480 + (c.sectionStart - 1) * 55;
+      const endMin: number = 480 + (c.sectionEnd - 1) * 55 + 45;
+      if (endMin >= nowMin) {
+        picked = c;
+        break;
       }
-      .height(40)
-      .width('100%')
-      .padding({ left: 12, right: 12 })
-      .alignItems(VerticalAlign.Center)
-      .alignSelf(ItemAlign.Stretch)
-
-      Divider()
-        .color($r('app.color.common_color_6'))
-        .strokeWidth(1)
     }
-    .width('100%')
-    .backgroundColor($r('app.color.white'))
+    if (picked === null && list.length > 0) {
+      picked = list[0];
+    }
+    if (picked !== null) {
+      const next: NextCourse = new NextCourse();
+      next.has = true;
+      next.name = picked.name;
+      next.location = picked.location;
+      // sectionTimeLabel(s,s) = "HH:MM - HH:MM+45"，拆出开始/结束
+      const startFull: string = sectionTimeLabel(picked.sectionStart, picked.sectionStart);
+      const endFull: string = sectionTimeLabel(picked.sectionEnd, picked.sectionEnd);
+      next.startLabel = startFull.split(' - ')[0];
+      next.endLabel = endFull.split(' - ').length > 1 ? endFull.split(' - ')[1] : startFull.split(' - ')[0];
+      this.nextCourse = next;
+    }
   }
 
-  /**
-   * mobile_campus_view_main_schedule.xml — 今日课表单节课。
-   * tvNum：宽 px_to_dip_90=45vp、px_to_sp_42=21fp、#DFE4EA、居中；
-   * 内容列 padding px_to_dip_24=12vp，课程名 px_to_sp_34=17fp #333333，
-   * 教室/时间 px_to_dip_28=14fp #999999、marginTop px_to_dip_16=8vp。
-   */
+  /** 我的课表卡 */
   @Builder
-  scheduleCourseCell(course: ICampusCourseInfo) {
+  scheduleCard() {
     Column() {
+      // 卡头：图标 + 我的课表 第N周 …… 更多
       Row() {
-        Text(course.num)
-          .fontSize(21)
-          .fontColor($r('app.color.menu_divider'))
-          .textAlign(TextAlign.Center)
-          .width(45)
-        Column() {
-          Text(course.title)
-            .fontSize(17)
-            .fontColor($r('app.color.common_color_1'))
-          Text(course.location)
-            .fontSize(14)
-            .fontColor($r('app.color.common_color_3'))
-            .margin({ top: 8 })
-        }
-        .padding(12)
-        .alignItems(HorizontalAlign.Start)
-        .layoutWeight(1)
-      }
-      .width('100%')
-      .alignItems(VerticalAlign.Center)
-    }
-    .width('100%')
-    .backgroundColor($r('app.color.white'))
-  }
-
-  /**
-   * mobile_campus_view_main_app.xml — 应用条目。
-   * padding 左右 px_to_dip_32=16vp、上下 px_to_dip_20=10vp；
-   * icon 32dip + margin 8dip；名称 px_to_sp_30=15fp 粗体 #333333，右侧箭头。
-   */
-  @Builder
-  appEntryCell(app: ICampusAppInfo) {
-    Row() {
-      Image(app.icon)
-        .width(32)
-        .height(32)
-        .margin(8)
-        .objectFit(ImageFit.Cover)
-      Text(app.name)
-        .fontSize(15)
-        .fontWeight(FontWeight.Bold)
-        .fontColor($r('app.color.common_color_1'))
-        .maxLines(1)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
-        .margin({ left: 12 })
-        .layoutWeight(1)
-      Image($r('app.media.arrow_right'))
-        .width(16)
-        .height(16)
-        .opacity(0.6)
-    }
-    .width('100%')
-    .padding({ left: 16, right: 16, top: 10, bottom: 10 })
-    .alignItems(VerticalAlign.Center)
-    .onClick(() => {
-      router.pushUrl({ url: app.url });
-    })
-  }
-
-  /**
-   * 考试安排条目 — 科目 + examination_tag"教务提供"标签（10fp白字蓝底圆角，
-   * padding 左右 px_to_dip_12=6vp、上下 px_to_dip_6=3vp）+ 时间/考场行。
-   */
-  @Builder
-  examEntryCell(exam: ICampusExamInfo) {
-    Column() {
-      Row() {
-        Text(exam.subject)
-          .fontSize(15)
-          .fontWeight(FontWeight.Bold)
+        Image($r('app.media.mobile_campus_icon_calendar'))
+          .width(22)
+          .height(22)
+        Text('我的课表')
+          .fontSize(17)
           .fontColor($r('app.color.common_color_1'))
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-          .layoutWeight(1)
-        Text('教务提供')
-          .fontSize(10)
-          .fontColor($r('app.color.white'))
-          .backgroundColor($r('app.color.blue_default'))
-          .borderRadius(4)
-          .padding({ left: 6, right: 6, top: 3, bottom: 3 })
           .margin({ left: 8 })
-      }
-      .width('100%')
-      .alignItems(VerticalAlign.Center)
-
-      Row() {
-        Image($r('app.media.examination_time'))
-          .width(14)
-          .height(14)
-        Text(exam.time)
+        Text('第' + this.weekNo + '周')
           .fontSize(14)
           .fontColor($r('app.color.common_color_3'))
-          .margin({ left: 6 })
+          .margin({ left: 8 })
+        Blank()
+        Text('更多')
+          .fontSize(15)
+          .fontColor($r('app.color.common_color_2'))
+          .onClick(() => {
+            router.pushUrl({ url: 'pages/SchedulePage' });
+          })
       }
       .width('100%')
-      .margin({ top: 8 })
+      .padding({ left: 12, right: 12, top: 12, bottom: 8 })
       .alignItems(VerticalAlign.Center)
 
-      Row() {
-        Image($r('app.media.examination_place'))
-          .width(14)
-          .height(14)
-        Text(exam.place)
-          .fontSize(14)
+      // 课程行：左时间列 + 右课程信息
+      if (this.nextCourse.has) {
+        Row() {
+          Column() {
+            Text(this.nextCourse.startLabel)
+              .fontSize(20)
+              .fontColor($r('app.color.common_color_1'))
+            Text(this.nextCourse.endLabel + '下课')
+              .fontSize(12)
+              .fontColor($r('app.color.common_color_3'))
+              .margin({ top: 6 })
+          }
+          .width(84)
+          .padding({ left: 12 })
+          .alignItems(HorizontalAlign.Start)
+
+          Column() {
+            Text(this.nextCourse.name)
+              .fontSize(20)
+              .fontColor($r('app.color.common_color_1'))
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+            Row() {
+              Image($r('app.media.mobile_campus_schedule_icon_location'))
+                .width(14)
+                .height(14)
+              Text(this.nextCourse.location)
+                .fontSize(14)
+                .fontColor($r('app.color.common_color_3'))
+                .margin({ left: 4 })
+            }
+            .margin({ top: 8 })
+            .alignItems(VerticalAlign.Center)
+          }
+          .layoutWeight(1)
+          .padding({ right: 12 })
+          .alignItems(HorizontalAlign.Start)
+        }
+        .width('100%')
+        .padding({ top: 6, bottom: 6 })
+        .alignItems(VerticalAlign.Center)
+
+        Divider()
+          .color($r('app.color.common_color_6'))
+          .strokeWidth(0.5)
+          .margin({ left: 12, right: 12 })
+
+        // 右下：添加至桌面 ?
+        Row() {
+          Blank()
+          Text('添加至桌面')
+            .fontSize(15)
+            .fontColor($r('app.color.common_color_3'))
+          Text('?')
+            .fontSize(13)
+            .fontColor($r('app.color.white'))
+            .backgroundColor($r('app.color.common_color_3'))
+            .borderRadius(10)
+            .width(20)
+            .height(20)
+            .textAlign(TextAlign.Center)
+            .margin({ left: 6 })
+        }
+        .width('100%')
+        .padding({ left: 12, right: 12, top: 8, bottom: 10 })
+        .alignItems(VerticalAlign.Center)
+      } else {
+        Text('今日暂无课程')
+          .fontSize(15)
           .fontColor($r('app.color.common_color_3'))
-          .margin({ left: 6 })
+          .width('100%')
+          .textAlign(TextAlign.Center)
+          .padding({ top: 20, bottom: 20 })
+      }
+    }
+    .width('100%')
+    .backgroundColor($r('app.color.white'))
+  }
+
+  /** 今日日程/会议卡 */
+  @Builder
+  scheduleMeetingCard() {
+    Column() {
+      // 卡头
+      Row() {
+        Image($r('app.media.mobile_campus_main_message_course'))
+          .width(22)
+          .height(22)
+        Text('今日日程/会议')
+          .fontSize(17)
+          .fontColor($r('app.color.common_color_1'))
+          .margin({ left: 8 })
+        Blank()
+        Text('更多')
+          .fontSize(15)
+          .fontColor($r('app.color.common_color_2'))
+          .onClick(() => {
+            router.pushUrl({ url: 'pages/ScheduleMainActivity' });
+          })
       }
       .width('100%')
-      .margin({ top: 8 })
+      .padding({ left: 12, right: 12, top: 12, bottom: 4 })
+      .alignItems(VerticalAlign.Center)
+
+      // 周历行（APK 实拍：今日为正圆红底白字，周末灰）
+      Row() {
+        ForEach(this.weekDays, (day: WeekDay) => {
+          Stack({ alignContent: Alignment.Center }) {
+            if (day.isToday) {
+              Column()
+                .width(46)
+                .height(46)
+                .borderRadius(23)
+                .backgroundColor($r('app.color.mobile_campus_schedule_color1'))
+            }
+            Column() {
+              Text(day.label)
+                .fontSize(15)
+                .fontColor(day.isToday ? $r('app.color.white') :
+                  (day.isWeekend ? $r('app.color.common_color_3') : $r('app.color.common_color_1')))
+              Text(day.date.toString())
+                .fontSize(15)
+                .margin({ top: 2 })
+                .fontColor(day.isToday ? $r('app.color.white') :
+                  (day.isWeekend ? $r('app.color.common_color_3') : $r('app.color.common_color_2')))
+            }
+            .alignItems(HorizontalAlign.Center)
+          }
+          .layoutWeight(1)
+          .height(56)
+        }, (day: WeekDay) => 'wd' + day.label + day.date.toString())
+      }
+      .width('100%')
+      .padding({ left: 6, right: 6 })
+
+      // 空态框：浅灰圆角 + 左右短横线
+      Row() {
+        Row()
+          .width(20)
+          .height(1)
+          .backgroundColor($r('app.color.common_color_3'))
+        Text('暂未添加日程')
+          .fontSize(16)
+          .fontColor($r('app.color.common_color_3'))
+          .margin({ left: 12, right: 12 })
+        Row()
+          .width(20)
+          .height(1)
+          .backgroundColor($r('app.color.common_color_3'))
+      }
+      .width('100%')
+      .padding({ top: 34, bottom: 34 })
+      .margin({ top: 12, bottom: 12, left: 12, right: 12 })
+      .backgroundColor($r('app.color.common_color_6'))
+      .borderRadius(6)
+      .justifyContent(FlexAlign.Center)
       .alignItems(VerticalAlign.Center)
     }
     .width('100%')
-    .padding(12)
     .backgroundColor($r('app.color.white'))
+    .margin({ top: 9 })
   }
 
   build() {
     Column() {
-      Stack({ alignContent: Alignment.BottomEnd }) {
-        // RecyclerView：#F2F2F2
-        Scroll(this.scroller) {
-          Column() {
-            this.groupTitleCell('今日课表', $r('app.media.mobile_campus_main_schedule'))
-            ForEach(this.courseList, (course: ICampusCourseInfo) => {
-              this.scheduleCourseCell(course)
-              Divider()
-                .color($r('app.color.common_color_6'))
-                .strokeWidth(1)
-            }, (course: ICampusCourseInfo) => 'campus_course_' + course.num + '_' + course.title)
-
-            this.groupTitleCell('校园应用', $r('app.media.mobile_campus_icon_course'))
-            ForEach(this.appList, (app: ICampusAppInfo) => {
-              this.appEntryCell(app)
-              Divider()
-                .color($r('app.color.common_color_6'))
-                .strokeWidth(1)
-            }, (app: ICampusAppInfo) => 'campus_app_' + app.name)
-
-            this.groupTitleCell('考试安排', $r('app.media.examination_term'))
-            ForEach(this.examList, (exam: ICampusExamInfo) => {
-              this.examEntryCell(exam)
-              Divider()
-                .color($r('app.color.common_color_6'))
-                .strokeWidth(1)
-            }, (exam: ICampusExamInfo) => 'campus_exam_' + exam.subject + '_' + exam.time)
-          }
-          .width('100%')
-          .padding({ bottom: 12 })
-          .backgroundColor($r('app.color.common_color_6'))
+      Scroll(this.scroller) {
+        Column() {
+          this.scheduleCard()
+          this.scheduleMeetingCard()
         }
-        .scrollable(ScrollDirection.Vertical)
         .width('100%')
-        .height('100%')
-        .onScroll((xOffset: number, yOffset: number) => {
-          this.showBackTop = this.scroller.currentOffset().yOffset > 200;
-        })
-
-        // imgTop：右下回顶按钮，layout_margin=8dip
-        if (this.showBackTop) {
-          Image($r('app.media.mobile_campus_top'))
-            .width(40)
-            .height(40)
-            .margin(8)
-            .objectFit(ImageFit.Contain)
-            .onClick(() => {
-              this.scroller.scrollTo({ xOffset: 0, yOffset: 0 });
-              this.showBackTop = false;
-            })
-        }
       }
+      .scrollable(ScrollDirection.Vertical)
       .width('100%')
       .height('100%')
+      .align(Alignment.Top)
+      .backgroundColor($r('app.color.common_color_6'))
     }
     .width('100%')
     .height('100%')
-    .backgroundColor($r('app.color.white'))
-    .padding({ top: 9 })
+    .backgroundColor($r('app.color.common_color_6'))
+  }
+}
+
+/** 周历单日 */
+class WeekDay {
+  label: string;
+  date: number;
+  isToday: boolean;
+  isWeekend: boolean;
+
+  constructor(label: string, date: number, isToday: boolean, isWeekend: boolean) {
+    this.label = label;
+    this.date = date;
+    this.isToday = isToday;
+    this.isWeekend = isWeekend;
   }
 }

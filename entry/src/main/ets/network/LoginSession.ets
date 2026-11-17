@@ -1,4 +1,4 @@
-﻿import { BusinessError } from '@kit.BasicServicesKit';
+import { BusinessError } from '@kit.BasicServicesKit';
 import { util } from '@kit.ArkTS';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { preferences } from '@kit.ArkData';
@@ -34,6 +34,13 @@ export class LoginSession {
   static userId: string = '';
   /** 学校代码（来自登录响应 UserEntity.schoolId，Access-Token 的 xxdm 字段） */
   static schoolId: string = '';
+  /** 登录用户全字段（parseUserEntity 填充，persistSession 持久化，个人资料页真数据源） */
+  static sessionName: string = '';
+  static sessionCollege: string = '';
+  static sessionMajor: string = '';
+  static sessionClass: string = '';
+  static sessionGrade: string = '';
+  static sessionPhone: string = '';
   static step: string = '';
 
   static log(msg: string): void {
@@ -56,7 +63,7 @@ export class LoginSession {
       hex.slice(10, 16).join('');
   }
 
-  /** 会话持久化：UC/aesKey/sessionKey/userId/userType/schoolId 写入 preferences */
+  /** 会话持久化：UC/aesKey/sessionKey/userId/userType/schoolId/用户全字段 写入 preferences */
   static async persistSession(): Promise<void> {
     try {
       const ctx = LoginSession.uiContext ?? LoginSession.fallbackContext();
@@ -72,6 +79,13 @@ export class LoginSession {
       await store.put('sessionUserId', LoginSession.userId);
       await store.put('sessionUserType', LoginSession.userType);
       await store.put('sessionSchoolId', LoginSession.schoolId);
+      // 用户资料全字段（个人资料页真数据源）
+      await store.put('sessionName', LoginSession.sessionName);
+      await store.put('sessionCollege', LoginSession.sessionCollege);
+      await store.put('sessionMajor', LoginSession.sessionMajor);
+      await store.put('sessionClass', LoginSession.sessionClass);
+      await store.put('sessionGrade', LoginSession.sessionGrade);
+      await store.put('sessionPhone', LoginSession.sessionPhone);
       await store.flush();
     } catch (error) {
       LoginSession.log('persistSession失败: ' + (error as BusinessError).message);
@@ -107,6 +121,31 @@ export class LoginSession {
         const sid: preferences.ValueType = await store.get('sessionSchoolId', '');
         if (typeof sid === 'string') {
           LoginSession.schoolId = sid;
+        }
+        // 用户资料全字段恢复
+        const n1: preferences.ValueType = await store.get('sessionName', '');
+        if (typeof n1 === 'string') {
+          LoginSession.sessionName = n1;
+        }
+        const n2: preferences.ValueType = await store.get('sessionCollege', '');
+        if (typeof n2 === 'string') {
+          LoginSession.sessionCollege = n2;
+        }
+        const n3: preferences.ValueType = await store.get('sessionMajor', '');
+        if (typeof n3 === 'string') {
+          LoginSession.sessionMajor = n3;
+        }
+        const n4: preferences.ValueType = await store.get('sessionClass', '');
+        if (typeof n4 === 'string') {
+          LoginSession.sessionClass = n4;
+        }
+        const n5: preferences.ValueType = await store.get('sessionGrade', '');
+        if (typeof n5 === 'string') {
+          LoginSession.sessionGrade = n5;
+        }
+        const n6: preferences.ValueType = await store.get('sessionPhone', '');
+        if (typeof n6 === 'string') {
+          LoginSession.sessionPhone = n6;
         }
         const oc: preferences.ValueType = await store.get('onlyCode', '');
         if (typeof oc === 'string') {
@@ -253,7 +292,14 @@ export class LoginSession {
     LoginSession.userType = pick('userType') === '' ? '1' : pick('userType');
     LoginSession.userId = pick('userId');
     // 原生 e.java:47 xxdm ← schoolId（登录响应 UserEntity.schoolId，SDGY）
-    LoginSession.schoolId = pick('schoolId') === '' ? 'SDGY' : pick('schoolId');
+    LoginSession.schoolId = pick('schoolId') === '' ? 'sdmu' : pick('schoolId');
+    // 用户资料全字段（个人资料页真数据源；persistSession 持久化）
+    LoginSession.sessionName = pick('userName');
+    LoginSession.sessionCollege = pick('department');
+    LoginSession.sessionMajor = pick('professionName');
+    LoginSession.sessionClass = pick('className');
+    LoginSession.sessionGrade = pick('grade');
+    LoginSession.sessionPhone = pick('mobileNo');
     LoginSession.log('parsed sessionKey len=' + LoginSession.sessionKey.length +
       ' userId=' + LoginSession.userId + ' userType=' + LoginSession.userType +
       ' schoolId=' + LoginSession.schoolId);

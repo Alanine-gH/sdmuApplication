@@ -35,7 +35,7 @@ struct IssueReviewPage {
   ];
   @State mine: ReviewIssue[] = [
     new ReviewIssue('软件工程课程体系调整议题', '信息工程学院', '2026-11-08', '已审议', 4),
-    new ReviewIssue('校企联合培养方案议题', '工商管理学院', '2026-10-28', '已审议', 6)
+    new ReviewIssue('校企联合培养方案议题', '信息工程学院', '2026-10-28', '已审议', 6)
   ];
 
   @Builder

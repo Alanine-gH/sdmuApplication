@@ -1,6 +1,7 @@
 import { router } from '@kit.ArkUI';
 import { PreferencesUtil } from '../data/PreferencesUtil';
 import { Constants } from '../data/Constants';
+import { LoginSession } from '../network/LoginSession';
 
 /**
  * 我的 Tab — 1:1 复刻 mobile_campus_fragment_my_page.xml
@@ -18,42 +19,70 @@ import { Constants } from '../data/Constants';
 export struct MineTab {
   @State userName: string = '';
   @State userDepartment: string = '';
+  @State userType: string = '1';
 
   aboutToAppear(): void {
     PreferencesUtil.getString(Constants.KEY_USER_NAME, '')
       .then((name: string) => {
         this.userName = name;
       });
-    PreferencesUtil.getString(Constants.KEY_USER_ID, '')
-      .then((id: string) => {
-        this.userDepartment = id;
+    PreferencesUtil.getString(Constants.KEY_USER_DEPARTMENT, '')
+      .then((dept: string) => {
+        this.userDepartment = dept;
       });
+    // UserEntity.userType：1 学生 / 2 教师（源码同口径）
+    this.userType = LoginSession.userType === '' ? '1' : LoginSession.userType;
   }
 
-  private async logout(): Promise<void> {
+  /** 源码 e2()：退出前确认弹窗（确认要退出登录吗？取消/确认） */
+  private showLogoutConfirm(): void {
+    AlertDialog.show({
+      title: '提示',
+      message: '确认要退出登录吗？',
+      primaryButton: {
+        value: '取消',
+        action: () => {
+        }
+      },
+      secondaryButton: {
+        value: '确认',
+        fontColor: $r('app.color.sdmu_primary'),
+        action: () => {
+          this.doLogout();
+        }
+      },
+      cancel: () => {
+      }
+    });
+  }
+
+  private async doLogout(): Promise<void> {
     await PreferencesUtil.clear();
     this.getUIContext().getPromptAction().showToast({ message: '已退出登录' });
     router.replaceUrl({ url: 'pages/LoginPage' });
   }
 
+  /** APK 菜单图标运行时 tint 主题红（原 ImageView app:tint） */
+  private static readonly TINT_RED: number[] =
+    [0, 0, 0, 0, 0.59, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.05, 0, 0, 0, 1, 0];
+
+  /** APK 实拍：菜单行右侧无箭头，仅用户卡有 >；图标 tint 红色 */
   @Builder
   menuRow(icon: Resource, label: string | Resource, target: string) {
     Row() {
       Image(icon)
         .width(24)
         .height(24)
-        .margin({ right: 12 })
+        .margin({ right: 16 })
+        .colorFilter(MineTab.TINT_RED)
       Text(label)
         .fontSize(17)
         .fontColor($r('app.color.common_color_1'))
         .layoutWeight(1)
-      Image($r('app.media.arrow_right2'))
-        .width(16)
-        .height(16)
     }
     .width('100%')
     .height(48)
-    .padding({ left: 12, right: 12 })
+    .padding({ left: 16, right: 16 })
     .alignItems(VerticalAlign.Center)
     .backgroundColor($r('app.color.white'))
     .onClick(() => {
@@ -64,9 +93,9 @@ export struct MineTab {
   build() {
     Scroll() {
       Column() {
-        // toolbar_normal：45vp 白底 + 标题 17fp 居中 + 细分隔线
+        // toolbar_normal：45vp 白底 + 标题「我」17fp 居中 + 细分隔线（APK 实拍标题为单字"我"）
         Column() {
-          Text($r('app.string.mine_title'))
+          Text('我')
             .fontSize(17)
             .fontColor($r('app.color.common_color_1'))
             .height(44)
@@ -81,21 +110,35 @@ export struct MineTab {
         .justifyContent(FlexAlign.Center)
         .backgroundColor($r('app.color.main_bg'))
 
-        // layoutDetail：白底用户信息行，高 88vp、paddingH 12vp、marginTop 12vp
+        // layoutDetail：白底用户卡。APK 实拍：红圆头像(姓名首字白字) + 姓名同行身份(学生)
+        // + 第二行学院 + 右侧 >；高 88vp、paddingH、marginTop 12vp
         Row() {
-          // 头像：64vp(px128/2)
-          Image($r('app.media.mobile_campus_school_logo'))
-            .width(64)
-            .height(64)
-            .borderRadius(32)
+          // 红色圆形头像：姓名首字白字
+          Stack({ alignContent: Alignment.Center }) {
+            Text(this.userName === '' ? '' : this.userName.substring(0, 1))
+              .fontSize(26)
+              .fontColor($r('app.color.white'))
+          }
+          .width(64)
+          .height(64)
+          .borderRadius(32)
+          .backgroundColor($r('app.color.sdmu_primary'))
 
-          // 用户名 18.5fp #333333 + 部门 16fp #7D7D7D
+          // 姓名 + 身份同行；第二行学院
           Column() {
-            Text(this.userName)
-              .fontSize(18.5)
-              .fontColor($r('app.color.common_color_1'))
-              .maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
+            Row() {
+              Text(this.userName)
+                .fontSize(19)
+                .fontColor($r('app.color.common_color_1'))
+                .maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+              Text(this.userType === '2' ? '教师' : '学生')
+                .fontSize(14)
+                .fontColor($r('app.color.user_job_gray'))
+                .margin({ left: 10 })
+            }
+            .alignItems(VerticalAlign.Center)
+
             Text(this.userDepartment)
               .fontSize(16)
               .fontColor($r('app.color.user_job_gray'))
@@ -114,7 +157,7 @@ export struct MineTab {
         }
         .width('100%')
         .height(88)
-        .padding({ left: 12, right: 12 })
+        .padding({ left: 16, right: 12 })
         .margin({ top: 12 })
         .alignItems(VerticalAlign.Center)
         .backgroundColor($r('app.color.white'))
@@ -158,7 +201,7 @@ export struct MineTab {
           .margin({ top: 32 })
           .backgroundColor($r('app.color.white'))
           .onClick(() => {
-            this.logout();
+            this.showLogoutConfirm();
           })
       }
       .width('100%')

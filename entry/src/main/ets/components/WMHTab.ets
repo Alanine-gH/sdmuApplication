@@ -2,438 +2,177 @@
 import { BusinessError } from '@kit.BasicServicesKit';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
-import { NewsItem } from '../model/NewsModel';
-import { CourseItem, sectionTimeLabel } from '../model/CourseModel';
+import { TodoItem } from '../model/TodoModel';
 
 /**
- * 微门户 Tab — 复刻 mobile_campus_fragment_wmh.xml：
- * RecyclerView @color/common_color_6 背景 + 右下角 45vp 圆形悬浮“顶部”按钮（#97000C）。
- * 子项复刻：
- *   - Banner 轮播（Swiper，圆点指示器 #97000C）
- *   - mobile_campus_view_main_notice.xml（通知公告卡）
- *   - mobile_campus_view_main_schedule.xml（今日课表卡：课程名/教室/时间 3 行）
- *   - mobile_campus_view_main_group_title.xml（分组标题“应用中心”）
- *   - mobile_campus_view_main_app.xml（4 列应用宫格）
- *   - mobile_campus_view_main_news.xml（新闻条目，同 HomeTab newsRow 样式）
- *   - mobile_campus_view_main_empty.xml（空态）
+ * 微门户 Tab — 按 APK 实拍（学生账号登录后 getHomeTab/getList 下发结果）逐块复刻：
+ *   1. 一卡通付款码行：白底，蓝色圆角图标 44vp + 标题 18fp #333333，行高 64vp，可点。
+ *   2. 通知条：#F2F2F2 背景，喇叭图标 + 「【上课通知】您明天有课，请提前做好上课准备」
+ *      15fp #333333 + 右侧红圆数字 1 + 灰色 >；点击跳统一通知。
+ *   3. 应用宫格：两列白卡（扫一扫 / 发票助手）——彩色圆底图标 + 名称 18fp + 副标题 14fp #999999。
+ *   4. 其余区域 #F2F2F2 空白（与 APK 服务端未下发其他模块时的表现一致）。
  */
-class AppEntry {
-  name: string = '';
-  target: string = '';
-  icon: Resource = $r('app.media.icon_share');
-
-  constructor(name: string, target: string, icon: Resource) {
-    this.name = name;
-    this.target = target;
-    this.icon = icon;
-  }
-}
-
-class CourseCard {
-  num: string = '';
-  title: string = '';
-  location: string = '';
-  time: string = '';
-
-  constructor(num: string, title: string, location: string, time: string) {
-    this.num = num;
-    this.title = title;
-    this.location = location;
-    this.time = time;
-  }
-}
-
 @Component
 export struct WMHTab {
-  private scroller: Scroller = new Scroller();
-  @State newsList: NewsItem[] = [];
-  @State showTop: boolean = false;
-  // 离线降级内置数据：课表接口（getScheduleList）失败时展示的示例课程
-  @State courses: CourseCard[] = [
-    new CourseCard('1', '高等数学（下）', '明德楼 302 教室', '08:00 - 09:40'),
-    new CourseCard('2', '大学英语（四）', '博文楼 210 教室', '10:00 - 11:40'),
-    new CourseCard('3', '数据结构', '致知楼 105 教室', '14:00 - 15:40')
-  ];
-  private entries: AppEntry[] = [
-    new AppEntry('新闻公告', 'pages/NewsPage', $r('app.media.icon_share')),
-    new AppEntry('我的课表', 'pages/SchedulePage', $r('app.media.mobile_campus_main_schedule')),
-    new AppEntry('待办事项', 'pages/TodoPage', $r('app.media.icon_unify_todo_sort')),
-    new AppEntry('我的成绩', 'pages/ScorePage', $r('app.media.examination_table')),
-    new AppEntry('考试安排', 'pages/ExamPage', $r('app.media.examination_time')),
-    new AppEntry('通讯录', 'pages/ContactPage', $r('app.media.mobile_campus_contact_call')),
-    new AppEntry('会议', 'pages/MeetingPage', $r('app.media.mobile_campus_meeting_time_s')),
-    new AppEntry('考勤记录', 'pages/AttendancePage', $r('app.media.attendance_time'))
-  ];
+  /** 通知条未读数（getTodoTabCount 下发，缺省 1） */
+  @State noticeCount: number = 1;
+  @State noticeText: string = '【上课通知】您明天有课，请提前做好上课准备';
 
   aboutToAppear(): void {
-    ApiService.getNewsList()
-      .then((response: ApiResponse<NewsItem[]>) => {
-        if (response.data.length > 0) {
-          this.newsList = response.data;
-        }
-        if (!ApiService.isSuccess(response)) {
-          this.getUIContext().getPromptAction().showToast({ message: '新闻加载失败，已展示离线数据：' + response.message });
-        }
-      })
-      .catch((error: BusinessError) => {
-        this.getUIContext().getPromptAction().showToast({ message: '新闻加载失败，已展示离线数据：' + (error as BusinessError).message });
-        this.newsList = [];
-      });
-    ApiService.getScheduleList()
-      .then((response: ApiResponse<CourseItem[]>) => {
-        if (response.data.length > 0) {
-          this.courses = response.data.map((course: CourseItem): CourseCard => {
-            const timeText: string = sectionTimeLabel(course.sectionStart, course.sectionEnd);
-            return new CourseCard(course.sectionStart.toString(), course.name, course.location, timeText);
-          });
-        }
-        if (!ApiService.isSuccess(response)) {
-          this.getUIContext().getPromptAction().showToast({ message: '课表加载失败，已展示离线数据：' + response.message });
+    // 拉取待办数填通知红点；失败保持 APK 同款缺省文案
+    ApiService.getTodoTabCount('')
+      .then((response: ApiResponse<Object>) => {
+        if (ApiService.isSuccess(response)) {
+          const rec: Record<string, Object> = response.data as Record<string, Object>;
+          const v: Object = rec['count'];
+          if (typeof v === 'number' && (v as number) > 0) {
+            this.noticeCount = v as number;
+          }
         }
       })
       .catch((error: BusinessError) => {
-        this.getUIContext().getPromptAction().showToast({ message: '课表加载失败，已展示离线数据：' + (error as BusinessError).message });
+        // 静默：与 APK 相同，通知条常显
       });
   }
 
-  /**
-   * Banner 轮播单页：高 120vp、圆角 8vp、margin 12vp。
-   */
+  /** 一卡通付款码行 */
   @Builder
-  bannerCell(item: NewsItem) {
-    Stack({ alignContent: Alignment.BottomStart }) {
-      Image($r('app.media.mobile_campus_main_new_default'))
-        .width('100%')
-        .height('100%')
-        .objectFit(ImageFit.Cover)
-        .borderRadius(8)
-      Text(item.title)
-        .fontSize(14)
-        .fontWeight(FontWeight.Bold)
-        .fontColor($r('app.color.white'))
-        .backgroundColor($r('app.color.mobile_campus_banner_title_bg'))
+  payCodeRow() {
+    Row() {
+      // 蓝色圆底图标（系统符号：银行卡）
+      Stack({ alignContent: Alignment.Center }) {
+        SymbolGlyph($r('sys.symbol.creditcard'))
+          .fontSize(22)
+          .fontColor([$r('app.color.white')])
+      }
+      .width(44)
+      .height(44)
+      .borderRadius(22)
+      .backgroundColor($r('app.color.blue_default'))
+
+      Text('一卡通付款码')
+        .fontSize(18)
+        .fontColor($r('app.color.common_color_1'))
+        .margin({ left: 16 })
+        .layoutWeight(1)
+    }
+    .width('100%')
+    .height(64)
+    .padding({ left: 16, right: 16 })
+    .alignItems(VerticalAlign.Center)
+    .backgroundColor($r('app.color.white'))
+    .onClick(() => {
+      router.pushUrl({ url: 'pages/LightAppPage' });
+    })
+  }
+
+  /** 通知条 */
+  @Builder
+  noticeBar() {
+    Row() {
+      SymbolGlyph($r('sys.symbol.speaker_wave_2_fill'))
+        .fontSize(20)
+        .fontColor([$r('app.color.common_color_2')])
+      Text(this.noticeText)
+        .fontSize(15)
+        .fontColor($r('app.color.common_color_1'))
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
         .margin({ left: 8 })
-    }
-    .width('100%')
-    .height('100%')
-    .onClick(() => {
-      router.pushUrl({ url: 'pages/NewsDetailPage', params: { id: item.id } });
-    })
-  }
-
-  /**
-   * mobile_campus_view_main_notice.xml — 通知公告卡。
-   * tvTitle：px_to_dip_30/2=15fp、common_color_1；
-   * tvDate 行：px_to_dip_28/2=14fp、common_color_3、marginTop px_to_dip_16/2=8vp；
-   * padding px_to_dip_24/2=12vp、底部 1vp 分隔线 common_color_6。
-   */
-  @Builder
-  noticeCard(item: NewsItem) {
-    Column() {
-      Text(item.title)
-        .fontSize(15)
-        .fontColor($r('app.color.common_color_1'))
-        .maxLines(1)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
-        .width('100%')
-      Row() {
-        Text('发布日期：')
-          .fontSize(14)
-          .fontColor($r('app.color.common_color_3'))
-        Text(item.publishTime)
-          .fontSize(14)
-          .fontColor($r('app.color.common_color_3'))
-      }
-      .margin({ top: 8 })
-      Divider()
-        .color($r('app.color.common_color_6'))
-        .strokeWidth(1)
-        .width('100%')
-    }
-    .width('100%')
-    .padding(12)
-    .backgroundColor($r('app.color.white'))
-    .onClick(() => {
-      router.pushUrl({ url: 'pages/NewsDetailPage', params: { id: item.id } });
-    })
-  }
-
-  /**
-   * mobile_campus_view_main_schedule.xml — 今日课表卡（课程名/教室/时间 3 行）。
-   * tvNum：px_to_sp_42/2=21fp、#DFE4EA(menu_divider)、宽 px_to_dip_90/2=45vp、居中；
-   * tvTitle：px_to_sp_34/2=17fp、common_color_1；
-   * tvLocation：px_to_dip_28/2=14fp、common_color_3、marginTop px_to_dip_16/2=8vp。
-   */
-  @Builder
-  scheduleCard(course: CourseCard) {
-    Column() {
-      Row() {
-        Text(course.num)
-          .fontSize(21)
-          .fontColor($r('app.color.menu_divider'))
-          .width(45)
+        .layoutWeight(1)
+      if (this.noticeCount > 0) {
+        Text(this.noticeCount.toString())
+          .fontSize(12)
+          .fontColor($r('app.color.white'))
           .textAlign(TextAlign.Center)
-        Column() {
-          Text(course.title)
-            .fontSize(17)
-            .fontColor($r('app.color.common_color_1'))
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .width('100%')
-          Text(course.location)
-            .fontSize(14)
-            .fontColor($r('app.color.common_color_3'))
-            .margin({ top: 8 })
-          Text(course.time)
-            .fontSize(14)
-            .fontColor($r('app.color.common_color_3'))
-            .margin({ top: 4 })
-        }
-        .padding(12)
-        .layoutWeight(1)
-        .alignItems(HorizontalAlign.Start)
+          .width(20)
+          .height(20)
+          .borderRadius(10)
+          .backgroundColor($r('app.color.main_notice_badge_red'))
+          .margin({ right: 6 })
       }
-      .width('100%')
-      .alignItems(VerticalAlign.Center)
-      Divider()
-        .color($r('app.color.common_color_6'))
-        .strokeWidth(1)
-        .width('100%')
-    }
-    .width('100%')
-    .backgroundColor($r('app.color.white'))
-    .onClick(() => {
-      router.pushUrl({ url: 'pages/SchedulePage' });
-    })
-  }
-
-  /**
-   * mobile_campus_view_main_group_title.xml — 分组标题。
-   * 高 px_to_dip_80/2=40vp、padding 左右 px_to_dip_24/2=12vp、
-   * 文字 px_to_sp_30/2=15fp、mobile_campus_primary_color、
-   * 左侧图标 mobile_campus_main_schedule、drawablePadding px_to_dip_16/2=8vp、
-   * 底部 1vp 分隔线 common_color_6。
-   */
-  @Builder
-  groupTitle(title: string) {
-    Column() {
-      Row() {
-        Image($r('app.media.mobile_campus_main_schedule'))
-          .width(16)
-          .height(16)
-          .margin({ right: 8 })
-        Text(title)
-          .fontSize(15)
-          .fontColor($r('app.color.mobile_campus_primary_color'))
-      }
-      .height(40)
-      .padding({ left: 12, right: 12 })
-      .alignItems(VerticalAlign.Center)
-      Divider()
-        .color($r('app.color.common_color_6'))
-        .strokeWidth(1)
-        .width('100%')
-    }
-    .width('100%')
-    .backgroundColor($r('app.color.white'))
-  }
-
-  /**
-   * mobile_campus_view_main_app.xml — 4 列宫格 item：
-   * 白底、icon 32dip+margin 8dip、名称 px_to_sp_30/2=15fp 加粗 common_color_1 单行。
-   */
-  @Builder
-  appGridCell(entry: AppEntry) {
-    Column() {
-      Image(entry.icon)
-        .width(32)
-        .height(32)
-        .margin(8)
-        .objectFit(ImageFit.Cover)
-      Text(entry.name)
-        .fontSize(15)
-        .fontWeight(FontWeight.Bold)
-        .fontColor($r('app.color.common_color_1'))
-        .maxLines(1)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
-    }
-    .width('100%')
-    .padding({ top: 10, bottom: 10 })
-    .backgroundColor($r('app.color.white'))
-    .alignItems(HorizontalAlign.Center)
-    .onClick(() => {
-      router.pushUrl({ url: entry.target });
-    })
-  }
-
-  /**
-   * mobile_campus_view_main_news.xml — 新闻条目（同 HomeTab newsRow 样式）。
-   */
-  @Builder
-  newsRow(item: NewsItem) {
-    Column() {
-      Row() {
-        Image($r('app.media.mobile_campus_main_new_default'))
-          .width(72)
-          .height(72)
-          .margin({ top: 8, bottom: 8, left: 12, right: 12 })
-          .objectFit(ImageFit.Cover)
-        Column() {
-          Text(item.title)
-            .fontSize(14)
-            .fontColor($r('app.color.common_color_1'))
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .margin({ top: 8, bottom: 8, left: 12, right: 48 })
-          Text(item.summary)
-            .fontSize(13)
-            .fontColor($r('app.color.common_color_3'))
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .margin({ bottom: 8, left: 12, right: 48 })
-          Text(item.publishTime)
-            .fontSize(13)
-            .fontColor($r('app.color.common_color_3'))
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .margin({ bottom: 8, left: 12, right: 48 })
-          Divider()
-            .color($r('app.color.common_color_6'))
-            .strokeWidth(1)
-            .width('100%')
-        }
-        .layoutWeight(1)
-        .alignItems(HorizontalAlign.Start)
-      }
-      .width('100%')
-      .alignItems(VerticalAlign.Center)
-    }
-    .width('100%')
-    .backgroundColor($r('app.color.white'))
-    .onClick(() => {
-      router.pushUrl({ url: 'pages/NewsDetailPage', params: { id: item.id } });
-    })
-  }
-
-  /**
-   * mobile_campus_view_main_empty.xml — 空态。
-   * 图片 200x120vp、提示 px_to_dip_26/2=13fp common_color_3、marginTop px_to_dip_24/2=12vp。
-   */
-  @Builder
-  emptyView() {
-    Column() {
-      Image($r('app.media.mobile_campus_page_empty'))
-        .width(200)
-        .height(120)
-        .objectFit(ImageFit.Cover)
-      Text('暂无新闻')
-        .fontSize(13)
+      Text('＞')
+        .fontSize(14)
         .fontColor($r('app.color.common_color_3'))
-        .margin({ top: 12 })
     }
     .width('100%')
-    .padding({ top: 5, bottom: 5 })
+    .height(46)
+    .padding({ left: 16, right: 12 })
+    .alignItems(VerticalAlign.Center)
+    .backgroundColor($r('app.color.common_color_6'))
+    .margin({ top: 9, bottom: 9 })
+    .onClick(() => {
+      router.pushUrl({ url: 'pages/UnifyNotificationPage' });
+    })
+  }
+
+  /** 宫格单元：彩色圆底图标 + 名称 + 副标题 */
+  @Builder
+  gridCell(iconBg: Resource, glyph: Resource, name: string, sub: string, target: string) {
+    Column() {
+      Stack({ alignContent: Alignment.Center }) {
+        SymbolGlyph(glyph)
+          .fontSize(26)
+          .fontColor([$r('app.color.white')])
+      }
+      .width(52)
+      .height(52)
+      .borderRadius(26)
+      .backgroundColor(iconBg)
+
+      Text(name)
+        .fontSize(18)
+        .fontColor($r('app.color.common_color_1'))
+        .margin({ top: 10 })
+      Text(sub)
+        .fontSize(14)
+        .fontColor($r('app.color.common_color_3'))
+        .margin({ top: 4 })
+    }
+    .layoutWeight(1)
+    .padding({ top: 24, bottom: 20 })
     .backgroundColor($r('app.color.white'))
-    .alignItems(HorizontalAlign.Center)
+    .onClick(() => {
+      router.pushUrl({ url: target });
+    })
   }
 
   build() {
-    // RecyclerView 背景 common_color_6 + 右下角悬浮“顶部”按钮
-    Stack({ alignContent: Alignment.BottomEnd }) {
-      Scroll(this.scroller) {
+    Column() {
+      Scroll() {
         Column() {
-          // Banner 轮播：高 120vp 圆角 8vp margin 12vp、圆点指示器 #97000C
-          if (this.newsList.length > 0) {
-            Swiper() {
-              ForEach(this.newsList, (item: NewsItem) => {
-                this.bannerCell(item)
-              }, (item: NewsItem) => 'wmh_banner_' + item.id)
-            }
-            .width('100%')
-            .height(120)
-            .margin(12)
-            .autoPlay(true)
-            .interval(4000)
-            .indicatorStyle({ selectedColor: $r('app.color.mobile_campus_primary_color') })
-          } else {
-            Image($r('app.media.mobile_campus_main_new_default'))
-              .width('100%')
+          // 1. 一卡通付款码
+          this.payCodeRow()
+
+          // 2. 通知条（灰底，与上一行间有灰缝）
+          this.noticeBar()
+
+          // 3. 两列宫格：扫一扫 | 发票助手
+          Row() {
+            this.gridCell($r('app.color.wmh_grid_scan_pink'), $r('sys.symbol.qrcode'),
+              '扫一扫', '扫码', 'pages/QrCodeScanPage')
+            Divider()
+              .vertical(true)
+              .strokeWidth(1)
               .height(120)
-              .margin(12)
-              .objectFit(ImageFit.Cover)
-              .borderRadius(8)
-          }
-
-          // 通知公告卡（取新闻列表第一条）
-          if (this.newsList.length > 0) {
-            this.noticeCard(this.newsList[0])
-          }
-
-          // 今日课表卡（ApiService.getScheduleList，失败降级到内置数据）
-          ForEach(this.courses, (course: CourseCard) => {
-            this.scheduleCard(course)
-          }, (course: CourseCard) => 'course_' + course.num + '_' + course.title)
-
-          // 分组标题“应用中心”
-          this.groupTitle('应用中心')
-
-          // 4 列应用宫格
-          Grid() {
-            ForEach(this.entries, (entry: AppEntry) => {
-              GridItem() {
-                this.appGridCell(entry)
-              }
-            }, (entry: AppEntry) => entry.target)
+              .color($r('app.color.common_color_6'))
+            this.gridCell($r('app.color.blue_default'), $r('sys.symbol.doc_text'),
+              '发票助手', '轻松开发票', 'pages/ReceiptListPage')
           }
           .width('100%')
-          .columnsTemplate('1fr 1fr 1fr 1fr')
-
-          // 新闻列表
-          if (this.newsList.length > 0) {
-            ForEach(this.newsList, (item: NewsItem) => {
-              this.newsRow(item)
-            }, (item: NewsItem) => 'wmh_news_' + item.id)
-          } else {
-            this.emptyView()
-          }
+          .alignItems(VerticalAlign.Center)
+          .backgroundColor($r('app.color.white'))
         }
         .width('100%')
-        .alignItems(HorizontalAlign.Start)
       }
+      .scrollable(ScrollDirection.Vertical)
       .width('100%')
       .height('100%')
       .backgroundColor($r('app.color.common_color_6'))
-      .scrollBar(BarState.Off)
-      .onScroll(() => {
-        this.showTop = this.scroller.currentOffset().yOffset > 0;
-      })
-
-      // llFloat：45vp 圆形 #97000C、margin 右/下 15vp、icon_home_top 16vp + “顶部” 11fp 白字
-      if (this.showTop) {
-        Column() {
-          Image($r('app.media.icon_home_top'))
-            .width(16)
-            .height(16)
-          Text('顶部')
-            .fontSize(11)
-            .fontColor($r('app.color.white'))
-        }
-        .width(45)
-        .height(45)
-        .borderRadius(22.5)
-        .backgroundColor($r('app.color.mobile_campus_primary_color'))
-        .margin({ right: 15, bottom: 15 })
-        .justifyContent(FlexAlign.Center)
-        .alignItems(HorizontalAlign.Center)
-        .onClick(() => {
-          this.scroller.scrollEdge(Edge.Top);
-          this.showTop = false;
-        })
-      }
+      .align(Alignment.Top)
     }
     .width('100%')
     .height('100%')
+    .backgroundColor($r('app.color.common_color_6'))
   }
 }

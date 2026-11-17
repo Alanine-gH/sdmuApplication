@@ -202,6 +202,7 @@
     "pages/CustomTimetablePage",
     "pages/TodoSupervisePage",
     "pages/IssueReviewPage",
-    "pages/AttendancePersonalPage"
+    "pages/AttendancePersonalPage",
+    "pages/FeedbackRecordPage"
   ]
 }

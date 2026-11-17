@@ -1,4 +1,6 @@
 import { router } from '@kit.ArkUI';
+import { common } from '@kit.AbilityKit';
+import fs from '@ohos.file.fs';
 import { TitleBar } from '../components/TitleBar';
 
 /**
@@ -15,12 +17,57 @@ import { TitleBar } from '../components/TitleBar';
 @Component
 struct SettingPage {
   @State cacheSize: string = '0.00M';
+  /** 源码 version_name：显示当前版本号，主色红 */
+  @State versionName: string = 'V3.0.0';
+
+  aboutToAppear(): void {
+    this.calcCacheSize();
+  }
+
+  /** 源码 f1：Math.round(g.e(cacheDir))，>1MB 显示 MB 否则 KB */
+  private calcCacheSize(): void {
+    try {
+      const ctx = getContext(this) as common.UIAbilityContext;
+      const total: number = this.dirSize(ctx.cacheDir);
+      const kb = Math.round(total / 1024);
+      if (kb / 1024 > 1) {
+        this.cacheSize = Math.round(kb / 1024) + 'MB';
+      } else {
+        this.cacheSize = kb + 'KB';
+      }
+    } catch {
+      this.cacheSize = '0.00M';
+    }
+  }
+
+  private dirSize(path: string): number {
+    let total = 0;
+    try {
+      const stat: fs.Stat = fs.statSync(path);
+      if (stat.isDirectory()) {
+        const names: string[] = fs.listFileSync(path);
+        for (const name of names) {
+          total += this.dirSize(path + '/' + name);
+        }
+      } else {
+        total = Number(stat.size);
+      }
+    } catch {
+    }
+    return total;
+  }
   @State pushEnabled: boolean = true;
   @State showUpdateDialog: boolean = false;
 
   private clearCache(): void {
-    this.getUIContext().getPromptAction().showToast({ message: '缓存已清除' });
-    this.cacheSize = '0.00M';
+    this.getUIContext().getPromptAction().showToast({ message: '清除成功' });
+    try {
+      const ctx = getContext(this) as common.UIAbilityContext;
+      fs.rmdirSync(ctx.cacheDir);
+    } catch {
+    }
+    this.cacheSize = '0KB';
+    this.calcCacheSize();
   }
 
   private checkUpdate(): void {

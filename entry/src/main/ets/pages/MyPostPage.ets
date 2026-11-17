@@ -22,7 +22,7 @@ struct MyPostPage {
     {
       id: 1,
       content: '今天在图书馆三楼捡到一张校园卡，请失主联系我~',
-      school: '山东女子学院',
+      school: '山东管理学院',
       time: '11-15 14:30',
       commentCount: 12,
       likeCount: 34
@@ -30,7 +30,7 @@ struct MyPostPage {
     {
       id: 2,
       content: '求推荐几门好过的选修课，学弟学妹们快冲！',
-      school: '山东女子学院',
+      school: '山东管理学院',
       time: '11-13 20:10',
       commentCount: 56,
       likeCount: 89
@@ -38,7 +38,7 @@ struct MyPostPage {
     {
       id: 3,
       content: '周末社团招新，摄影协会期待你的加入！',
-      school: '山东女子学院',
+      school: '山东管理学院',
       time: '11-11 09:45',
       commentCount: 8,
       likeCount: 21

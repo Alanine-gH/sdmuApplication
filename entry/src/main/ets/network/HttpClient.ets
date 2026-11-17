@@ -1,6 +1,7 @@
-﻿import { util } from '@kit.ArkTS';
+import { util } from '@kit.ArkTS';
 import { http } from '@kit.NetworkKit';
 import { BusinessError } from '@kit.BasicServicesKit';
+import fs from '@ohos.file.fs';
 import { ApiResponse } from '../model/ResponseModel';
 import { CryptoUtil } from './CryptoUtil';
 import { LoginSession } from './LoginSession';
@@ -33,7 +34,7 @@ export class HttpClient {
     const uid: string = LoginSession.userId === '' ? '' : LoginSession.userId;
     const utype: string = LoginSession.userType === '' ? '1' : LoginSession.userType;
     // 原生 e.java:47 headParamsEntity.setXxdm(schoolId) —— schoolId 来自登录响应 UserEntity.schoolId
-    const xxdm: string = LoginSession.schoolId === '' ? 'SDGY' : LoginSession.schoolId;
+    const xxdm: string = LoginSession.schoolId === '' ? 'sdmu' : LoginSession.schoolId;
     const token: Record<string, string> = {
       'clientVersion': Constants.CLIENT_VERSION,
       'deviceId': Constants.DEVICE_ID,
@@ -119,6 +120,86 @@ export class HttpClient {
     }
   }
 
+  /** GET + data 加密参数请求（原 APK e.a() 同款：参数明文 JSON AES 加密进 query，响应 data 解密） */
+  static async getWithEncParams(path: string, params: Record<string, Object>): Promise<ApiResponse<Object>> {
+    const client: http.HttpRequest = http.createHttp();
+    try {
+      const atEnc: string = await HttpClient.buildEncryptedAccessToken();
+      const dataEnc: string = await CryptoUtil.encryptAES(JSON.stringify(params), LoginSession.aesKey);
+      const url: string = Constants.SOCKET_HOST + path + '?data=' + encodeURIComponent(dataEnc);
+      const header: Record<string, string> = {
+        'Access-Token': atEnc,
+        'Unique-Code': LoginSession.onlyCode,
+        'AppType': Constants.APP_TYPE,
+        'User-Agent': 'Dalvik/2.1.0 (Linux; U; Android 14; 25060RK16C Build/UQ1A.240205.11101510)'
+      };
+      const options: http.HttpRequestOptions = {
+        method: http.RequestMethod.GET,
+        header: header,
+        expectDataType: http.HttpDataType.STRING,
+        connectTimeout: 10000,
+        readTimeout: 10000
+      };
+      const response: http.HttpResponse = await client.request(url, options);
+      if (response.responseCode === 200) {
+        const raw = JSON.parse(response.result as string) as ApiRawData;
+        const code: number = HttpClient.normalizeCode(raw.code);
+        const dataStr: string = raw.data as string ?? '';
+        if (code === 0 && dataStr !== '') {
+          const plain: string = await HttpClient.decryptData(dataStr);
+          return new ApiResponse<Object>(0, raw.message, plain as Object);
+        }
+        return new ApiResponse<Object>(code, raw.message, raw.data);
+      }
+      return new ApiResponse<Object>(-1, 'HTTP ' + response.responseCode + ' @' + path, new Object());
+    } catch (error) {
+      const be = error as BusinessError;
+      CryptoUtil.log('getWithEncParams fail @' + path + ' code=' + be.code + ' msg=' + be.message);
+      return new ApiResponse<Object>(-1, '网络请求失败: ' + be.message + ' @' + path, new Object());
+    } finally {
+      client.destroy();
+    }
+  }
+
+  /** 裸 GET 加密响应请求（无 data 参数，如 /open/app/touristList）：响应 data AES 解密 */
+  static async getNoParams(path: string): Promise<ApiResponse<Object>> {
+    const client: http.HttpRequest = http.createHttp();
+    try {
+      const atEnc: string = await HttpClient.buildEncryptedAccessToken();
+      const header: Record<string, string> = {
+        'Access-Token': atEnc,
+        'Unique-Code': LoginSession.onlyCode,
+        'AppType': Constants.APP_TYPE,
+        'User-Agent': 'Dalvik/2.1.0 (Linux; U; Android 14; 25060RK16C Build/UQ1A.240205.11101510)'
+      };
+      const options: http.HttpRequestOptions = {
+        method: http.RequestMethod.GET,
+        header: header,
+        expectDataType: http.HttpDataType.STRING,
+        connectTimeout: 10000,
+        readTimeout: 10000
+      };
+      const response: http.HttpResponse = await client.request(Constants.SOCKET_HOST + path, options);
+      if (response.responseCode === 200) {
+        const raw = JSON.parse(response.result as string) as ApiRawData;
+        const code: number = HttpClient.normalizeCode(raw.code);
+        const dataStr: string = raw.data as string ?? '';
+        if (code === 0 && dataStr !== '') {
+          const plain: string = await HttpClient.decryptData(dataStr);
+          return new ApiResponse<Object>(0, raw.message, plain as Object);
+        }
+        return new ApiResponse<Object>(code, raw.message, raw.data);
+      }
+      return new ApiResponse<Object>(-1, 'HTTP ' + response.responseCode + ' @' + path, new Object());
+    } catch (error) {
+      const be = error as BusinessError;
+      CryptoUtil.log('getNoParams fail @' + path + ' code=' + be.code + ' msg=' + be.message);
+      return new ApiResponse<Object>(-1, '网络请求失败: ' + be.message + ' @' + path, new Object());
+    } finally {
+      client.destroy();
+    }
+  }
+
   /** 旧接口兼容：普通请求（协商/登录/开放接口用）
    * Access-Token：原生 e.g() 里是明文 JSON（k.m 序列化，不加密）。
    * 协商接口（asymKey 非 public）时为空；业务明文接口时带上完整 token JSON。
@@ -147,7 +228,7 @@ export class HttpClient {
           'sessionKey': LoginSession.sessionKey === '' ? Constants.SESSION_KEY : LoginSession.sessionKey,
           'userId': LoginSession.userId,
           'userType': LoginSession.userType === '' ? '1' : LoginSession.userType,
-          'xxdm': LoginSession.schoolId === '' ? 'SDGY' : LoginSession.schoolId
+          'xxdm': LoginSession.schoolId === '' ? 'sdmu' : LoginSession.schoolId
         };
         header['Access-Token'] = JSON.stringify(token);
         header['Unique-Code'] = LoginSession.deviceCode === '' ? uniqueCode : LoginSession.deviceCode;
@@ -194,6 +275,160 @@ export class HttpClient {
   static async postForm(path: string, formBody: string): Promise<ApiResponse<Object>> {
     return HttpClient.requestRaw(path, 'POST', formBody, 'application/x-www-form-urlencoded',
       LoginSession.onlyCode === '' ? Constants.UNIQUE_CODE : LoginSession.onlyCode, '');
+  }
+
+  // ===== T3 misc-worker：意见反馈模块通道（源码 f.o() 逐行还原）=====
+  // 原生 f.o()：bVar.j=false 时既不走 k 分支也不走 j 分支 → f.s()（协商key加密）整体短路，
+  // 直接 u.e() 发送。FeedbackModel 六个接口（T0/U0/V0/W0/X0/Y0）均显式 j=false，因此：
+  //   - Access-Token 头 = 明文 JSON（e.g() k.m(HeadParamsEntity) 原样，无 AES）
+  //   - Unique-Code 头 = d.a.d()（设备码）；无 AppType 头（AppType 仅在 f.s() 内添加）
+  //   - GET 参数 = 普通 query 对（impl.k() case 1 addQueryStringParameter）
+  //   - multipart 表单字段 = 普通 form-data part（impl.k() case 7 addBodyParameter），
+  //     data 字段值 = 固定key密文（FeedbackModel 内 c.i(json,固定key) 已加密，无需再包一层）
+  //   - 响应 y()：j=false 不走 r() 解密 → data 明文
+  // Host = feedbackUrl（SystemSwitch 下发，缺省 ydxy_url_release=https://ydxy.ly-sky.com:8098）。
+
+  /** 明文 Access-Token 头（源码 e.g()：k.m(HeadParamsEntity)，字段与 requestRaw 明文分支一致） */
+  private static plainAccessToken(): string {
+    const token: Record<string, string> = {
+      'clientVersion': Constants.CLIENT_VERSION,
+      'deviceId': Constants.DEVICE_ID,
+      'deviceModel': Constants.DEVICE_MODEL,
+      'sessionKey': LoginSession.sessionKey === '' ? Constants.SESSION_KEY : LoginSession.sessionKey,
+      'userId': LoginSession.userId,
+      'userType': LoginSession.userType === '' ? '1' : LoginSession.userType,
+      'xxdm': LoginSession.schoolId === '' ? 'sdmu' : LoginSession.schoolId
+    };
+    return JSON.stringify(token);
+  }
+
+  /** feedback 头（j=false：明文 AT + 设备码 UC，无 AppType——源码 e.g() 只有这两个头） */
+  private static feedbackHeader(contentType: string): Record<string, string> {
+    const header: Record<string, string> = {
+      'Content-Type': contentType,
+      'Access-Token': HttpClient.plainAccessToken(),
+      'Unique-Code': LoginSession.deviceCode === '' ?
+        (LoginSession.onlyCode === '' ? Constants.UNIQUE_CODE : LoginSession.onlyCode)
+        : LoginSession.deviceCode,
+      'User-Agent': 'Dalvik/2.1.0 (Linux; U; Android 14; 25060RK16C Build/UQ1A.240205.11101510)'
+    };
+    return header;
+  }
+
+  /** feedback GET（源码 impl.k() case 1：参数逐个 addQueryStringParameter，值原样透传） */
+  static async feedbackGet(url: string, formFields: Record<string, string>): Promise<ApiResponse<Object>> {
+    const client: http.HttpRequest = http.createHttp();
+    try {
+      let fullUrl: string = url;
+      const keys: string[] = Object.keys(formFields);
+      for (let i = 0; i < keys.length; i++) {
+        fullUrl = fullUrl + (i === 0 ? '?' : '&') + encodeURIComponent(keys[i]) +
+          '=' + encodeURIComponent(formFields[keys[i]]);
+      }
+      const options: http.HttpRequestOptions = {
+        method: http.RequestMethod.GET,
+        header: HttpClient.feedbackHeader('application/json'),
+        expectDataType: http.HttpDataType.STRING,
+        connectTimeout: 15000,
+        readTimeout: 50000
+      };
+      const response: http.HttpResponse = await client.request(fullUrl, options);
+      if (response.responseCode === 200) {
+        const raw = JSON.parse(response.result as string) as ApiRawData;
+        return new ApiResponse<Object>(HttpClient.normalizeCode(raw.code), raw.message, raw.data);
+      }
+      return new ApiResponse<Object>(-1, 'HTTP ' + response.responseCode + ' @feedback', new Object());
+    } catch (error) {
+      const be = error as BusinessError;
+      CryptoUtil.log('feedbackGet fail @' + url + ' code=' + be.code + ' msg=' + be.message);
+      return new ApiResponse<Object>(-1, '网络请求失败: ' + be.message, new Object());
+    } finally {
+      client.destroy();
+    }
+  }
+
+  /** 数组字节拼接（multipart 组包用） */
+  private static concatBytes(parts: Uint8Array[]): Uint8Array {
+    let total: number = 0;
+    for (const p of parts) {
+      total += p.length;
+    }
+    const out: Uint8Array = new Uint8Array(total);
+    let offset: number = 0;
+    for (const p of parts) {
+      out.set(p, offset);
+      offset += p.length;
+    }
+    return out;
+  }
+
+  /** 单个文件 part（源码 FeedbackPImpl.g() 逐图 SubmitFileBean keyName="imgs" → impl.k() case 7） */
+  private static appendFilePart(parts: Uint8Array[], encoder: util.TextEncoder,
+    boundary: string, uri: string): void {
+    const fileName: string = uri.substring(uri.lastIndexOf('/') + 1);
+    const stat: fs.Stat = fs.statSync(uri);
+    const file = fs.openSync(uri, fs.OpenMode.READ_ONLY);
+    try {
+      const buf: ArrayBuffer = new ArrayBuffer(stat.size);
+      fs.readSync(file.fd, buf);
+      const ext: string = fileName.lastIndexOf('.') >= 0 ?
+        fileName.substring(fileName.lastIndexOf('.') + 1).toLowerCase() : 'jpg';
+      const mime: string = ext === 'png' ? 'image/png' : 'image/jpeg';
+      parts.push(encoder.encodeInto('--' + boundary + '\r\n'));
+      parts.push(encoder.encodeInto('Content-Disposition: form-data; name="imgs"; filename="' +
+        fileName + '"\r\n'));
+      parts.push(encoder.encodeInto('Content-Type: ' + mime + '\r\n\r\n'));
+      parts.push(new Uint8Array(buf));
+      parts.push(encoder.encodeInto('\r\n'));
+    } finally {
+      fs.closeSync(file);
+    }
+  }
+
+  /** feedback 提交 multipart（源码 e.f() POST_MULTIPART j=false）：
+   *  表单字段逐个普通 form-data part（data=固定key密文原样，不再外层加密）；
+   *  图片文件逐个 imgs part；响应 data 明文 Boolean（j=false）。
+   */
+  static async feedbackSubmitMultipart(url: string, formFields: Record<string, string>,
+    photoUris: string[]): Promise<ApiResponse<Object>> {
+    const client: http.HttpRequest = http.createHttp();
+    try {
+      const boundary: string = '----WebKitFormBoundary' + Date.now();
+      const parts: Uint8Array[] = [];
+      const encoder: util.TextEncoder = new util.TextEncoder();
+      const fieldKeys: string[] = Object.keys(formFields);
+      for (const key of fieldKeys) {
+        parts.push(encoder.encodeInto('--' + boundary + '\r\n'));
+        parts.push(encoder.encodeInto('Content-Disposition: form-data; name="' +
+          encodeURIComponent(key) + '"\r\n\r\n'));
+        parts.push(encoder.encodeInto(formFields[key] + '\r\n'));
+      }
+      for (const uri of photoUris) {
+        HttpClient.appendFilePart(parts, encoder, boundary, uri);
+      }
+      parts.push(encoder.encodeInto('--' + boundary + '--\r\n'));
+      const body: ArrayBuffer = HttpClient.concatBytes(parts).buffer as ArrayBuffer;
+      const options: http.HttpRequestOptions = {
+        method: http.RequestMethod.POST,
+        header: HttpClient.feedbackHeader('multipart/form-data; boundary=' + boundary),
+        extraData: body,
+        expectDataType: http.HttpDataType.STRING,
+        connectTimeout: 15000,
+        readTimeout: 50000
+      };
+      const response: http.HttpResponse = await client.request(url, options);
+      if (response.responseCode === 200) {
+        const raw = JSON.parse(response.result as string) as ApiRawData;
+        return new ApiResponse<Object>(HttpClient.normalizeCode(raw.code), raw.message, raw.data);
+      }
+      return new ApiResponse<Object>(-1, 'HTTP ' + response.responseCode + ' @feedback submit', new Object());
+    } catch (error) {
+      const be = error as BusinessError;
+      CryptoUtil.log('feedbackSubmit fail code=' + be.code + ' msg=' + be.message);
+      return new ApiResponse<Object>(-1, '网络请求失败: ' + be.message, new Object());
+    } finally {
+      client.destroy();
+    }
   }
 }
 

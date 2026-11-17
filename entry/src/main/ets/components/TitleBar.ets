@@ -1,4 +1,4 @@
-﻿import { router } from '@kit.ArkUI';
+import { router } from '@kit.ArkUI';
 
 /**
  * 通用标题栏 — 1:1 复刻 toolbar_normal.xml
@@ -11,6 +11,10 @@
 export struct TitleBar {
   @Prop title: string = '';
   @Prop showBack: boolean = true;
+  /** 右侧文字按钮（源码 toolbar_normal 的 toolBar_text_but，如反馈页"反馈记录"，黑色） */
+  @Prop rightText: string = '';
+  /** 右侧按钮点击回调（普通属性，TitleBar({ onRightClick: () => {} }) 传入） */
+  onRightClick: (() => void) | null = null;
 
   build() {
     Column() {
@@ -34,7 +38,17 @@ export struct TitleBar {
           .textAlign(TextAlign.Center)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
-        if (this.showBack) {
+        if (this.rightText !== '') {
+          Text(this.rightText)
+            .fontSize(16)
+            .fontColor($r('app.color.black'))
+            .margin({ right: 12 })
+            .onClick(() => {
+              if (this.onRightClick !== null) {
+                this.onRightClick();
+              }
+            })
+        } else if (this.showBack) {
           Blank()
             .width(40)
         } else {

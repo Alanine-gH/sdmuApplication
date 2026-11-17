@@ -16,6 +16,7 @@ import { ChooseSchoolItem } from '../components/ChooseSchoolItem';
 struct ChooseSchoolPage {
   @State searchText: string = '';
   private schoolList: string[] = [
+    '山东管理学院', '山东女子学院', '山东青年政治学院', '山东传媒职业学院',
     '山东医学高等专科学校', '山东商业职业技术学院', '山东电力高等专科学校',
     '山东职业学院', '济南职业学院', '青岛职业技术学院', '淄博职业学院',
     '烟台职业学院', '潍坊职业学院', '济宁职业技术学院', '泰安职业技术学院',

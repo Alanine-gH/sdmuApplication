@@ -31,7 +31,7 @@ struct GradeRankPage {
     new RankRank2(),
     new RankRank3(),
     new RankEntry(4, '赵同学', '会计学院', '3.98'),
-    new RankEntry(5, '刘同学', '工商管理学院', '3.95'),
+    new RankEntry(5, '刘同学', '信息工程学院', '3.95'),
     new RankEntry(6, '陈同学', '信息工程学院', '3.91'),
     new RankEntry(7, '杨同学', '人文学院', '3.87'),
     new RankEntry(8, '黄同学', '金融学院', '3.84'),

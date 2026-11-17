@@ -43,7 +43,7 @@ struct CenterDetailPage {
     { id: 'a8', name: '报修服务' }
   ];
   @State styleList: CenterStyleItem[] = [
-    { id: 's1', name: '张明', college: '工商管理学院', img: $r('app.media.social_banner_default') },
+    { id: 's1', name: '张明', college: '信息工程学院', img: $r('app.media.social_banner_default') },
     { id: 's2', name: '李华', college: '信息工程学院', img: $r('app.media.market_top') },
     { id: 's3', name: '王芳', college: '会计学院', img: $r('app.media.mobile_campus_reading_bg_card') }
   ];

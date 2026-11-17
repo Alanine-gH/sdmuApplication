@@ -1479,6 +1479,14 @@
     {
       "name": "ybg_pure_red",
       "value": "#FFFF0000"
+    },
+    {
+      "name": "main_notice_badge_red",
+      "value": "#FD481F"
+    },
+    {
+      "name": "wmh_grid_scan_pink",
+      "value": "#EA4A8F"
     }
   ]
 }

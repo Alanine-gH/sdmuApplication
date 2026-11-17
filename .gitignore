@@ -11,3 +11,6 @@
 **/.test
 /.appanalyzer
 /.cache/
+/temp/
+/docs/review_**.md
+/docs/EXTERNAL_AI_TASKS.md

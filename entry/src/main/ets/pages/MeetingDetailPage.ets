@@ -74,16 +74,6 @@ struct MeetingDetailPage {
         if (this.meeting.id === '') {
           EmptyView({ tipText: '内容不存在' })
         } else {
-          if (this.isOffline) {
-            Text('离线降级（' + this.offlineReason + '），当前展示本地模拟数据')
-              .fontSize(12)
-              .fontColor($r('app.color.mobile_campus_primary_color_default'))
-              .width('100%')
-              .textAlign(TextAlign.Center)
-              .padding({ top: 6, bottom: 6 })
-              .backgroundColor($r('app.color.common_color_6'))
-          }
-
           // ScrollView 部分（layout_above layoutBottom）
           Scroll() {
             Column() {

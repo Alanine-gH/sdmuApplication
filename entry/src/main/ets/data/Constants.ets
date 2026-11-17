@@ -24,4 +24,10 @@ export class Constants {
   static readonly KEY_USER_ID: string = 'userId';
   static readonly KEY_IS_LOGIN: string = 'isLogin';
   static readonly KEY_USER_NAME: string = 'userName';
+  static readonly KEY_USER_DEPARTMENT: string = 'userDepartment';
+  static readonly KEY_USER_MAJOR: string = 'userMajor';
+  static readonly KEY_USER_CLASS: string = 'userClass';
+  static readonly KEY_USER_GRADE: string = 'userGrade';
+  static readonly KEY_USER_PHONE: string = 'userPhone';
+  static readonly KEY_USER_TYPE: string = 'userType';
 }
