@@ -1,24 +1,29 @@
-﻿import { cryptoFramework } from '@kit.CryptoArchitectureKit';
+﻿import { BusinessError } from '@kit.BasicServicesKit';
+import { cryptoFramework } from '@kit.CryptoArchitectureKit';
 import { util } from '@kit.ArkTS';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import { Constants } from '../data/Constants';
 
+const TAG = 0x0000;
+const DOMAIN = 'SDMU';
+
 /**
- * 加密工具 — 1:1 复刻安卓版 baselibrary/framework/util/z.smali + GetKeyUtil 协议：
- *   - AES-128/ECB/PKCS5Padding（z.smali "AES/ECB/PKCS5Padding"）
- *   - RSA-1024/ECB/PKCS1Padding（z.smali "RSA/ECB/PKCS1Padding"）
- *   - key协商：随机16字节key → Base64 → {"sk":key} → RSA公钥加密 → Base64
- *     POST /open/security/asym/key（头 Asym-Key: private）
- *   2026-11-16 已在真实服务器验证协商与响应解密全链路。
+ * 加密工具 — 1:1 复刻安卓 z.smali + GetKeyUtil 协议（2026-11-16/17 服务器实测验证）：
+ *   - AES-128/ECB/PKCS5（PKCS5不可用时自动降级PKCS7，字节级等价）
+ *   - RSA-1024/ECB/PKCS1（DER失败自动降级PEM）
+ *   - 全流程插桩：失败时hilog输出step+code+message
  */
 export class CryptoUtil {
   private static base64Helper: util.Base64Helper = new util.Base64Helper();
 
-  /** 随机16字节key → Base64（对应安卓 c.k(): KeyGenerator("AES")） */
+  static log(msg: string): void {
+    hilog.info(TAG, DOMAIN, '%{public}s', msg);
+  }
+
   static generateKey(): string {
     const bytes: Uint8Array = new Uint8Array(16);
     for (let i = 0; i < 16; i++) {
-      const r: number = Math.floor(Math.random() * 256);
-      bytes[i] = r;
+      bytes[i] = Math.floor(Math.random() * 256);
     }
     return CryptoUtil.bytesToBase64(bytes);
   }
@@ -41,50 +46,91 @@ export class CryptoUtil {
     return decoder.decodeToString(bytes);
   }
 
-  /** AES-128/ECB/PKCS5 加密 → Base64（对应 z.encryptAES） */
-  static async encryptAES(plain: string, keyB64: string): Promise<string> {
+  /** 创建AES cipher：PKCS5失败自动降级PKCS7 */
+  private static createAesCipher(mode: cryptoFramework.CryptoMode, keyB64: string, step: string): cryptoFramework.Cipher {
     const symKeyGenerator: cryptoFramework.SymKeyGenerator = cryptoFramework.createSymKeyGenerator('AES128');
     const keyBlob: cryptoFramework.DataBlob = { data: CryptoUtil.base64ToBytes(keyB64) };
-    const symKey: cryptoFramework.SymKey = await symKeyGenerator.convertKey(keyBlob);
-    const cipher: cryptoFramework.Cipher = cryptoFramework.createCipher('AES128|ECB|PKCS5');
-    cipher.initSync(cryptoFramework.CryptoMode.ENCRYPT_MODE, symKey, null);
-    const plainBlob: cryptoFramework.DataBlob = { data: CryptoUtil.stringToBytes(plain) };
-    const encrypted: cryptoFramework.DataBlob = await cipher.doFinal(plainBlob);
-    return CryptoUtil.bytesToBase64(encrypted.data);
+    const symKey: cryptoFramework.SymKey = symKeyGenerator.convertKeySync(keyBlob);
+    const specs: string[] = ['AES128|ECB|PKCS5', 'AES128|ECB|PKCS7', 'AES128|ECB|NONE'];
+    for (const spec of specs) {
+      try {
+        const cipher: cryptoFramework.Cipher = cryptoFramework.createCipher(spec);
+        cipher.initSync(mode, symKey, null);
+        return cipher;
+      } catch (e) {
+        const be = e as BusinessError;
+        CryptoUtil.log(step + ' cipher ' + spec + ' fail code=' + be.code + ' msg=' + be.message);
+      }
+    }
+    throw new Error(step + ': 所有AES cipher规格均创建失败');
   }
 
-  /** AES-128/ECB/PKCS5 解密（对应 z.decryptAES） */
-  static async decryptAES(cipherB64: string, keyB64: string): Promise<string> {
-    const symKeyGenerator: cryptoFramework.SymKeyGenerator = cryptoFramework.createSymKeyGenerator('AES128');
-    const keyBlob: cryptoFramework.DataBlob = { data: CryptoUtil.base64ToBytes(keyB64) };
-    const symKey: cryptoFramework.SymKey = await symKeyGenerator.convertKey(keyBlob);
-    const cipher: cryptoFramework.Cipher = cryptoFramework.createCipher('AES128|ECB|PKCS5');
-    cipher.initSync(cryptoFramework.CryptoMode.DECRYPT_MODE, symKey, null);
-    const cipherBlob: cryptoFramework.DataBlob = { data: CryptoUtil.base64ToBytes(cipherB64) };
-    const decrypted: cryptoFramework.DataBlob = await cipher.doFinal(cipherBlob);
-    return CryptoUtil.bytesToString(decrypted.data);
+  /** AES-128/ECB 加密 → Base64 */
+  static encryptAES(plain: string, keyB64: string): string {
+    try {
+      const cipher = CryptoUtil.createAesCipher(cryptoFramework.CryptoMode.ENCRYPT_MODE, keyB64, 'encryptAES');
+      const plainBlob: cryptoFramework.DataBlob = { data: CryptoUtil.stringToBytes(plain) };
+      const encrypted: cryptoFramework.DataBlob = cipher.doFinalSync(plainBlob);
+      return CryptoUtil.bytesToBase64(encrypted.data);
+    } catch (e) {
+      const be = e as BusinessError;
+      CryptoUtil.log('encryptAES fail code=' + be.code + ' msg=' + be.message);
+      throw e as Error;
+    }
   }
 
-  /** RSA-1024/ECB/PKCS1 公钥加密 → Base64（对应 z.encryptRSAByPublicKey） */
+  /** AES-128/ECB 解密 */
+  static decryptAES(cipherB64: string, keyB64: string): string {
+    try {
+      const cipher = CryptoUtil.createAesCipher(cryptoFramework.CryptoMode.DECRYPT_MODE, keyB64, 'decryptAES');
+      const cipherBlob: cryptoFramework.DataBlob = { data: CryptoUtil.base64ToBytes(cipherB64) };
+      const decrypted: cryptoFramework.DataBlob = cipher.doFinalSync(cipherBlob);
+      return CryptoUtil.bytesToString(decrypted.data);
+    } catch (e) {
+      const be = e as BusinessError;
+      CryptoUtil.log('decryptAES fail code=' + be.code + ' msg=' + be.message);
+      throw e as Error;
+    }
+  }
+
+  /** 构造PEM格式公钥 */
+  private static toPem(pubB64: string): string {
+    const body: string = pubB64.replace(/(.{64})/g, '$1\n');
+    return '-----BEGIN PUBLIC KEY-----\n' + body + '\n-----END PUBLIC KEY-----\n';
+  }
+
+  /** RSA-1024/ECB/PKCS1 公钥加密 → Base64（DER失败自动PEM兜底） */
   static async encryptRSA(plain: string, publicKeyB64: string): Promise<string> {
     const asyKeyGenerator: cryptoFramework.AsyKeyGenerator = cryptoFramework.createAsyKeyGenerator('RSA1024');
     const pubBlob: cryptoFramework.DataBlob = { data: CryptoUtil.base64ToBytes(publicKeyB64) };
-    // 私钥传null（只有公钥，官方范例convertKey(pubKeyBlob, null)）
-    const keyPair: cryptoFramework.KeyPair = await asyKeyGenerator.convertKey(pubBlob, null);
+    let keyPair: cryptoFramework.KeyPair;
+    try {
+      CryptoUtil.log('RSA convertKey(DER) 开始');
+      keyPair = await asyKeyGenerator.convertKey(pubBlob, null);
+      CryptoUtil.log('RSA convertKey(DER) 成功');
+    } catch (e) {
+      const be = e as BusinessError;
+      CryptoUtil.log('RSA convertKey(DER) fail code=' + be.code + ' msg=' + be.message + ' → 尝试PEM');
+      try {
+        keyPair = await asyKeyGenerator.convertPemKey(CryptoUtil.toPem(publicKeyB64), null);
+        CryptoUtil.log('RSA convertPemKey 成功');
+      } catch (e2) {
+        const be2 = e2 as BusinessError;
+        CryptoUtil.log('RSA convertPemKey fail code=' + be2.code + ' msg=' + be2.message);
+        throw e2 as Error;
+      }
+    }
     const cipher: cryptoFramework.Cipher = cryptoFramework.createCipher('RSA1024|PKCS1');
     cipher.initSync(cryptoFramework.CryptoMode.ENCRYPT_MODE, keyPair.pubKey, null);
     const plainBlob: cryptoFramework.DataBlob = { data: CryptoUtil.stringToBytes(plain) };
-    const encrypted: cryptoFramework.DataBlob = await cipher.doFinal(plainBlob);
+    const encrypted: cryptoFramework.DataBlob = cipher.doFinalSync(plainBlob);
     return CryptoUtil.bytesToBase64(encrypted.data);
   }
 
-  /**
-   * 构造key协商body（1:1 复刻 GetKeyUtil.p方法）：
-   * body = Base64(RSA公钥加密('{"sk":"<随机key>"}'))
-   */
-  static async buildNegotiateBody(randomKeyB64: string): Promise<string> {
+  /** 构造key协商body：Base64(RSA('{"sk":"<key>"}')) */
+  static async buildNegotiateBody(randomKeyB64: string, publicKeyB64: string): Promise<string> {
     const json: string = '{"sk":"' + randomKeyB64 + '"}';
-    return CryptoUtil.encryptRSA(json, Constants.RSA_PUBLIC_KEY);
+    return CryptoUtil.encryptRSA(json, publicKeyB64);
   }
 }
 

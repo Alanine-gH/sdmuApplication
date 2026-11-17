@@ -1,4 +1,6 @@
-﻿import { util } from '@kit.ArkTS';
+﻿import { BusinessError } from '@kit.BasicServicesKit';
+import { util } from '@kit.ArkTS';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import { HttpClient } from './HttpClient';
 import { CryptoUtil } from './CryptoUtil';
 import { ApiResponse } from '../model/ResponseModel';
@@ -6,24 +8,28 @@ import { UserInfo } from '../model/UserModel';
 import { Constants } from '../data/Constants';
 import { ApiService } from './ApiService';
 
+const TAG = 0x0000;
+const DOMAIN = 'SDMU';
+
 /**
- * 登录会话管理 — 1:1 复刻安卓 GetKeyUtil + LoginModel（源码验证 + 真实服务器全链路打通 2026-11-16）：
- *   1. key协商：随机16字节AES key → {"sk":key} → RSA-1024公钥加密 → Base64
- *      POST /open/security/asym/key（头 Asym-Key: private，Unique-Code=随机UUID）
- *      响应 data = AES(onlyCode)，解密得到 onlyCode
- *   2. 登录：body = AES(完整LoginSumbitEntity JSON)，Unique-Code=onlyCode
- *      POST /open/auth/login → code=0
- *   3. 响应 data = AES(UserEntity JSON)，解密得到 session_key + 真实用户信息
+ * 登录会话管理 — 1:1 复刻安卓 GetKeyUtil + LoginModel（服务器实测协议）：
+ *   1. GET /open/security/asym/key（Asym-Key: public）动态取RSA公钥
+ *   2. POST 协商（Asym-Key: private，Unique-Code=随机UUID）→ onlyCode
+ *   3. 登录：body=AES(完整实体)，Unique-Code=onlyCode → code=0
+ *   4. 解密响应 → session_key + 真实用户信息
+ * 错误码：0成功 1005账号密码错 0006解密失败 0001系统异常
  */
 export class LoginSession {
-  /** 当前会话的AES key（Base64） */
   static aesKey: string = '';
-  /** 协商得到的onlyCode（后续请求的Unique-Code） */
   static onlyCode: string = '';
-  /** 登录后的session_key */
   static sessionKey: string = '';
-  /** 用户类型（登录响应userType） */
   static userType: string = '';
+  static userId: string = '';
+  static step: string = '';
+
+  static log(msg: string): void {
+    hilog.info(TAG, DOMAIN, 'login %{public}s', msg);
+  }
 
   private static randomUuid(): string {
     const bytes: Uint8Array = new Uint8Array(16);
@@ -34,35 +40,63 @@ export class LoginSession {
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
     const hex: string[] = [];
     for (let i = 0; i < 16; i++) {
-      const h: string = bytes[i].toString(16).padStart(2, '0');
-      hex.push(h);
+      hex.push(bytes[i].toString(16).padStart(2, '0'));
     }
     return hex.slice(0, 4).join('') + '-' + hex.slice(4, 6).join('') + '-' +
       hex.slice(6, 8).join('') + '-' + hex.slice(8, 10).join('') + '-' +
       hex.slice(10, 16).join('');
   }
 
-  /**
-   * 完整登录流程（真实服务器验证通过）：
-   * 协商 → onlyCode → 加密登录body → 解密响应 → UserInfo
-   */
+  private static fail(code: number, msg: string, account: string): ApiResponse<UserInfo> {
+    LoginSession.log('FAIL [' + LoginSession.step + '] code=' + code + ' msg=' + msg);
+    return new ApiResponse<UserInfo>(code, msg, ApiService.mockUser(account));
+  }
+
   static async login(account: string, password: string): Promise<ApiResponse<UserInfo>> {
     try {
-      // ===== 第1步：key协商 =====
+      // ===== 第0步：GET动态公钥 =====
+      LoginSession.step = 'fetchPubKey';
+      const pubResp: ApiResponse<Object> = await HttpClient.requestRaw(
+        '/mobileapi_ydxy/open/security/asym/key', 'GET', '', 'application/json',
+        LoginSession.randomUuid(), 'public');
+      let pubKey: string = Constants.RSA_PUBLIC_KEY;
+      if (pubResp.code === 0 && pubResp.data !== null && pubResp.data !== undefined) {
+        const fetched: string = pubResp.data as string;
+        if (fetched !== '' && fetched.length > 100) {
+          pubKey = fetched;
+        }
+      }
+      LoginSession.log('pubKey len=' + pubKey.length + ' 前20=' + pubKey.substring(0, 20));
+
+      // ===== 第1步：生成key+协商body =====
+      LoginSession.step = 'genKey';
       LoginSession.aesKey = CryptoUtil.generateKey();
-      const negotiateBody: string = await CryptoUtil.buildNegotiateBody(LoginSession.aesKey);
+      LoginSession.log('aesKey=' + LoginSession.aesKey.substring(0, 8) + '...');
+
+      LoginSession.step = 'rsaNegotiate';
+      const negotiateBody: string = await CryptoUtil.buildNegotiateBody(LoginSession.aesKey, pubKey);
+      LoginSession.log('negoBody len=' + negotiateBody.length);
+
+      // ===== 第2步：POST协商 =====
+      LoginSession.step = 'negotiateRequest';
       const negoResp: ApiResponse<Object> = await HttpClient.requestRaw(
-        Constants.NEGOTIATE_PATH, 'POST', negotiateBody, 'text/plain', LoginSession.randomUuid(), 'private');
+        '/mobileapi_ydxy/open/security/asym/key', 'POST', negotiateBody, 'text/plain',
+        LoginSession.randomUuid(), 'private');
       if (negoResp.code !== 0) {
-        return new ApiResponse<UserInfo>(-1, 'key协商失败: ' + negoResp.message, ApiService.mockUser(account));
+        return LoginSession.fail(negoResp.code, 'key协商失败: ' + negoResp.message, account);
       }
       const negoData: string = negoResp.data as string ?? '';
       if (negoData === '') {
-        return new ApiResponse<UserInfo>(-1, 'key协商响应为空', ApiService.mockUser(account));
+        return LoginSession.fail(negoResp.code, 'key协商响应data为空', account);
       }
-      LoginSession.onlyCode = await CryptoUtil.decryptAES(negoData, LoginSession.aesKey);
 
-      // ===== 第2步：加密登录body（完整LoginSumbitEntity字段，源码InitSumbitCommonEntity） =====
+      // ===== 第3步：解密onlyCode =====
+      LoginSession.step = 'decryptOnlyCode';
+      LoginSession.onlyCode = await CryptoUtil.decryptAES(negoData, LoginSession.aesKey);
+      LoginSession.log('onlyCode=' + LoginSession.onlyCode);
+
+      // ===== 第4步：AES加密登录body =====
+      LoginSession.step = 'aesLoginBody';
       const entity: Record<string, string> = {
         'userId': account,
         'passw': password,
@@ -80,30 +114,41 @@ export class LoginSession {
         'imei': '',
         'deviceId': Constants.DEVICE_ID
       };
-      const plain: string = JSON.stringify(entity);
-      const loginBody: string = await CryptoUtil.encryptAES(plain, LoginSession.aesKey);
+      const loginBody: string = await CryptoUtil.encryptAES(JSON.stringify(entity), LoginSession.aesKey);
 
-      // ===== 第3步：登录（Unique-Code=onlyCode） =====
+      // ===== 第5步：登录（Unique-Code=onlyCode） =====
+      LoginSession.step = 'loginRequest';
       const loginResp: ApiResponse<Object> = await HttpClient.requestRaw(
-        '/mobileapi_ydxy/open/auth/login', 'POST', loginBody, 'text/plain', LoginSession.onlyCode, '');
+        '/mobileapi_ydxy/open/auth/login', 'POST', loginBody, 'text/plain',
+        LoginSession.onlyCode, '');
+      LoginSession.log('login resp code=' + loginResp.code + ' msg=' + loginResp.message);
+      if (loginResp.code === 1005) {
+        return LoginSession.fail(1005, '账号或密码错误，请重试', account);
+      }
       if (loginResp.code !== 0) {
-        return new ApiResponse<UserInfo>(-1, '登录失败: ' + loginResp.message, ApiService.mockUser(account));
+        return LoginSession.fail(loginResp.code, '登录失败: ' + loginResp.message, account);
       }
       const loginData: string = loginResp.data as string ?? '';
       if (loginData === '') {
-        return new ApiResponse<UserInfo>(-1, '登录响应为空', ApiService.mockUser(account));
+        return LoginSession.fail(loginResp.code, '登录响应data为空', account);
       }
 
-      // ===== 第4步：解密响应 → 真实用户信息 =====
+      // ===== 第6步：解密用户信息 =====
+      LoginSession.step = 'decryptUser';
       const userJson: string = await CryptoUtil.decryptAES(loginData, LoginSession.aesKey);
       const user: UserInfo = LoginSession.parseUserEntity(userJson);
+      LoginSession.log('登录成功 userId=' + user.userId + ' name=' + user.name);
       return new ApiResponse<UserInfo>(0, '请求成功', user);
     } catch (error) {
-      return new ApiResponse<UserInfo>(-1, '登录异常: ' + JSON.stringify(error), ApiService.mockUser(account));
+      const be = error as BusinessError;
+      LoginSession.log('EXCEPTION step=' + LoginSession.step + ' code=' + be.code + ' msg=' + be.message);
+      return new ApiResponse<UserInfo>(-1,
+        '登录异常[' + LoginSession.step + '] code=' + be.code + ' ' + be.message,
+        ApiService.mockUser(account));
     }
   }
 
-  /** UserEntity JSON → UserInfo（字段名1:1对应安卓实体类） */
+  /** UserEntity JSON → UserInfo（字段1:1对应安卓UserEntity） */
   static parseUserEntity(json: string): UserInfo {
     const rec: Record<string, Object> = JSON.parse(json) as Record<string, Object>;
     const pick = (k: string): string => {
@@ -112,6 +157,7 @@ export class LoginSession {
     };
     LoginSession.sessionKey = pick('session_key');
     LoginSession.userType = pick('userType') === '' ? '1' : pick('userType');
+    LoginSession.userId = pick('userId');
     return new UserInfo(
       pick('userId'),
       pick('userName'),
@@ -121,11 +167,10 @@ export class LoginSession {
       pick('professionName'),
       pick('grade'),
       pick('mobileNo'),
-      pick('email') === '' ? '' : pick('email'),
+      pick('email'),
       '',
       pick('session_key')
     );
   }
 }
-
 
