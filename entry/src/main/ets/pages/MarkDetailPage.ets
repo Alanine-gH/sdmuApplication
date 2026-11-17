@@ -118,6 +118,9 @@ struct MarkDetailPage {
             .width('100%')
             .padding({ left: 15, right: 15, top: 10, bottom: 7 })
             .backgroundColor($r('app.color.main_bg'))
+            .onClick(() => {
+              this.getUIContext().getPromptAction().showToast({ message: '商品信息已刷新' });
+            })
 
             Row() {
               Image($r('app.media.social_comment'))
@@ -194,6 +197,9 @@ struct MarkDetailPage {
             .width('100%')
             .padding({ left: 15, right: 15, top: 10, bottom: 10 })
             .backgroundColor($r('app.color.main_bg'))
+            .onClick(() => {
+              this.getUIContext().getPromptAction().showToast({ message: '回复功能' });
+            })
           }
         }, (comment: MarketDetailComment) => comment.id)
       }

@@ -1,3 +1,4 @@
+import { router } from '@kit.ArkUI';
 import { TitleBar } from '../components/TitleBar';
 
 /**
@@ -61,6 +62,12 @@ struct DemoPage {
               }
               .padding({ left: 16, right: 16, top: 14, bottom: 14 })
               .width('100%')
+              .onClick(() => {
+                router.pushUrl({
+                  url: 'pages/WebViewPage',
+                  params: { url: 'https://www.sdmu.edu.cn/', title: '详情' }
+                });
+              })
             }
           }, (item: DemoListItem) => `demo_${item.itemId}`)
 

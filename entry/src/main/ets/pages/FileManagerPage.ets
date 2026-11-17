@@ -56,6 +56,9 @@ struct FileManagerPage {
     .padding({ top: 10, bottom: 10 })
     .alignItems(VerticalAlign.Center)
     .backgroundColor($r('app.color.white'))
+    .onClick(() => {
+      this.getUIContext().getPromptAction().showToast({ message: '文件管理功能已就绪' });
+    })
   }
 
   build() {

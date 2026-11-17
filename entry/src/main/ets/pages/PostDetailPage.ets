@@ -101,6 +101,9 @@ struct PostDetailPage {
                     .objectFit(ImageFit.Cover)
                     .borderRadius(3)
                     .margin({ right: 5, bottom: 5 })
+                    .onClick(() => {
+                      this.getUIContext().getPromptAction().showToast({ message: '查看大图' });
+                    })
                 }, (photo: string, idx: number) => this.postName + idx)
               }
               .width('100%')
@@ -186,6 +189,9 @@ struct PostDetailPage {
             .width('100%')
             .padding({ left: 15, right: 15, top: 10, bottom: 10 })
             .backgroundColor($r('app.color.main_bg'))
+            .onClick(() => {
+              this.getUIContext().getPromptAction().showToast({ message: '回复功能' });
+            })
           }
         }, (comment: SocialDetailComment) => comment.id)
       }

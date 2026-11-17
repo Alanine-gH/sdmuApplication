@@ -30,10 +30,37 @@ struct AppUpdatePage {
     }
   }
 
-  /** 各 variant 对应的背景图资源（实测源布局 mipmap 引用） */
+  /** 各 variant 对应的背景图资源（实测源布局 mipmap 引用；$r要求字面量，switch静态映射） */
   private bgRes(): Resource {
-    if (this.variant >= 3 && this.variant <= 12) {
-      return $r(`app.media.dialog_bg_type_${this.variant}`);
+    if (this.variant === 3) {
+      return $r('app.media.dialog_bg_type_3');
+    }
+    if (this.variant === 4) {
+      return $r('app.media.dialog_bg_type_4');
+    }
+    if (this.variant === 5) {
+      return $r('app.media.dialog_bg_type_5');
+    }
+    if (this.variant === 6) {
+      return $r('app.media.dialog_bg_type_6');
+    }
+    if (this.variant === 7) {
+      return $r('app.media.dialog_bg_type_7');
+    }
+    if (this.variant === 8) {
+      return $r('app.media.dialog_bg_type_8');
+    }
+    if (this.variant === 9) {
+      return $r('app.media.dialog_bg_type_9');
+    }
+    if (this.variant === 10) {
+      return $r('app.media.dialog_bg_type_10');
+    }
+    if (this.variant === 11) {
+      return $r('app.media.dialog_bg_type_11');
+    }
+    if (this.variant === 12) {
+      return $r('app.media.dialog_bg_type_12');
     }
     return $r('app.media.dialog_update_bg');
   }

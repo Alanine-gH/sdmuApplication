@@ -1,3 +1,4 @@
+import { router } from '@kit.ArkUI';
 import { TitleBar } from '../components/TitleBar';
 
 /**
@@ -103,6 +104,9 @@ struct MessageListPage {
         .strokeWidth(0.5)
     }
     .width('100%')
+    .onClick(() => {
+      router.pushUrl({ url: 'pages/EmcMessageDetailPage', params: { id: item.id } });
+    })
   }
 
   build() {

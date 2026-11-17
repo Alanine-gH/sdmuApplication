@@ -1,3 +1,4 @@
+import { router } from '@kit.ArkUI';
 import { TitleBar } from '../components/TitleBar';
 
 /**
@@ -75,6 +76,9 @@ struct ClassmatesListPage {
             }
             .width('100%')
             .backgroundColor($r('app.color.ybg_white'))
+            .onClick(() => {
+              router.pushUrl({ url: 'pages/ContactPersonalDetailPage' });
+            })
           }
         }, (item: ClassmateItem) => item.name)
       }

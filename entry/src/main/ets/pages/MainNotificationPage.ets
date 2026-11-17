@@ -1,3 +1,4 @@
+import { router } from '@kit.ArkUI';
 import { TitleBar } from '../components/TitleBar';
 
 /**
@@ -87,6 +88,9 @@ struct MainNotificationPage {
     .width('100%')
     .backgroundColor($r('app.color.white'))
     .padding({ left: 14, top: 14, right: 14 })
+    .onClick(() => {
+      router.pushUrl({ url: 'pages/EmcMessageDetailPage', params: { id: item.id } });
+    })
   }
 
   build() {

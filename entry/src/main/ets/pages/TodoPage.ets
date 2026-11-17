@@ -1,3 +1,4 @@
+﻿import { router } from '@kit.ArkUI';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { TodoItem } from '../model/TodoModel';
@@ -388,7 +389,7 @@ struct TodoPage {
         })
         .catch(() => {
         });
-      this.getUIContext().getPromptAction().showToast({ message: '待办详情暂未开放' });
+      router.pushUrl({ url: 'pages/TodoReadPage' });
     })
   }
 
@@ -432,7 +433,8 @@ struct TodoPage {
     .padding({ top: 6, bottom: 6 })
     .backgroundColor($r('app.color.white'))
     .onClick(() => {
-      this.getUIContext().getPromptAction().showToast({ message: '日程详情暂未开放' });
+      router.pushUrl({ url: 'pages/ScheduleDetailPage' });
     })
   }
 }
+

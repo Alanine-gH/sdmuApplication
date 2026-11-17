@@ -1,4 +1,4 @@
-import { router } from '@kit.ArkUI';
+﻿import { router } from '@kit.ArkUI';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { MeetingItem } from '../model/MeetingModel';
@@ -213,7 +213,7 @@ struct MeetingDetailPage {
             .width('100%')
             .backgroundColor($r('app.color.white'))
             .onClick(() => {
-              this.getUIContext().getPromptAction().showToast({ message: '参会人员功能暂未开放' });
+              router.pushUrl({ url: 'pages/MeetingAttendPage' });
             })
           }
           .width('100%')
@@ -225,3 +225,4 @@ struct MeetingDetailPage {
     .backgroundColor($r('app.color.mobile_campus_bg_color'))
   }
 }
+
