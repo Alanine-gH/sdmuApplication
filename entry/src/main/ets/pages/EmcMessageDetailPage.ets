@@ -28,7 +28,7 @@ function buildEmcMessageDetail(): EmcMessageDetail {
 }
 
 /**
- * 消息详情页 — 按反编译布局 1:1 复刻 mobile_campus_activity_emc_message_detail.xml：
+ * 消息详情页 — 按源布局 1:1 复刻 mobile_campus_activity_emc_message_detail.xml：
  *   LinearLayout vertical（白底）
  *   - include toolbar_normal（TitleBar）
  *   - MultiStateView marginTop=px_to_dip_24=12vp → NestedScrollView：

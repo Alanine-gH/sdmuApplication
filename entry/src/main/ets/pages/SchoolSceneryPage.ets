@@ -40,7 +40,7 @@ function filterSceneryItems(items: SceneryItem[], category: number): SceneryItem
 }
 
 /**
- * 校园风光页 — 按反编译布局 1:1 复刻 mobile_campus_school_activity_scenery.xml：
+ * 校园风光页 — 按源布局 1:1 复刻 mobile_campus_school_activity_scenery.xml：
  *   LinearLayout vertical（fill_parent）
  *   - include toolbar_normal（标题“校园风光”）
  *   - TabLayout：height=px_to_dip_72=36vp、textSize=px_to_dip_30=15fp、

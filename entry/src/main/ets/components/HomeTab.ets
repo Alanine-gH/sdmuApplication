@@ -3,7 +3,7 @@ import { ApiService } from '../network/ApiService';
 import { NewsItem } from '../model/NewsModel';
 
 /**
- * 首页新闻区块 — 按反编译布局 1:1 复刻：
+ * 首页新闻区块 — 按源布局 1:1 复刻：
  *   - mobile_campus_main_banner.xml（顶部 Banner 轮播，AutoScrollViewPager → Swiper）
  *   - mobile_campus_view_main_center_news.xml + mobile_campus_view_main_news_item.xml（“动态”模块）
  *   - mobile_campus_view_main_news.xml（首页新闻条目）

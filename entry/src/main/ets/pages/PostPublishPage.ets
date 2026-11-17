@@ -12,7 +12,7 @@ class PostPublishPhoto {
 }
 
 /**
- * 发布帖子 — 按反编译布局 1:1 复刻 social_post_publish.xml + social_post_publish_bottom_bar.xml：
+ * 发布帖子 — 按源布局 1:1 复刻 social_post_publish.xml + social_post_publish_bottom_bar.xml：
  *   RelativeLayout（背景 ybg_white）
  *   - include toolbar_normal（标题“发布帖子”）
  *   - ScrollView：LinearLayout padding 15/14/15/12

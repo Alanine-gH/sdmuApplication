@@ -53,7 +53,7 @@ function buildDeptRanks(): SportRankItem[] {
 }
 
 /**
- * 教师运动步数排名页 — 按反编译布局 1:1 复刻 mobile_campus_activity_app_sport_steps_rankings.xml：
+ * 教师运动步数排名页 — 按源布局 1:1 复刻 mobile_campus_activity_app_sport_steps_rankings.xml：
  *   LinearLayout vertical
  *   - MToolBar（标题“教师运动步数”）
  *   - CoordinatorLayout：

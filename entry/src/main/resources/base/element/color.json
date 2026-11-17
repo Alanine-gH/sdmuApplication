@@ -517,24 +517,24 @@
       "value": "#333333"
     },
     {
-      "value": "#1B68B7",
-      "name": "mobile_campus_contact"
+      "name": "mobile_campus_contact",
+      "value": "#1B68B7"
     },
     {
-      "value": "#1B68B7",
-      "name": "mobile_campus_oa_meeting"
+      "name": "mobile_campus_oa_meeting",
+      "value": "#1B68B7"
     },
     {
-      "value": "#333333",
-      "name": "mobile_campus_textcolor_doc_number"
+      "name": "mobile_campus_textcolor_doc_number",
+      "value": "#333333"
     },
     {
-      "value": "#1B6BB7",
-      "name": "mobile_campus_oa_next_level"
+      "name": "mobile_campus_oa_next_level",
+      "value": "#1B6BB7"
     },
     {
-      "value": "#E8F1FB",
-      "name": "mobile_campus_oa_doc_check_bg"
+      "name": "mobile_campus_oa_doc_check_bg",
+      "value": "#E8F1FB"
     },
     {
       "name": "timetable_bg",
@@ -557,28 +557,104 @@
       "value": "#FF5D3D"
     },
     {
-      "value": "#E60012",
-      "name": "mobile_campus_supervise_edit_textcolor"
+      "name": "mobile_campus_supervise_edit_textcolor",
+      "value": "#E60012"
     },
     {
-      "value": "#F8F8F9",
-      "name": "mobile_campus_supervise_evaluate_edittext_solid"
+      "name": "mobile_campus_supervise_evaluate_edittext_solid",
+      "value": "#F8F8F9"
     },
     {
-      "value": "#DFE4EA",
-      "name": "mobile_campus_supervise_evaluate_edittext_stroke"
+      "name": "mobile_campus_supervise_evaluate_edittext_stroke",
+      "value": "#DFE4EA"
     },
     {
-      "value": "#B2BDC9",
-      "name": "mobile_campus_supervise_notify_solid"
+      "name": "mobile_campus_supervise_notify_solid",
+      "value": "#B2BDC9"
     },
     {
-      "value": "#B4BDC8",
-      "name": "mobile_campus_supervise_filter_hint"
+      "name": "mobile_campus_supervise_filter_hint",
+      "value": "#B4BDC8"
     },
     {
       "name": "mobile_campus_meeting_add_textcolor",
       "value": "#80FFFFFF"
+    },
+    {
+      "name": "pager_bg",
+      "value": "#CA000000"
+    },
+    {
+      "name": "alpha_20",
+      "value": "#33000000"
+    },
+    {
+      "name": "browse_photos_hover_dot",
+      "value": "#BBBBBB"
+    },
+    {
+      "name": "browse_photos_normal_dot",
+      "value": "#454545"
+    },
+    {
+      "name": "upsdk_color_gray_10",
+      "value": "#191919"
+    },
+    {
+      "name": "update_light_orange",
+      "value": "#FF7133"
+    },
+    {
+      "name": "update_btn_orange",
+      "value": "#FF721E"
+    },
+    {
+      "name": "update_btn_red",
+      "value": "#FA5C53"
+    },
+    {
+      "name": "update_content_gray",
+      "value": "#4B4B4B"
+    },
+    {
+      "name": "update_btn_orange_light",
+      "value": "#FE8B80"
+    },
+    {
+      "name": "update_btn_pink",
+      "value": "#FC8680"
+    },
+    {
+      "name": "viewLine",
+      "value": "#F2F2F2"
+    },
+    {
+      "name": "zhy_center_pill_blue",
+      "value": "#74ACFF"
+    },
+    {
+      "name": "zhy_criterion_text",
+      "value": "#283163"
+    },
+    {
+      "name": "zhy_criterion_bg",
+      "value": "#19283163"
+    },
+    {
+      "name": "download_msg_gray",
+      "value": "#444444"
+    },
+    {
+      "name": "download_divider",
+      "value": "#E3E3E3"
+    },
+    {
+      "name": "download_btn_green",
+      "value": "#7EC059"
+    },
+    {
+      "name": "titleColor",
+      "value": "#000000"
     }
   ]
 }

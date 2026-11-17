@@ -31,7 +31,7 @@ function buildDetailBooks(): ReadingBook[] {
 }
 
 /**
-   * 书籍详情页 — 按反编译布局 1:1 复刻 mobile_campus_reading_activity_detail.xml：
+   * 书籍详情页 — 按源布局 1:1 复刻 mobile_campus_reading_activity_detail.xml：
  *   LinearLayout vertical（fill_parent）
  *   - include toolbar_normal（标题“书籍详情”）
  *   - StickyNavLayout

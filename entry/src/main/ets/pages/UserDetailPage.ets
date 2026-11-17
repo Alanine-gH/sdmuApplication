@@ -30,7 +30,7 @@ function buildUserPosts(): UserDetailPost[] {
 }
 
 /**
- * 用户详情 — 按反编译布局 1:1 复刻 social_fragment_page.xml + social_post_item.xml：
+ * 用户详情 — 按源布局 1:1 复刻 social_fragment_page.xml + social_post_item.xml：
  *   LinearLayout vertical
  *   - include toolbar_normal（标题“个人主页”）
  *   - 头部：头像 px_to_dip_100=50vp 居中 + 昵称16fp + 院系/学校12fp common_color_3 + 加好友按钮

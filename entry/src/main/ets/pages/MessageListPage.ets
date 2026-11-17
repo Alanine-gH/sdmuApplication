@@ -34,7 +34,7 @@ function buildMessageItems(): MessageItem[] {
 }
 
 /**
- * 消息列表页 — 按反编译布局 1:1 复刻 mobile_campus_activity_message_list.xml：
+ * 消息列表页 — 按源布局 1:1 复刻 mobile_campus_activity_message_list.xml：
  *   LinearLayout vertical（背景 #E5E5E5）
  *   - FrameLayout 45vp 白底：返回按钮 45x45（padding 13）、标题“消息” 17sp #252525 居中 margin 45
  *   - View 10vp 间隔

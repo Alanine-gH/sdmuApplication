@@ -2,7 +2,7 @@ import { TitleBar } from '../components/TitleBar';
 
 /**
  * 同学列表页 — timetable/ClassmatesListActivity
- * APK 加壳无对应独立布局，按课程详情“本课上课时间由XX同学提供”同学列表交互复刻：
+ * 原生包 加壳无对应独立布局，按课程详情“本课上课时间由XX同学提供”同学列表交互复刻：
  * toolbar_normal + ListView：左侧头像占位 + 姓名 TextSize2.Color1 + 提供课程数 TextSize2.Color3
  */
 class ClassmateItem {

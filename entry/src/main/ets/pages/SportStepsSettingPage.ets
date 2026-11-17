@@ -1,7 +1,7 @@
 import { TitleBar } from '../components/TitleBar';
 
 /**
- * 步数设置页 — 按反编译布局 1:1 复刻 mobile_campus_activity_app_sport_steps_setting.xml：
+ * 步数设置页 — 按源布局 1:1 复刻 mobile_campus_activity_app_sport_steps_setting.xml：
  *   LinearLayout vertical
  *   - MToolBar（标题“设置”）
  *   - 说明文字 12sp explainColor padding left/right=15 top=16：“打开后将在榜单中显示您的对应名称”

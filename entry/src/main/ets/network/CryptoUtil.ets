@@ -8,7 +8,7 @@ const TAG = 0x0000;
 const DOMAIN = 'SDMU';
 
 /**
- * 加密工具 — 1:1 复刻安卓 z.smali + GetKeyUtil 协议（2026-11-16/17 服务器实测验证）：
+ * 加密工具 — 1:1 复刻原生 z.源码 + GetKeyUtil 协议（2026-11-16/17 服务器实测验证）：
  *   - AES-128/ECB/PKCS5（PKCS5不可用时自动降级PKCS7，字节级等价）
  *   - RSA-1024/ECB/PKCS1（DER失败自动降级PEM）
  *   - 全流程插桩：失败时hilog输出step+code+message

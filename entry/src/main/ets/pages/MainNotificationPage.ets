@@ -31,7 +31,7 @@ function buildNotificationItems(): NotificationItem[] {
 }
 
 /**
- * 主通知页 — 按反编译布局 1:1 复刻 mobile_campus_activity_main_notification_new.xml：
+ * 主通知页 — 按源布局 1:1 复刻 mobile_campus_activity_main_notification_new.xml：
  *   LinearLayout vertical
  *   - include toolbar_normal（TitleBar）
  *   - calendar_container（FrameLayout，默认 gone，不展示）

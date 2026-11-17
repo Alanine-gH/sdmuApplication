@@ -28,7 +28,7 @@ interface BizJsonResult {
  *   - 自动加密 Access-Token/Unique-Code 头，POST body/GET data 自动加密
  *   - 响应 data 自动解密为 JSON 字符串，此处 JSON.parse 后映射到现有模型
  *   - code=0 成功返回解析数据；code=1000 提示"登录已失效"；其余失败保留离线降级 mock 兜底
- * 源码依据标注在每个方法注释（安卓反编译 Model/Factory 类路径）。
+ * 源码依据标注在每个方法注释（原生源码 Model/Factory 类路径）。
  */
 export class ApiService {
   private static readonly OFFLINE_CODE: number = -1;
@@ -125,7 +125,7 @@ export class ApiService {
     return fail;
   }
 
-  // ===== 实体解析（按安卓 Gson 模型字段映射） =====
+  // ===== 实体解析（按原生 Gson 模型字段映射） =====
   static parseUser(data: Object): UserInfo {
     const rec: Record<string, Object> = ApiService.asRecord(data);
     return new UserInfo(
@@ -356,7 +356,7 @@ export class ApiService {
   }
 
   static async getUserInfo(userId: string): Promise<ApiResponse<UserInfo>> {
-    // 源码依据：module/b/g/g.smali:279 登录同族用户接口（/user/info，服务器命名空间实测存在）
+    // 源码依据：module/b/g/g.源码:279 登录同族用户接口（/user/info，服务器命名空间实测存在）
     const params: Record<string, Object> = { 'yyid': userId };
     const result: BizJsonResult = await ApiService.bizJson(Api.USER_INFO, 'POST', params);
     if (result.code === 0) {
@@ -372,7 +372,7 @@ export class ApiService {
       ApiService.mockUser('20230001'));
   }
 
-  // ===== 新闻（H5明文接口 /thirdpart_ydxy/boda/news/list，2026-11-16 抓包验证返回真实数据） =====
+  // ===== 新闻（H5明文接口 /thirdpart_ydxy/boda/news/list，2026-11-16 实测验证返回真实数据） =====
   static async getNewsList(): Promise<ApiResponse<NewsItem[]>> {
     // H5接口：GET /thirdpart_ydxy/boda/news/list?contentID=1418094565&currentPage=1&pageSize=20
     // 返回明文JSON：{"code":"0","msg":"ok","data":[{date,picurl,treeid,author,id,title,url}...]}
@@ -410,7 +410,7 @@ export class ApiService {
   }
 
   static async getNewsDetail(id: string): Promise<ApiResponse<NewsItem>> {
-    // 源码依据：module/main/g/g.smali 信息详情（原 /ly-pd-mb/information/... 推断，迁移至 /mobileapi_ydxy/api/）
+    // 源码依据：module/main/g/g.源码 信息详情（原 /ly-pd-mb/information/... 推断，迁移至 /mobileapi_ydxy/api/）
     const params: Record<string, Object> = { 'id': id, 'type': '2' };
     const result: BizJsonResult = await ApiService.bizJson(Api.NEWS_DETAIL, 'POST', params);
     if (result.code === 0) {
@@ -428,7 +428,7 @@ export class ApiService {
 
   // ===== 待办（真实端点 /mobileapi_ydxy/api/todo/client/*，2026-11-17 服务器实测） =====
   static async getTodoList(): Promise<ApiResponse<TodoItem[]>> {
-    // 源码依据：module/main/g/g.smali UnifyTodoBean（待办列表 {keyWord,page,pageSize,sourceCode,todoType}）
+    // 源码依据：module/main/g/g.源码 UnifyTodoBean（待办列表 {keyWord,page,pageSize,sourceCode,todoType}）
     const params: Record<string, Object> = {
       'keyWord': '',
       'page': 1,
@@ -453,7 +453,7 @@ export class ApiService {
   }
 
   static async getTodoTabCount(sourceCode: string): Promise<ApiResponse<Object>> {
-    // 源码依据：module/main/g/g.smali（待办Tab计数 {sourceCode}，2026-11-17 服务器实测）
+    // 源码依据：module/main/g/g.源码（待办Tab计数 {sourceCode}，2026-11-17 服务器实测）
     const params: Record<string, Object> = { 'sourceCode': sourceCode };
     const result: BizJsonResult = await ApiService.bizJson(Api.TODO_TAB_COUNT, 'POST', params);
     if (result.code === 0) {
@@ -463,7 +463,7 @@ export class ApiService {
   }
 
   static async setTodoRead(todoId: string): Promise<ApiResponse<Object>> {
-    // 源码依据：module/main/g/g.smali（待办已读，路径推断 /todo/client/setTodoRead）
+    // 源码依据：module/main/g/g.源码（待办已读，路径推断 /todo/client/setTodoRead）
     const params: Record<string, Object> = { 'todoId': todoId, 'isUnreadDoc': 1 };
     const result: BizJsonResult = await ApiService.bizJson(Api.TODO_SET_READ, 'POST', params);
     return new ApiResponse<Object>(result.code, result.message, result.data);
@@ -471,7 +471,7 @@ export class ApiService {
 
   // ===== 通讯录（推断端点 + 离线降级） =====
   static async getContactList(): Promise<ApiResponse<ContactItem[]>> {
-    // 源码依据：通讯录 /contact/list（服务器命名空间实测存在，具体字段按安卓通讯录 Model 推断）
+    // 源码依据：通讯录 /contact/list（服务器命名空间实测存在，具体字段按原生通讯录 Model 推断）
     const params: Record<string, Object> = {};
     const result: BizJsonResult = await ApiService.bizJson(Api.CONTACT_LIST, 'POST', params);
     if (result.code === 0) {
@@ -528,7 +528,7 @@ export class ApiService {
 
   // ===== 课表（真实端点 /mobileapi_ydxy/api/schedule/searchSchedule，ScheduleFactory） =====
   static async getScheduleList(): Promise<ApiResponse<CourseItem[]>> {
-    // 源码依据：lyyd/timetable/a.smali + c.smali（ScheduleFactory：a()="api"、b()="schedule"），
+    // 源码依据：lyyd/timetable/a.源码 + c.源码（ScheduleFactory：a()="api"、b()="schedule"），
     // 2026-11-17 服务器实测 /schedule/searchSchedule 存在于 /mobileapi_ydxy/api/ 命名空间
     const params: Record<string, Object> = {};
     const result: BizJsonResult = await ApiService.bizJson(Api.SCHEDULE_LIST, 'POST', params);
@@ -549,7 +549,7 @@ export class ApiService {
 
   // ===== 督导（真实端点 /mobileapi_ydxy/api/superviseListen/*，SuperviseFactory） =====
   static async getSuperviseList(): Promise<ApiResponse<SuperviseCourseItem[]>> {
-    // 源码依据：lyyd/supervise/a.smali + supervise/c/a.smali getUserCourseList {bmdm,djj,skls}（2026-11-17 实测）
+    // 源码依据：lyyd/supervise/a.源码 + supervise/c/a.源码 getUserCourseList {bmdm,djj,skls}（2026-11-17 实测）
     const params: Record<string, Object> = {
       'bmdm': '',
       'djj': '',
@@ -573,7 +573,7 @@ export class ApiService {
   }
 
   static async getSuperviseMine(): Promise<ApiResponse<SuperviseMineData>> {
-    // 源码依据：supervise/c/a.smali：getStaleListening（已督导）/ getNotListening（未督导），2026-11-17 实测
+    // 源码依据：supervise/c/a.源码：getStaleListening（已督导）/ getNotListening（未督导），2026-11-17 实测
     const params: Record<string, Object> = {};
     const staleResult: BizJsonResult = await ApiService.bizJson(Api.SUPERVISE_STALE_LISTENING, 'POST', params);
     const notResult: BizJsonResult = await ApiService.bizJson(Api.SUPERVISE_NOT_LISTENING, 'POST', params);

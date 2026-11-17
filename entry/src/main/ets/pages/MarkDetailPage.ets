@@ -27,7 +27,7 @@ function buildMarketComments(): MarketDetailComment[] {
 }
 
 /**
- * 市场商品详情 — 按反编译布局 1:1 复刻 market_activity_item.xml + social_post_item.xml + social_comment_item.xml：
+ * 市场商品详情 — 按源布局 1:1 复刻 market_activity_item.xml + social_post_item.xml + social_comment_item.xml：
  *   LinearLayout vertical
  *   - include toolbar_normal（标题“商品详情”）
  *   - 商品内容 social_post_item（头像40vp、昵称16fp、“想卖”标签、正文15fp、九图）

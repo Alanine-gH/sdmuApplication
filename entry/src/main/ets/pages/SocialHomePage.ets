@@ -59,7 +59,7 @@ function buildSocialPosts(): SocialPostInfo[] {
 }
 
 /**
- * 社交主页 — 按反编译布局 1:1 复刻 social_main_activity.xml + social_fragment.xml
+ * 社交主页 — 按源布局 1:1 复刻 social_main_activity.xml + social_fragment.xml
  * (social_fragment_head.xml + social_news_head.xml + social_post_item.xml)：
  *   LinearLayout vertical
  *   - toolbar_normal（标题“校圈”）

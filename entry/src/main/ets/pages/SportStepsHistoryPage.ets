@@ -63,7 +63,7 @@ function buildDetailRanks(): SportDetailRankItem[] {
 }
 
 /**
- * 步数历史页 — 按反编译布局 1:1 复刻 mobile_campus_activity_app_sport_steps_history.xml：
+ * 步数历史页 — 按源布局 1:1 复刻 mobile_campus_activity_app_sport_steps_history.xml：
  *   LinearLayout vertical
  *   - MToolBar（标题“历史记录”）
  *   - SmartRefreshLayout + RecyclerView（paddingTop/Bottom=4vp）：

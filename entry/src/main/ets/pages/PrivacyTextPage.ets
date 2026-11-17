@@ -2,7 +2,7 @@ import { router } from '@kit.ArkUI';
 import { TitleBar } from '../components/TitleBar';
 
 /**
- * 服务协议/隐私政策文本页 — 内容 1:1 来自反编译 strings.xml 真实文案
+ * 服务协议/隐私政策文本页 — 内容 1:1 来自源码 strings.xml 真实文案
  * （mobile_campus_privacy_policy / mobile_campus_privacy_policy_dialog_content），
  * 并按 HarmonyOS 上架政策补充：数据收集范围、权限用途、可撤回同意等条款说明。
  * 结构：toolbar_normal(privacy_title "使用条款及隐私政策") + Scroll 文本

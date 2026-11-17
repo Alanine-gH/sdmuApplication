@@ -12,7 +12,7 @@ const TAG = 0x0000;
 const DOMAIN = 'SDMU';
 
 /**
- * 登录会话管理 — 1:1 复刻安卓 GetKeyUtil + LoginModel（服务器实测协议）：
+ * 登录会话管理 — 1:1 复刻原生 GetKeyUtil + LoginModel（服务器实测协议）：
  *   1. GET /open/security/asym/key（Asym-Key: public）动态取RSA公钥
  *   2. POST 协商（Asym-Key: private，Unique-Code=随机UUID）→ onlyCode
  *   3. 登录：body=AES(完整实体)，Unique-Code=onlyCode → code=0
@@ -148,7 +148,7 @@ export class LoginSession {
     }
   }
 
-  /** UserEntity JSON → UserInfo（字段1:1对应安卓UserEntity） */
+  /** UserEntity JSON → UserInfo（字段1:1对应原生UserEntity） */
   static parseUserEntity(json: string): UserInfo {
     const rec: Record<string, Object> = JSON.parse(json) as Record<string, Object>;
     const pick = (k: string): string => {

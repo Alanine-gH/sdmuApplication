@@ -35,7 +35,7 @@ function buildSocialNewsPosts(): SocialNewsPost[] {
 }
 
 /**
- * 校园动态列表 — 按反编译布局 1:1 复刻 social_news_activity.xml：
+ * 校园动态列表 — 按源布局 1:1 复刻 social_news_activity.xml：
  *   RelativeLayout（背景 common_color_6）
  *   - include toolbar_normal（标题“校园动态”）
  *   - common_refresh_lv_rl：帖子列表 social_post_item

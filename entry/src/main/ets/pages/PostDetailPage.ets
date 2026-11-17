@@ -27,7 +27,7 @@ function buildDetailComments(): SocialDetailComment[] {
 }
 
 /**
- * 帖子详情 — 按反编译布局 1:1 复刻 social_post_detail_head.xml + social_comment_item.xml：
+ * 帖子详情 — 按源布局 1:1 复刻 social_post_detail_head.xml + social_comment_item.xml：
  *   LinearLayout vertical（背景 main_bg）
  *   - 帖子内容 social_post_item（头像40vp、昵称16fp、时间/学校12fp、正文15fp、九图）
  *   - 点赞数行：social_like_select + px_to_sp_27=13.5fp，左边距15

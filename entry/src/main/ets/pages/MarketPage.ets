@@ -47,7 +47,7 @@ function buildMarketPosts(): MarketPostInfo[] {
 }
 
 /**
- * 跳蚤市场列表 — 按反编译布局 1:1 复刻 activity_market.xml + header_market.xml + market_activity_item.xml：
+ * 跳蚤市场列表 — 按源布局 1:1 复刻 activity_market.xml + header_market.xml + market_activity_item.xml：
  *   LinearLayout vertical
  *   - include toolbar_normal（标题“跳蚤市场”）
  *   - header_market：搜索行（EditText 高32vp + “搜索” #1B68B6）+ 12vp 灰条 +

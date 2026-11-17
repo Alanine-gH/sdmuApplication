@@ -171,6 +171,14 @@
                 "pages/WorkApplyEditPage",
                 "pages/WorkApplyMorePage",
                 "pages/WorkApplyFormConfigPage",
-                "pages/WorkApplyScreenPage"
-            ]
-}
+                "pages/WorkApplyScreenPage",                "pages/TouristModePage",                "pages/YiBanPage",                "pages/ZhyCenterPage",                "pages/ZhyFourPage",                "pages/CampusAppFragmentPage",                "pages/CampusDateFragmentPage",                "pages/PopupWindowPage",                "pages/EndisableServicePage",                "pages/MipushPage",                "pages/SuperviseLaunchPage",                "pages/HomeFunctionDialogPage",                "pages/BannerDialogPage",                "pages/SortDialogPage",                "pages/PrivacySettingsPage",                "pages/ScoreCommentDialogPage",
+                "pages/AppUpdatePage",
+                "pages/UpdateBackgroundPage",
+                "pages/DownloadDialogPage",
+                "pages/PhotoPickerPage",
+                "pages/PhotoPagerPage",
+                "pages/BrowsePhotosPage",
+                "pages/ReadonlyTextPage",
+                "pages/DemoPage"
+            ]
+}

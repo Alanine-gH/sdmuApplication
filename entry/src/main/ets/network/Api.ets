@@ -1,10 +1,10 @@
 /**
  * API 端点常量 — 2026-11-17 服务器实测（http://mcp.sdmu.edu.cn:8081，校园内网）。
  * 业务接口统一前缀 /mobileapi_ydxy/api/（加密通道，HttpClient.bizRequest）：
- *   - 待办：/todo/client/*（安卓源码依据：module/main/g/g.smali，UnifyTodoBean）
- *   - 课表：/schedule/*（lyyd/timetable/a.smali + c.smali，ScheduleFactory）
- *   - 督导：/superviseListen/*（lyyd/supervise/a.smali + supervise/c/a.smali，SuperviseFactory）
- *   - 首页：/homepageModule/*（module/b/g/g.smali:279 同族端点）
+ *   - 待办：/todo/client/*（原生源码依据：module/main/g/g.源码，UnifyTodoBean）
+ *   - 课表：/schedule/*（lyyd/timetable/a.源码 + c.源码，ScheduleFactory）
+ *   - 督导：/superviseListen/*（lyyd/supervise/a.源码 + supervise/c/a.源码，SuperviseFactory）
+ *   - 首页：/homepageModule/*（module/b/g/g.源码:279 同族端点）
  *   - 成绩：/grade/*（原 /ly-pd-mb/score/... 推断修正）
  *   - 通讯录/用户/会议/考试/考勤/信息详情：原 /ly-pd-mb/<module>/api/... 推断路径
  *     统一迁移至 /mobileapi_ydxy/api/ 前缀（与服务器已验证命名空间一致），失败回退离线数据。

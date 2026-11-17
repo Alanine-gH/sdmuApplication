@@ -8,7 +8,7 @@ import { LoadingView } from '../components/LoadingView';
 import { BusinessError } from '@kit.BasicServicesKit';
 
 /**
- * 新闻列表页 — 按反编译布局 1:1 复刻 mobile_campus_activity_news.xml：
+ * 新闻列表页 — 按源布局 1:1 复刻 mobile_campus_activity_news.xml：
  *   LinearLayout vertical（fill_parent）
  *   - include toolbar_normal（标题由菜单名下发，取“新闻公告”）
  *   - mRecyclerView：fill_parent、LinearLayoutManager 纵向列表

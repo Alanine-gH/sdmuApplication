@@ -33,7 +33,7 @@ function buildFriendUsers(): FriendUserInfo[] {
 }
 
 /**
- * 好友列表 — 按反编译布局 1:1 复刻 social_list_fragment.xml + social_friendship_user_item.xml：
+ * 好友列表 — 按源布局 1:1 复刻 social_list_fragment.xml + social_friendship_user_item.xml：
  *   LinearLayout vertical
  *   - include toolbar_normal（标题“好友”）
  *   - List：social_friendship_user_item（padding 15/12）

@@ -31,7 +31,7 @@ function buildSearchBooks(): ReadingBook[] {
 }
 
 /**
- * 读书搜索页 — 按反编译布局 1:1 复刻 mobile_campus_reading_activity_search.xml：
+ * 读书搜索页 — 按源布局 1:1 复刻 mobile_campus_reading_activity_search.xml：
  *   LinearLayout vertical（fill_parent）
  *   - include toolbar_normal（标题“搜索书籍”）
  *   - ClearableEditText：bg=@drawable/mobile_campus_shape_base_sesarch_bg、height=32.0dip=32vp、

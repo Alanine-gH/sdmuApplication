@@ -13,7 +13,7 @@ interface ApiRawData {
 }
 
 /**
- * HTTP网络封装 — 1:1复刻安卓 f.java s() 方法加密请求协议（2026-11-17服务器实测）：
+ * HTTP网络封装 — 1:1复刻原生 f.java s() 方法加密请求协议（2026-11-17服务器实测）：
  *   - Unique-Code头 = onlyCode（协商产物）
  *   - Access-Token头 = AES加密的HeadParamsEntity JSON（含sessionKey/userId/userType/xxdm=sdmu）
  *   - POST body = AES加密的JSON

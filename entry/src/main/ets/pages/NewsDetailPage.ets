@@ -4,7 +4,7 @@ import { NewsItem } from '../model/NewsModel';
 import { EmptyView } from '../components/EmptyView';
 
 /**
- * 新闻详情页 — 按反编译布局 1:1 复刻 mobile_campus_fragment_news.xml（资讯页）：
+ * 新闻详情页 — 按源布局 1:1 复刻 mobile_campus_fragment_news.xml（资讯页）：
  *   根 LinearLayout vertical：background=@color/mobile_campus_bg_color、fill_parent
  *   - 顶部 RelativeLayout 45.0dip=45vp 白底：ivBack / 居中标题“资讯” / ivRefresh
  *   - ProgressBar：3.0dip=3vp 横向进度条（progressDrawable=mobile_campus_progress：白底 + 主色进度）

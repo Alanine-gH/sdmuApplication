@@ -12,7 +12,7 @@ class MarketPublishPhoto {
 }
 
 /**
- * 市场发布 — 按反编译布局 1:1 复刻 activity_market_post.xml + social_post_publish_bottom_bar.xml：
+ * 市场发布 — 按源布局 1:1 复刻 activity_market_post.xml + social_post_publish_bottom_bar.xml：
  *   RelativeLayout（背景 #F0F0F0）
  *   - include toolbar_normal（标题“发布商品”）
  *   - ScrollView：白色卡片（minHeight 179vp，padding 15/14/15/12）

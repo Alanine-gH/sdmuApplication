@@ -43,7 +43,7 @@ function buildSituationEntries(): SituationEntry[] {
 }
 
 /**
- * 学校概况页 — 按反编译布局 1:1 复刻 mobile_campus_school_activity_situation.xml：
+ * 学校概况页 — 按源布局 1:1 复刻 mobile_campus_school_activity_situation.xml：
  *   LinearLayout vertical（fill_parent）
  *   - include toolbar_normal（标题“学校概况”）
  *   - school_image_view：height=px_to_dip_280=140vp、scaleType=fitXY

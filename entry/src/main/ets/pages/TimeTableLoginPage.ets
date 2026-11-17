@@ -2,7 +2,7 @@ import { TitleBar } from '../components/TitleBar';
 
 /**
  * 课表登录页 — 复刻 timetable/TimeTableLoginActivity
- * 说明：APK 经 360 加固（smali 仅 stub），res/layout 中不存在 timetable_login 专属布局，
+ * 说明：原生包 经 360 加固（源码 仅 stub），res/layout 中不存在 timetable_login 专属布局，
  * 依据桌面小部件登录入口（desk_widget_timetable_login / no_login="请先登录"）与
  * 通用登录表单（timetable 主题色 timetable_bg / timetable_text）1:1 重建：
  * 结构：LinearLayout(#F2F2F2) + toolbar_normal("课表登录")
