@@ -3,12 +3,15 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { PreferencesUtil } from '../data/PreferencesUtil';
+import { LoginSession } from '../network/LoginSession';
 
 const DOMAIN = 0x0000;
 
 export default class EntryAbility extends UIAbility {
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onCreate');
+    // 注入UIAbility上下文供会话持久化使用
+    LoginSession.uiContext = this.context;
   }
 
   onDestroy(): void {

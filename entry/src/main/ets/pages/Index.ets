@@ -1,4 +1,5 @@
-﻿import { router } from '@kit.ArkUI';
+﻿import { LoginSession } from '../network/LoginSession';
+import { router } from '@kit.ArkUI';
 import { PreferencesUtil } from '../data/PreferencesUtil';
 import { Constants } from '../data/Constants';
 import { WMHTab } from '../components/WMHTab';
@@ -242,6 +243,8 @@ struct Index {
   @State currentTabIndex: number = 0;
 
   aboutToAppear(): void {
+    // 启动即恢复持久化会话（UC/aesKey/sessionKey），业务请求免重新协商
+    LoginSession.restoreSession();
     PreferencesUtil.getBoolean(Constants.KEY_IS_LOGIN, false)
       .then((logged: boolean) => {
         this.isLogged = logged;
@@ -327,5 +330,6 @@ struct Index {
     .backgroundColor($r('app.color.main_bg'))
   }
 }
+
 
 

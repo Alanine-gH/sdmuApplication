@@ -14,7 +14,7 @@ interface ApiRawData {
 
 /**
  * HTTP网络封装 — 1:1复刻原生 f.java s() 方法加密请求协议（2026-11-17服务器实测）：
- *   - Unique-Code头 = onlyCode（协商产物）
+ *   - Unique-Code头 = deviceCode（设备UC，实测：服务器绑定协商请求的UC而非onlyCode）
  *   - Access-Token头 = AES加密的HeadParamsEntity JSON（含sessionKey/userId/userType/xxdm=sdmu）
  *   - POST body = AES加密的JSON
  *   - GET参数 = JSON({}) AES加密 → data=<密文>
@@ -79,7 +79,7 @@ export class HttpClient {
       const header: Record<string, string> = {
         'Content-Type': 'text/plain',
         'Access-Token': atEnc,
-        'Unique-Code': LoginSession.onlyCode,
+        'Unique-Code': LoginSession.deviceCode,
         'AppType': Constants.APP_TYPE,
         'User-Agent': 'Dalvik/2.1.0 (Linux; U; Android 14; 25060RK16C Build/UQ1A.240205.11101510)'
       };
@@ -154,22 +154,24 @@ export class HttpClient {
 
   static async request(path: string, method: http.RequestMethod, body: string, contentType: string): Promise<ApiResponse<Object>> {
     return HttpClient.requestRaw(path, method === http.RequestMethod.POST ? 'POST' : 'GET', body, contentType,
-      LoginSession.onlyCode === '' ? Constants.UNIQUE_CODE : LoginSession.onlyCode, '');
+      LoginSession.deviceCode === '' ? Constants.UNIQUE_CODE : LoginSession.deviceCode, '');
   }
 
   static async get(path: string): Promise<ApiResponse<Object>> {
     return HttpClient.requestRaw(path, 'GET', '', 'application/json',
-      LoginSession.onlyCode === '' ? Constants.UNIQUE_CODE : LoginSession.onlyCode, '');
+      LoginSession.deviceCode === '' ? Constants.UNIQUE_CODE : LoginSession.deviceCode, '');
   }
 
   static async post(path: string, body: string): Promise<ApiResponse<Object>> {
     return HttpClient.requestRaw(path, 'POST', body, 'application/json',
-      LoginSession.onlyCode === '' ? Constants.UNIQUE_CODE : LoginSession.onlyCode, '');
+      LoginSession.deviceCode === '' ? Constants.UNIQUE_CODE : LoginSession.deviceCode, '');
   }
 
   static async postForm(path: string, formBody: string): Promise<ApiResponse<Object>> {
     return HttpClient.requestRaw(path, 'POST', formBody, 'application/x-www-form-urlencoded',
-      LoginSession.onlyCode === '' ? Constants.UNIQUE_CODE : LoginSession.onlyCode, '');
+      LoginSession.deviceCode === '' ? Constants.UNIQUE_CODE : LoginSession.deviceCode, '');
   }
 }
+
+
 
