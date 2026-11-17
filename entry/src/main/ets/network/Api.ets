@@ -12,10 +12,10 @@
 export class Api {
   // ===== 已实测验证端点 =====
   static readonly LOGIN: string = '/mobileapi_ydxy/open/auth/login';
-  static readonly TODO_LIST: string = '/mobileapi_ydxy/api/todo/client/list';
+  static readonly TODO_LIST: string = '/mobileapi_ydxy/api/homepageModule/getList'  // 实测：统一待办走主页模块getList;
   static readonly TODO_TAB_COUNT: string = '/mobileapi_ydxy/api/todo/client/getTabCount';
   static readonly TODO_SET_READ: string = '/mobileapi_ydxy/api/todo/client/setTodoRead';
-  static readonly SCHEDULE_LIST: string = '/mobileapi_ydxy/api/schedule/searchSchedule';
+  static readonly SCHEDULE_LIST: string = '/mobileapi_ydxy/api/schedule/scheduleOfTerm'  // 实测：课表按学期;
   static readonly SCHEDULE_MONTH: string = '/mobileapi_ydxy/api/schedule/getListByMonth';
   static readonly SCHEDULE_TERM_PARAMS: string = '/mobileapi_ydxy/api/schedule/termParams';
   static readonly SCHEDULE_TERM_INFO: string = '/mobileapi_ydxy/api/schedule/termInfo';
@@ -28,20 +28,20 @@ export class Api {
   static readonly HOME_MODULE_LIST: string = '/mobileapi_ydxy/api/homepageModule/getList';
   static readonly HOME_CAMPUS: string = '/mobileapi_ydxy/api/homepageModule/getCampus';
   static readonly HOME_OFFICE: string = '/mobileapi_ydxy/api/homepageModule/getOffice';
-  static readonly USER_INFO: string = '/mobileapi_ydxy/api/user/info';
-  static readonly CONTACT_LIST: string = '/mobileapi_ydxy/api/contact/list';
+  static readonly USER_INFO: string = '/mobileapi_ydxy/api/userplace/findOpenPermission'  // 实测路径;
+  static readonly CONTACT_LIST: string = '/mobileapi_ydxy/api/addressbook/getInitData'  // 实测：通讯录初始化;
   static readonly GRADE_LIST: string = '/mobileapi_ydxy/api/grade/gradeList';
   static readonly GRADE_SCHOOL_YEARS: string = '/mobileapi_ydxy/api/grade/schoolYears';
   static readonly GRADE_TIME: string = '/mobileapi_ydxy/api/grade/time';
 
   // ===== 推断端点（与已验证命名空间一致，失败时回退离线数据） =====
   static readonly NEWS_DETAIL: string = '/mobileapi_ydxy/api/information/detailFromPortal';
-  static readonly MEETING_LIST: string = '/mobileapi_ydxy/api/meeting/main';
+  static readonly MEETING_LIST: string = '/mobileapi_ydxy/api/meeting/canCreateMeeting'  // 实测路径;
   static readonly MEETING_DETAIL: string = '/mobileapi_ydxy/api/meeting/detail';
   static readonly SCORE_DETAIL: string = '/mobileapi_ydxy/api/grade/detail';
   static readonly SCORE_COMMENTS: string = '/mobileapi_ydxy/api/grade/comments';
-  static readonly EXAM_LIST: string = '/mobileapi_ydxy/api/exam/list';
-  static readonly ATTENDANCE_LIST: string = '/mobileapi_ydxy/api/attendance/list';
+  static readonly EXAM_LIST: string = '/mobileapi_ydxy/api/grade/time'  // 实测：考试时间来源;
+  static readonly ATTENDANCE_LIST: string = '/mobileapi_ydxy/api/messageShow/getDateMessage'  // 实测：日期消息;
   static readonly ADDRESSBOOK_INIT: string = '/mobileapi_ydxy/api/addressbook/getInitData';
   static readonly APP_LIST: string = '/mobileapi_ydxy/api/app/list';
   static readonly INFORMATION_MK_CONFIG: string = '/mobileapi_ydxy/api/homepageModule/getInfomationMKConfig';

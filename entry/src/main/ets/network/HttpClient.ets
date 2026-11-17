@@ -14,7 +14,7 @@ interface ApiRawData {
 
 /**
  * HTTP网络封装 — 1:1复刻原生 f.java s() 方法加密请求协议（2026-11-17服务器实测）：
- *   - Unique-Code头 = deviceCode（设备UC，实测：服务器绑定协商请求的UC而非onlyCode）
+ *   - Unique-Code头 = onlyCode（协商响应解密产物=会话UC；实测：登录与业务统一用它）
  *   - Access-Token头 = AES加密的HeadParamsEntity JSON（含sessionKey/userId/userType/xxdm=sdmu）
  *   - POST body = AES加密的JSON
  *   - GET参数 = JSON({}) AES加密 → data=<密文>
@@ -24,11 +24,16 @@ interface ApiRawData {
 export class HttpClient {
   static base64Helper: util.Base64Helper = new util.Base64Helper();
 
-  /** 构建加密后的Access-Token头（AES(HeadParamsEntity JSON, 协商key)） */
+  /** 构建加密后的Access-Token头（AES(HeadParamsEntity JSON, 协商key)）
+   * 字段名与原生 HeadParamsEntity.java 1:1 对应（clientVersion/deviceId/deviceModel/
+   * sessionKey/userId/userType/xxdm），xxdm 取登录响应 schoolId（原 APK 实证 = 'SDGY'）。
+   */
   static async buildEncryptedAccessToken(): Promise<string> {
     const sk: string = LoginSession.sessionKey === '' ? Constants.SESSION_KEY : LoginSession.sessionKey;
     const uid: string = LoginSession.userId === '' ? '' : LoginSession.userId;
     const utype: string = LoginSession.userType === '' ? '1' : LoginSession.userType;
+    // 原生 e.java:47 headParamsEntity.setXxdm(schoolId) —— schoolId 来自登录响应 UserEntity.schoolId
+    const xxdm: string = LoginSession.schoolId === '' ? 'SDGY' : LoginSession.schoolId;
     const token: Record<string, string> = {
       'clientVersion': Constants.CLIENT_VERSION,
       'deviceId': Constants.DEVICE_ID,
@@ -36,9 +41,10 @@ export class HttpClient {
       'sessionKey': sk,
       'userId': uid,
       'userType': utype,
-      'xxdm': 'sdmu'
+      'xxdm': xxdm
     };
     const json: string = JSON.stringify(token);
+    CryptoUtil.log('AT json=' + json);
     return CryptoUtil.encryptAES(json, LoginSession.aesKey);
   }
 
@@ -79,7 +85,7 @@ export class HttpClient {
       const header: Record<string, string> = {
         'Content-Type': 'text/plain',
         'Access-Token': atEnc,
-        'Unique-Code': LoginSession.deviceCode,
+        'Unique-Code': LoginSession.onlyCode,
         'AppType': Constants.APP_TYPE,
         'User-Agent': 'Dalvik/2.1.0 (Linux; U; Android 14; 25060RK16C Build/UQ1A.240205.11101510)'
       };
@@ -113,7 +119,10 @@ export class HttpClient {
     }
   }
 
-  /** 旧接口兼容：普通请求（协商/登录/开放接口用） */
+  /** 旧接口兼容：普通请求（协商/登录/开放接口用）
+   * Access-Token：原生 e.g() 里是明文 JSON（k.m 序列化，不加密）。
+   * 协商接口（asymKey 非 public）时为空；业务明文接口时带上完整 token JSON。
+   */
   static async requestRaw(path: string, method: string, body: string, contentType: string,
     uniqueCode: string, asymKey: string): Promise<ApiResponse<Object>> {
     const client: http.HttpRequest = http.createHttp();
@@ -127,6 +136,21 @@ export class HttpClient {
       };
       if (asymKey !== '') {
         header['Asym-Key'] = asymKey;
+      }
+      // 明文业务接口（非协商）：带明文 JSON token（与原生 e.g() 的 k.m(headParamsEntity) 一致）
+      if (asymKey === '' && uniqueCode !== '' && path.indexOf('/open/security/asym/key') < 0
+        && path.indexOf('/open/auth/login') < 0) {
+        const token: Record<string, string> = {
+          'clientVersion': Constants.CLIENT_VERSION,
+          'deviceId': Constants.DEVICE_ID,
+          'deviceModel': Constants.DEVICE_MODEL,
+          'sessionKey': LoginSession.sessionKey === '' ? Constants.SESSION_KEY : LoginSession.sessionKey,
+          'userId': LoginSession.userId,
+          'userType': LoginSession.userType === '' ? '1' : LoginSession.userType,
+          'xxdm': LoginSession.schoolId === '' ? 'SDGY' : LoginSession.schoolId
+        };
+        header['Access-Token'] = JSON.stringify(token);
+        header['Unique-Code'] = LoginSession.deviceCode === '' ? uniqueCode : LoginSession.deviceCode;
       }
       const reqMethod: http.RequestMethod = method === 'POST' ? http.RequestMethod.POST : http.RequestMethod.GET;
       const options: http.HttpRequestOptions = {
@@ -154,24 +178,26 @@ export class HttpClient {
 
   static async request(path: string, method: http.RequestMethod, body: string, contentType: string): Promise<ApiResponse<Object>> {
     return HttpClient.requestRaw(path, method === http.RequestMethod.POST ? 'POST' : 'GET', body, contentType,
-      LoginSession.deviceCode === '' ? Constants.UNIQUE_CODE : LoginSession.deviceCode, '');
+      LoginSession.onlyCode === '' ? Constants.UNIQUE_CODE : LoginSession.onlyCode, '');
   }
 
   static async get(path: string): Promise<ApiResponse<Object>> {
     return HttpClient.requestRaw(path, 'GET', '', 'application/json',
-      LoginSession.deviceCode === '' ? Constants.UNIQUE_CODE : LoginSession.deviceCode, '');
+      LoginSession.onlyCode === '' ? Constants.UNIQUE_CODE : LoginSession.onlyCode, '');
   }
 
   static async post(path: string, body: string): Promise<ApiResponse<Object>> {
     return HttpClient.requestRaw(path, 'POST', body, 'application/json',
-      LoginSession.deviceCode === '' ? Constants.UNIQUE_CODE : LoginSession.deviceCode, '');
+      LoginSession.onlyCode === '' ? Constants.UNIQUE_CODE : LoginSession.onlyCode, '');
   }
 
   static async postForm(path: string, formBody: string): Promise<ApiResponse<Object>> {
     return HttpClient.requestRaw(path, 'POST', formBody, 'application/x-www-form-urlencoded',
-      LoginSession.deviceCode === '' ? Constants.UNIQUE_CODE : LoginSession.deviceCode, '');
+      LoginSession.onlyCode === '' ? Constants.UNIQUE_CODE : LoginSession.onlyCode, '');
   }
 }
+
+
 
 
 

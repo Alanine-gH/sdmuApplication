@@ -16,12 +16,12 @@ const DOMAIN = 'SDMU';
 /**
  * 登录会话管理 — 复刻原生 GetKeyUtil + LoginModel（服务器实测协议，2026-11-17 全链路打通）：
  *   1. GET /open/security/asym/key（Asym-Key: public）动态取RSA公钥
- *   2. POST 协商（Asym-Key: private，Unique-Code=设备UC）→ 响应data=AES(onlyCode)
+ *   2. POST 协商（Asym-Key: private，Unique-Code=随机UUID）→ 响应data=AES(onlyCode)
  *      关键实测结论：协商请求头使用的 UC 被服务器绑定为会话标识，
  *      业务请求的 Unique-Code 必须用「协商时的UC」，而非解密产物 onlyCode
- *   3. 登录：body=AES(完整实体)，Unique-Code=同一UC → code=0
+ *   3. 登录：body=AES(完整实体)，Unique-Code=onlyCode → code=0
  *   4. 解密响应 → session_key + 真实用户信息
- *   5. UC/aesKey/sessionKey 持久化 preferences：重启后免重新协商直接复用会话
+ *   5. onlyCode/aesKey/sessionKey 持久化 preferences：重启后免重新协商直接复用会话
  * 错误码：0成功 1005账号密码错 0006解密失败 0001系统异常
  */
 export class LoginSession {
@@ -32,6 +32,8 @@ export class LoginSession {
   static sessionKey: string = '';
   static userType: string = '';
   static userId: string = '';
+  /** 学校代码（来自登录响应 UserEntity.schoolId，Access-Token 的 xxdm 字段） */
+  static schoolId: string = '';
   static step: string = '';
 
   static log(msg: string): void {
@@ -54,7 +56,7 @@ export class LoginSession {
       hex.slice(10, 16).join('');
   }
 
-  /** 会话持久化：UC/aesKey/sessionKey/userId/userType 写入 preferences */
+  /** 会话持久化：UC/aesKey/sessionKey/userId/userType/schoolId 写入 preferences */
   static async persistSession(): Promise<void> {
     try {
       const ctx = LoginSession.uiContext ?? LoginSession.fallbackContext();
@@ -69,6 +71,7 @@ export class LoginSession {
       await store.put('sessionKey', LoginSession.sessionKey);
       await store.put('sessionUserId', LoginSession.userId);
       await store.put('sessionUserType', LoginSession.userType);
+      await store.put('sessionSchoolId', LoginSession.schoolId);
       await store.flush();
     } catch (error) {
       LoginSession.log('persistSession失败: ' + (error as BusinessError).message);
@@ -100,6 +103,10 @@ export class LoginSession {
         const ut: preferences.ValueType = await store.get('sessionUserType', '');
         if (typeof ut === 'string') {
           LoginSession.userType = ut;
+        }
+        const sid: preferences.ValueType = await store.get('sessionSchoolId', '');
+        if (typeof sid === 'string') {
+          LoginSession.schoolId = sid;
         }
         const oc: preferences.ValueType = await store.get('onlyCode', '');
         if (typeof oc === 'string') {
@@ -206,7 +213,7 @@ export class LoginSession {
       LoginSession.step = 'loginRequest';
       const loginResp: ApiResponse<Object> = await HttpClient.requestRaw(
         '/mobileapi_ydxy/open/auth/login', 'POST', loginBody, 'text/plain',
-        LoginSession.deviceCode, '');
+        LoginSession.onlyCode, '');
       if (loginResp.code === 1005) {
         return LoginSession.fail(1005, '账号或密码错误，请重试', account);
       }
@@ -245,6 +252,11 @@ export class LoginSession {
     LoginSession.sessionKey = pick('session_key');
     LoginSession.userType = pick('userType') === '' ? '1' : pick('userType');
     LoginSession.userId = pick('userId');
+    // 原生 e.java:47 xxdm ← schoolId（登录响应 UserEntity.schoolId，SDGY）
+    LoginSession.schoolId = pick('schoolId') === '' ? 'SDGY' : pick('schoolId');
+    LoginSession.log('parsed sessionKey len=' + LoginSession.sessionKey.length +
+      ' userId=' + LoginSession.userId + ' userType=' + LoginSession.userType +
+      ' schoolId=' + LoginSession.schoolId);
     return new UserInfo(
       pick('userId'),
       pick('userName'),
@@ -260,6 +272,8 @@ export class LoginSession {
     );
   }
 }
+
+
 
 
 

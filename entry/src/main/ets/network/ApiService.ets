@@ -473,7 +473,7 @@ export class ApiService {
   static async getContactList(): Promise<ApiResponse<ContactItem[]>> {
     // 源码依据：通讯录 /contact/list（服务器命名空间实测存在，具体字段按原生通讯录 Model 推断）
     const params: Record<string, Object> = {};
-    const result: BizJsonResult = await ApiService.bizJson(Api.CONTACT_LIST, 'POST', params);
+    const result: BizJsonResult = await ApiService.bizJson(Api.CONTACT_LIST, 'GET', params);
     if (result.code === 0) {
       const items: ContactItem[] = [];
       const raw: Object[] = ApiService.extractArray(result.data);
@@ -531,7 +531,7 @@ export class ApiService {
     // 源码依据：lyyd/timetable/a.源码 + c.源码（ScheduleFactory：a()="api"、b()="schedule"），
     // 2026-11-17 服务器实测 /schedule/searchSchedule 存在于 /mobileapi_ydxy/api/ 命名空间
     const params: Record<string, Object> = {};
-    const result: BizJsonResult = await ApiService.bizJson(Api.SCHEDULE_LIST, 'POST', params);
+    const result: BizJsonResult = await ApiService.bizJson(Api.SCHEDULE_LIST, 'GET', params);
     if (result.code === 0) {
       const items: CourseItem[] = [];
       const raw: Object[] = ApiService.extractArray(result.data);
@@ -664,7 +664,7 @@ export class ApiService {
   static async getScoreList(): Promise<ApiResponse<ScoreItem[]>> {
     // 源码依据：/grade/gradeList（2026-11-17 服务器命名空间实测存在）
     const params: Record<string, Object> = {};
-    const result: BizJsonResult = await ApiService.bizJson(Api.GRADE_LIST, 'POST', params);
+    const result: BizJsonResult = await ApiService.bizJson(Api.GRADE_LIST, 'GET', params);
     if (result.code === 0) {
       const items: ScoreItem[] = [];
       const raw: Object[] = ApiService.extractArray(result.data);
