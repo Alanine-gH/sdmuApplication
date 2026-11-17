@@ -483,6 +483,102 @@
     {
       "name": "read_dot_bg",
       "value": "#FF0000"
+    },
+    {
+      "name": "mobile_campus_schedule_color12",
+      "value": "#B2BDC9"
+    },
+    {
+      "name": "common_color_28",
+      "value": "#767676"
+    },
+    {
+      "name": "color_jian",
+      "value": "#FD5F65"
+    },
+    {
+      "name": "title_color",
+      "value": "#000000"
+    },
+    {
+      "name": "divider_grey",
+      "value": "#E7E7E7"
+    },
+    {
+      "name": "color_cecece",
+      "value": "#CECECE"
+    },
+    {
+      "name": "edit_common_app_bg",
+      "value": "#F8F8F8"
+    },
+    {
+      "name": "textColor",
+      "value": "#333333"
+    },
+    {
+      "value": "#1B68B7",
+      "name": "mobile_campus_contact"
+    },
+    {
+      "value": "#1B68B7",
+      "name": "mobile_campus_oa_meeting"
+    },
+    {
+      "value": "#333333",
+      "name": "mobile_campus_textcolor_doc_number"
+    },
+    {
+      "value": "#1B6BB7",
+      "name": "mobile_campus_oa_next_level"
+    },
+    {
+      "value": "#E8F1FB",
+      "name": "mobile_campus_oa_doc_check_bg"
+    },
+    {
+      "name": "timetable_bg",
+      "value": "#60FFFFFF"
+    },
+    {
+      "name": "timetable_bg2",
+      "value": "#40EFEFEF"
+    },
+    {
+      "name": "timetable_bg3",
+      "value": "#00FFFFFF"
+    },
+    {
+      "name": "mobile_campus_schedule_color1",
+      "value": "#FF5151"
+    },
+    {
+      "name": "mobile_campus_main_item_bg_orange",
+      "value": "#FF5D3D"
+    },
+    {
+      "value": "#E60012",
+      "name": "mobile_campus_supervise_edit_textcolor"
+    },
+    {
+      "value": "#F8F8F9",
+      "name": "mobile_campus_supervise_evaluate_edittext_solid"
+    },
+    {
+      "value": "#DFE4EA",
+      "name": "mobile_campus_supervise_evaluate_edittext_stroke"
+    },
+    {
+      "value": "#B2BDC9",
+      "name": "mobile_campus_supervise_notify_solid"
+    },
+    {
+      "value": "#B4BDC8",
+      "name": "mobile_campus_supervise_filter_hint"
+    },
+    {
+      "name": "mobile_campus_meeting_add_textcolor",
+      "value": "#80FFFFFF"
     }
   ]
 }
