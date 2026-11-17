@@ -1,4 +1,4 @@
-import { router } from '@kit.ArkUI';
+﻿import { router } from '@kit.ArkUI';
 import { TitleBar } from '../components/TitleBar';
 
 /**
@@ -6,7 +6,7 @@ import { TitleBar } from '../components/TitleBar';
  * 结构：FrameLayout（common_color_6 底 ReportScrollView）
  *   - toolbar_normal_alpha 标题栏
  *   - 报表卡片列表（ReportScrollView 内容）：
- *     学业报告 / 早餐打卡 / 一卡通消费 / 图书借阅 / 上网流量
+ *     学业报告 / 早餐打卡 / 一卡通消费 / 图书借阅 / 绩点排行
  */
 interface ReportEntry {
   name: string;
@@ -23,7 +23,7 @@ struct StudentReportHomePage {
     new ReportEntryItem('早餐打卡', '个人打卡记录与全校排名', '#57C06B', 'pages/BreakfastPersonalPage'),
     new ReportEntryItem('一卡通消费', '校园卡消费流水统计', '#FF8900', 'pages/CardConsumeReportPage'),
     new ReportEntryItem('图书借阅', '图书馆借阅历史统计', '#1B68B7', 'pages/BookBorrowReportPage'),
-    new ReportEntryItem('上网流量', '校园网流量使用报表', '#18B4ED', 'pages/NetTrafficReportPage')
+    new ReportEntryItem('绩点排行', '全校绩点排行榜单', '#18B4ED', 'pages/GradeRankPage')
   ] as ReportEntry[];
 
   build() {
@@ -112,3 +112,4 @@ class ReportEntryItem implements ReportEntry {
     this.pagePath = pagePath;
   }
 }
+

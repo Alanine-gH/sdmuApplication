@@ -1,4 +1,4 @@
-import { router } from '@kit.ArkUI';
+﻿import { router } from '@kit.ArkUI';
 import { webview } from '@kit.ArkWeb';
 import { TitleBar } from '../components/TitleBar';
 
@@ -9,7 +9,7 @@ import { TitleBar } from '../components/TitleBar';
 @Component
 struct WebViewPage {
   @State pageTitle: string = '隐私政策';
-  @State pageUrl: string = 'https://www.sdgu.edu.cn/';
+  @State pageUrl: string = 'https://www.sdmu.edu.cn/';
   controller: webview.WebviewController = new webview.WebviewController();
 
   aboutToAppear(): void {
@@ -40,3 +40,4 @@ struct WebViewPage {
     .backgroundColor($r('app.color.sdmu_card_bg'))
   }
 }
+
