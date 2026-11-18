@@ -25,7 +25,7 @@ import { Constants } from '../data/Constants';
  *   - my_receipt_name/type/number/address/dial/bank/bank_account 及其容器 XML visibility="gone"
  *     且源码 K1() 只 setText 不置可见 → 恒隐藏（保真省略渲染）；
  *   - my_receipt_qrcode 150×150dip 居中 mt25：d.c()+/mobileapi_ydxy/open/common/post/picture?uuid=QRCODE
- *     （失败占位 icon_share）+ "商家扫描二维码快速获取抬头信息" 14sp #b8c0c9 居中 mt14 mb14；
+ *     （失败占位 report_bottom_image_bg，[W28 review] 与源码 K1() Glide 占位一致）+ "商家扫描二维码快速获取抬头信息" 14sp #b8c0c9 居中 mt14 mb14；
  *   - 分隔线 + "开票须知" 17sp #b8c0c9 居中 paddingTop9 paddingBottom12 marginTop5。
  * 【探针】temp/probe_w28_final_b.py 锚点 [W28 final-b]。
  */
@@ -90,13 +90,13 @@ struct ReceiptAssistPage {
         }
         .width('100%')
         .lineSpacing(LengthMetrics.vp(10))
-        .padding({ top: 10, bottom: 10 })
+        .padding({ top: 20, bottom: 20 })
 
         Image(this.qrUrl(row))
           .width(150)
           .height(150)
           .objectFit(ImageFit.Contain)
-          .alt($r('app.media.icon_share'))
+          .alt($r('app.media.report_bottom_image_bg'))
           .margin({ top: 25 })
 
         Text('商家扫描二维码快速获取抬头信息')
@@ -154,10 +154,11 @@ struct ReceiptAssistPage {
         if (this.rows.length > 1) {
           Row() {
             ForEach(this.rows, (row: RatepayingEntry, index: number) => {
+              // IndicatorLayout：选中 ybg_white、未选中 common_color_3(#999999)
               Circle()
                 .width(6)
                 .height(6)
-                .fill(this.current === index ? '#1B68B7' : '#CCCCCC')
+                .fill(this.current === index ? Color.White : '#999999')
                 .margin({ left: 4, right: 4 })
             }, (row: RatepayingEntry, index: number) => 'dot_' + String(index))
           }

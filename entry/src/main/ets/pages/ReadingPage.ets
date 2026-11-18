@@ -201,7 +201,7 @@ struct ReadingPage {
         Text('借书卡')
           .fontSize(50)
           .fontColor('#0EFFFFFF')
-          .margin({ left: 13, top: 9 })
+          .margin({ left: 26, top: 18 })
         Blank()
         Row() {
           Row() {
@@ -213,9 +213,9 @@ struct ReadingPage {
               .height(28)
               .textAlign(TextAlign.Center)
               .backgroundColor(Color.White)
-              .borderRadius(4)
+              .borderRadius(2)
               .border({ width: 0.5, color: '#CECECE' })
-              .margin({ left: 4 })
+              .margin({ left: 8 })
           }
           .alignItems(VerticalAlign.Center)
           Blank()
@@ -223,11 +223,10 @@ struct ReadingPage {
         }
         .width('100%')
         .alignItems(VerticalAlign.Bottom)
-        .margin({ bottom: 7.5 })
+        .margin({ left: 26, right: 26, bottom: 15 })
       }
       .width('100%')
       .height('100%')
-      .padding({ left: 13, right: 13 })
       .alignItems(HorizontalAlign.Start)
 
       Column() {
@@ -267,7 +266,8 @@ struct ReadingPage {
 
       Column() {
         Row() {
-          Text(this.home.arrearage).fontSize(18).fontColor('#38A2F3')
+          // 源码 setStateData(overdue, arrearage 空→"0")
+          Text(this.home.arrearage === '' ? '0' : this.home.arrearage).fontSize(18).fontColor('#38A2F3')
           Text('元').fontSize(13).fontColor($r('app.color.common_color_1'))
         }
         .alignItems(VerticalAlign.Bottom)
@@ -507,7 +507,7 @@ struct ReadingPage {
       Column() {
         TitleBar({ title: '我的借阅', showBack: true })
         this.cardTop()
-        if (Number(this.home.overdue) > 0 || (this.home.arrearage !== '' && this.home.arrearage !== '0')) {
+        if (Number(this.home.overdue) > 0 || this.home.arrearage !== '0') {
           this.statePanel()
         }
         this.tabBar()

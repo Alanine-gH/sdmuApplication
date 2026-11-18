@@ -31,6 +31,11 @@ import { LoginSession } from '../network/LoginSession';
 const TAB_KEYS: string[] = ['newest', 'hottest', 'my'];
 const TAB_LABELS: string[] = ['最新', '最热', '我的'];
 
+/** 源码 f1()：lifemanager.d.b.b()（session_key 非空）才追加"我的"页签与相机图标 */
+function tabKeysForSession(hasSession: boolean): string[] {
+  return hasSession ? TAB_KEYS : TAB_KEYS.slice(0, 2);
+}
+
 @Entry
 @Component
 struct SchoolSceneryPage {
@@ -302,7 +307,7 @@ struct SchoolSceneryPage {
         onRightClick: (): void => { this.pickAndUpload(); }
       })
       Row() {
-        ForEach(TAB_KEYS, (key: string, index: number) => {
+        ForEach(tabKeysForSession(this.canUpload), (key: string, index: number) => {
           Column() {
             Text(TAB_LABELS[index])
               .fontSize(15)

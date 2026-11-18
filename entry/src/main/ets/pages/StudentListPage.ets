@@ -34,7 +34,6 @@ struct StudentListPage {
   @State isLoading: boolean = true;
   @State errorText: string = '';
   @State paramsValue: string = '';
-  private loadedCodes: string[] = [];
 
   aboutToAppear(): void {
     const params: Record<string, Object> | undefined = router.getParams() as Record<string, Object> | undefined;
@@ -82,11 +81,7 @@ struct StudentListPage {
       return;
     }
     this.activeIndex = index;
-    const code: string = this.classes[index].code;
-    if (this.loadedCodes.indexOf(code) >= 0) {
-      return;
-    }
-    this.loadStudents(code);
+    this.loadStudents(this.classes[index].code);
   }
 
   /** 源码 StudentListFragment.N1：StudentSearchPImpl.o(...).k(bjid) → W0 getStudents */
@@ -100,7 +95,6 @@ struct StudentListPage {
         }
         if (response.code === 0) {
           this.students = response.data;
-          this.loadedCodes.push(bjid);
         } else {
           this.students = [];
           this.errorText = response.message;
@@ -150,11 +144,11 @@ struct StudentListPage {
             ForEach(this.classes, (item: ClassAndId, index: number) => {
               Text(item.clazz)
                 .fontSize(14)
-                .fontColor(this.activeIndex === index ? $r('app.color.white') : '#B2BDC9')
-                .backgroundColor(this.activeIndex === index ? '#18B4ED' : '#F2F2F2')
-                .borderRadius(14)
-                .padding({ left: 12, right: 12, top: 6, bottom: 6 })
-                .margin({ left: 5, right: 5, top: 8, bottom: 8 })
+                .fontColor(this.activeIndex === index ? $r('app.color.white') : '#999999')
+                .backgroundColor(this.activeIndex === index ? '#1B68B7' : '#DFE4EA')
+                .borderRadius(4)
+                .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+                .margin({ left: 10, right: 10, top: 8, bottom: 8 })
                 .maxLines(1)
                 .onClick((): void => { this.selectTab(index); })
             }, (item: ClassAndId) => item.code)
@@ -193,7 +187,7 @@ struct StudentListPage {
         }
         .layoutWeight(1)
         .width('100%')
-        .divider({ strokeWidth: 0.5, color: $r('app.color.common_color_6'), startMargin: 12, endMargin: 0 })
+        .divider({ strokeWidth: 0.5, color: $r('app.color.common_color_6'), startMargin: 12, endMargin: 12 })
         .scrollBar(BarState.Off)
       }
     }

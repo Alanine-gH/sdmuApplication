@@ -18,10 +18,10 @@ import { Constants } from '../data/Constants';
  *   12sp+icon 8dip+底部 23×2dip 圆角指示条 mt5，padding 10} + 1dip #f5f5f5)
  *   + common_refresh_lv_rl（MultiStateView+ListView）+ 右下 market_post 浮动按钮（margin 15）。
  * 【数据链】hasSchoolCirclePhone 分支（GlobalParamInfo.getPhoneStatus()）：
- *   false：ALL+空关键词 → GET circleOpen/getMarketList {lastId}；筛选/搜索 → POST circleOpen/serchMarketList
- *          {lastId,marketType,marketStatus,keyWord}（MarketModel.h1/Y0，e.b/e.d）。
+ *   false：ALL+空关键词 → POST circleOpen/getMarketList {lastId}（MarketModel.h1 e.d）；筛选/搜索 →
+ *          POST circleOpen/serchMarketList {lastId[,marketType,marketStatus],keyWord}（Y0）。
  *   true ：ALL+空关键词 → GET market/freshNewList {lastId}；筛选/搜索 → GET market/serchFreshNewList
- *          {lastId,marketType,marketStatus,keyWord}（MarketModel.g1/X0 @push 域）。
+ *          {lastId[,marketType,marketStatus],keyWord}（MarketModel.g1/X0 @push 域）。
  *   分页 lastId=上页末条 id（空→"-1"）；下拉 i() 重置；上拉 h.b() 追加。
  * 【行】market_activity_item = social_post_item + 4dip 间隔 + 评论/点赞行（15sp common_color_3，
  *   drawablePadding 7；分享 gone；more 30dip）+ 双层分隔线。
@@ -454,39 +454,40 @@ struct MarketPage {
       .catch((error: BusinessError) => promptAction.showToast({ message: error.message }));
   }
 
+  /** 源码 m_select_tab：padding 10 + icon 17(34px@2x) + 文字12sp + 指示条23×2 mt5 */
   @Builder
   marketTabItem(label: string, icon: Resource, color: string, index: number) {
     Column() {
       Row() {
-        Image(icon).width(12).height(12).margin({ right: 4 })
+        Image(icon).width(17).height(17).margin({ right: 4 })
         Text(label).fontSize(12).fontColor(color)
       }
       .alignItems(VerticalAlign.Center)
       Column()
-        .width(11.5)
-        .height(1)
+        .width(23)
+        .height(2)
         .borderRadius(1)
         .backgroundColor(color)
-        .margin({ top: 2.5 })
+        .margin({ top: 5 })
         .visibility(this.tab === index ? Visibility.Visible : Visibility.Hidden)
     }
     .layoutWeight(1)
-    .padding({ top: 5, bottom: 5 })
+    .padding({ top: 10, bottom: 10 })
     .alignItems(HorizontalAlign.Center)
     .onClick(() => {
       this.switchTab(index);
     })
   }
 
-  /** header_market：搜索行 44 + 12 灰条 + 四页签 + 1 分隔 */
+  /** header_market：搜索行 44 + 12 灰条 + 四页签（m_select_tab wrap≈44）+ 1 分隔 */
   @Builder
   headerMarket() {
     Column() {
       Row() {
         Row() {
           Image($r('app.media.search'))
-            .width(14)
-            .height(14)
+            .width(16)
+            .height(16)
             .margin({ left: 8, right: 4.5 })
           TextInput({ text: this.keyword, placeholder: '输入你想搜索的内容...' })
             .placeholderColor('#B5B5B5')
@@ -511,12 +512,12 @@ struct MarketPage {
         .margin({ left: 15 })
 
         Text('搜索')
-          .fontSize(16)
+          .fontSize(14)
           .fontColor('#1B68B6')
-          .width(25)
-          .height(25)
+          .width(50)
+          .height(50)
           .textAlign(TextAlign.Center)
-          .margin({ left: 4, right: 5 })
+          .margin({ left: 8 })
           .onClick(() => {
             this.search();
           })
@@ -525,7 +526,7 @@ struct MarketPage {
       .height(44)
       .alignItems(VerticalAlign.Center)
 
-      Row().width('100%').height(6).backgroundColor('#F2F2F2')
+      Row().width('100%').height(12).backgroundColor('#F2F2F2')
 
       Row() {
         this.marketTabItem('全部', $r('app.media.icon_all'), '#1B68B6', 0)
@@ -534,7 +535,6 @@ struct MarketPage {
         this.marketTabItem('已成交', $r('app.media.icon_closed1'), '#5EC78F', 3)
       }
       .width('100%')
-      .height(32)
 
       Divider().color('#F5F5F5').strokeWidth(0.5)
     }
@@ -653,6 +653,43 @@ struct MarketPage {
     .padding({ left: 15, right: 15, top: 10, bottom: 7 })
   }
 
+  /** 源码 MarketItemAdapter.g：图片点击 → BrowsePhotosActivity{photoUrlList,startPosition,extraOperation:NONE} */
+  private openPhotos(post: SocialPost, startIndex: number): void {
+    router.pushUrl({
+      url: 'pages/BrowsePhotosPage',
+      params: {
+        'photoUrlList': post.pictureList(),
+        'startPosition': startIndex,
+        'extraOperation': 'none'
+      } as Record<string, Object>
+    });
+  }
+
+  /** 源码 MarketItemAdapter.setPhotoViews 行分组：<=3 一行；4/6 每行 2 张；5 首行 3 张；>6 每行 3 张（上限 9） */
+  private photoRows(post: SocialPost): string[][] {
+    const pics: string[] = post.pictureList().slice(0, 9);
+    const rows: string[][] = [];
+    const n: number = pics.length;
+    if (n === 2 || n === 3) {
+      rows.push(pics);
+    } else if (n === 4) {
+      rows.push([pics[0], pics[1]]);
+      rows.push([pics[2], pics[3]]);
+    } else if (n === 5) {
+      rows.push([pics[0], pics[1], pics[2]]);
+      rows.push([pics[3], pics[4]]);
+    } else if (n === 6) {
+      rows.push([pics[0], pics[1]]);
+      rows.push([pics[2], pics[3]]);
+      rows.push([pics[4], pics[5]]);
+    } else if (n >= 7) {
+      rows.push([pics[0], pics[1], pics[2]]);
+      rows.push([pics[3], pics[4], pics[5]]);
+      rows.push([pics[6], pics[7], pics[8]]);
+    }
+    return rows;
+  }
+
   @Builder
   photoGrid(post: SocialPost) {
     Column() {
@@ -662,23 +699,33 @@ struct MarketPage {
           .height(100)
           .objectFit(ImageFit.Cover)
           .borderRadius(2)
+          .onClick(() => {
+            this.openPhotos(post, 0);
+          })
       } else if (post.pictureList().length > 1) {
-        Grid() {
-          ForEach(post.pictureList(), (pic: string) => {
-            GridItem() {
-              Image(this.picSrc(pic))
-                .width('100%')
-                .height('100%')
-                .objectFit(ImageFit.Cover)
-                .borderRadius(2)
+        ForEach(this.photoRows(post), (row: string[], rowIndex: number) => {
+          Row() {
+            ForEach(row, (pic: string, picIndex: number) => {
+              Row() {
+                Image(this.picSrc(pic))
+                  .width('100%')
+                  .aspectRatio(1)
+                  .objectFit(ImageFit.Cover)
+                  .borderRadius(2)
+                  .onClick(() => {
+                    this.openPhotos(post, post.pictureList().indexOf(pic));
+                  })
+              }
+              .layoutWeight(1)
+              .margin({ right: picIndex === row.length - 1 && row.length === 3 ? 0 : 2.5, bottom: 2.5 })
+            }, (pic: string, picIndex: number) => pic + '_' + String(rowIndex) + '_' + String(picIndex))
+            if (row.length < 3) {
+              Blank().layoutWeight(3 - row.length)
             }
-          }, (pic: string) => pic)
-        }
-        .columnsTemplate('1fr 1fr 1fr')
-        .columnsGap(2.5)
-        .rowsGap(2.5)
-        .height(115)
-        .width('100%')
+          }
+          .width('100%')
+          .alignItems(VerticalAlign.Top)
+        }, (row: string[], rowIndex: number) => 'prow_' + String(rowIndex))
       }
     }
     .width('100%')
@@ -692,9 +739,9 @@ struct MarketPage {
     Column() {
       Row() {
         Row() {
-          Image($r('app.media.social_comment')).width(15).height(15).margin({ right: 7 })
+          Image($r('app.media.social_comment')).width(17).height(17).margin({ right: 7 })
           Text(post.commentNum === '0' || post.commentNum === '' ? '评论' : post.commentNum)
-            .fontSize(15)
+            .fontSize(Number(post.commentNum) > 0 ? 15 : 14)
             .fontColor($r('app.color.common_color_3'))
         }
         .padding({ top: 10, bottom: 10, right: 40 })
@@ -703,11 +750,10 @@ struct MarketPage {
         })
         Row() {
           Image(post.isLike === '1' ? $r('app.media.social_like') : $r('app.media.social_like_select'))
-            .width(15)
-            .height(15)
+            .width(16).height(16)
             .margin({ right: 7 })
           Text(post.likeNum === '0' || post.likeNum === '' ? '点赞' : post.likeNum)
-            .fontSize(15)
+            .fontSize(Number(post.likeNum) > 0 ? 15 : 14)
             .fontColor($r('app.color.common_color_3'))
         }
         .padding({ top: 10, bottom: 10, right: 40 })
@@ -716,8 +762,8 @@ struct MarketPage {
         })
         Blank()
         Image($r('app.media.social_more'))
-          .width(15)
-          .height(15)
+          .width(18)
+          .height(18)
           .objectFit(ImageFit.Contain)
           .onClick(() => {
             this.showMoreMenu(post);

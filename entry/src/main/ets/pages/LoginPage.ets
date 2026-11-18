@@ -17,10 +17,10 @@ import { Constants } from '../data/Constants';
 @Entry
 @Component
 struct LoginPage {
-  @State account: string = '243051201411'; // TEMP
-  @State password: string = 'Ks20060214!'; // TEMP
+  @State account: string = '';
+  @State password: string = '';
   @State passwordVisible: boolean = false;
-  @State privacyAgreed: boolean = true; // TEMP
+  @State privacyAgreed: boolean = false;
   @State isLogging: boolean = false;
 
   private async doLogin(): Promise<void> {

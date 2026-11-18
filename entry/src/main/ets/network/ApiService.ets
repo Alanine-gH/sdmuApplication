@@ -2089,18 +2089,23 @@ export class ApiService {
   }
 
   // ===== [W28 final-b] 集市列表链（MarketActivity/MarketPImpl 源码级）=====
-  /** MarketModel.h1（hasSchoolCirclePhone=false）：GET getMarketList {lastId}（e.b GET data=加密参数） */
+  /** MarketModel.h1（hasSchoolCirclePhone=false）：POST_CONTENT getMarketList {lastId}
+   *  （e.d body=加密 JSON，[W28 review] 实证 MarketModel.java L166-170） */
   static async getMarketList(lastId: string): Promise<BizJsonResult> {
-    return ApiService.bizJson(Api.CIRCLE_OPEN_GET_MARKET_LIST, 'GET', { 'lastId': lastId });
+    return ApiService.bizJson(Api.CIRCLE_OPEN_GET_MARKET_LIST, 'POST', { 'lastId': lastId });
   }
 
   /** MarketModel.Y0（hasSchoolCirclePhone=false）：POST_CONTENT serchMarketList
-   *  {lastId,marketType,marketStatus,keyWord}（e.d body=加密 JSON） */
+   *  {lastId[,marketType,marketStatus],keyWord}（e.d body=加密 JSON；
+   *  [W28 review] 源码 Y0 仅在 marketType/marketStatus 至少一个非空时才放入 map） */
   static async searchMarketList(lastId: string, marketType: string, marketStatus: string,
     keyWord: string): Promise<BizJsonResult> {
-    const params: Record<string, Object> = {
-      'lastId': lastId, 'marketType': marketType, 'marketStatus': marketStatus, 'keyWord': keyWord
-    };
+    const params: Record<string, Object> = { 'lastId': lastId };
+    if (marketType !== '' || marketStatus !== '') {
+      params['marketType'] = marketType;
+      params['marketStatus'] = marketStatus;
+    }
+    params['keyWord'] = keyWord;
     return ApiService.bizJson(Api.CIRCLE_OPEN_SERCH_MARKET_LIST, 'POST', params);
   }
 
@@ -2112,12 +2117,15 @@ export class ApiService {
   }
 
   /** MarketModel.X0（hasSchoolCirclePhone=true）：GET serchFreshNewList
-   *  {lastId,marketType,marketStatus,keyWord} @ push 域 */
+   *  {lastId[,marketType,marketStatus],keyWord} @ push 域（源码条件拼参） */
   static async pushSearchMarketFreshList(lastId: string, marketType: string, marketStatus: string,
     keyWord: string): Promise<BizJsonResult> {
-    const params: Record<string, Object> = {
-      'lastId': lastId, 'marketType': marketType, 'marketStatus': marketStatus, 'keyWord': keyWord
-    };
+    const params: Record<string, Object> = { 'lastId': lastId };
+    if (marketType !== '' || marketStatus !== '') {
+      params['marketType'] = marketType;
+      params['marketStatus'] = marketStatus;
+    }
+    params['keyWord'] = keyWord;
     const response: ApiResponse<Object> = await HttpClient.pushBizGet(
       Api.PUSH_HOST + Api.MARKET_LIANYI_SERCH_FRESH_NEW_LIST, params);
     return ApiService.parsePushBizResult(response);

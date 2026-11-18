@@ -131,7 +131,7 @@ struct AttendancePersonalPage {
     this.loadDetail();
   }
 
-  /** 源码 AttendanceDateStateView.setData：开始段 */
+  /** 源码 AttendanceDateStateView.setData：开始段（默认色 attendance_unable_color #CECECE） */
   private startColor(bean: AttendanceByDayBean): string {
     if (bean.sbdkzt === '正常') {
       return '#388CFC';
@@ -139,7 +139,7 @@ struct AttendancePersonalPage {
     if (bean.sbdkzt === '缺勤' || bean.sbdkzt === '缺卡') {
       return '#EE6D60';
     }
-    return '#B4B4B4';
+    return '#CECECE';
   }
 
   /** 源码 AttendanceDateStateView.setData：结束段（正常文案固定"正常"；错误说明取 sbdkfs 保真） */
@@ -150,7 +150,7 @@ struct AttendancePersonalPage {
     if (bean.xbdkzt === '缺勤' || bean.xbdkzt === '缺卡') {
       return '#EE6D60';
     }
-    return '#B4B4B4';
+    return '#CECECE';
   }
 
   private showDesc(status: string): boolean {
@@ -396,7 +396,7 @@ struct AttendancePersonalPage {
           Divider().color('#E7E7E7').strokeWidth(0.5).width('100%').margin({ top: 16, bottom: 8 })
           ForEach(this.detail.errorRecord, (record: AttendanceDetailErrorRecord) => {
             Row() {
-              Text(record.errorDetailName)
+              Text(record.errorDetailType)
                 .fontSize(16)
                 .fontColor('#999999')
               Blank().layoutWeight(1)

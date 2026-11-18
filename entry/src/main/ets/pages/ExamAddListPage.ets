@@ -67,13 +67,7 @@ struct ExamAddListPage {
       return;
     }
     this.activeTab = index;
-    if (this.loaded[index]) {
-      this.errorText = '';
-      this.isLoading = false;
-      this.loadList(index === 0 ? '0' : '1');
-    } else {
-      this.loadList(index === 0 ? '0' : '1');
-    }
+    this.loadList(index === 0 ? '0' : '1');
   }
 
   /** 源码 AddExamListFragment.b：footer 自定义添加 → HandleExamCourseActivity(custom add) */
@@ -153,9 +147,9 @@ struct ExamAddListPage {
       Text(item.LX === '3' ? '待添加' : '已添加')
         .fontSize(16)
         .fontColor(item.LX === '3' ? '#18B4ED' : '#CECECE')
-        .margin({ left: 12 })
+        .margin({ left: 15, right: item.LX === '3' ? 15 : 40 })
       if (item.LX === '3') {
-        Image($r('app.media.arrow_right_blue_desk_widget')).width(12).height(12).margin({ left: 5 })
+        Image($r('app.media.arrow_right_blue_desk_widget')).width(8).height(8).margin({ left: 5 })
       }
     }
     .width('100%')
@@ -173,14 +167,14 @@ struct ExamAddListPage {
           Column() {
             Text(label)
               .fontSize(14)
-              .fontColor(this.activeTab === index ? '#18B4ED' : '#333333')
+              .fontColor(this.activeTab === index ? '#18B4ED' : '#747474')
               .height(43)
               .textAlign(TextAlign.Center)
               .width('100%')
             Divider()
               .color(this.activeTab === index ? '#18B4ED' : Color.Transparent)
               .strokeWidth(2)
-              .width('100%')
+              .width(85)
           }
           .layoutWeight(1)
           .height(45)

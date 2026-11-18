@@ -60,15 +60,34 @@ function semesterCn(text: string): string {
   return out;
 }
 
-function remainingDays(text: string): number {
+/** 源码 e.b(sdf,KSSJ,now)：日历天差值（两端均取零点） */
+function remainingDays(text: string): number | null {
   const d: Date | null = parseDate(text);
   if (d === null) {
-    return 0;
+    return null;
   }
   const now: Date = new Date();
   const today: Date = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const examDay: Date = new Date(d.getFullYear(), d.getMonth(), d.getDate());
   return Math.round((examDay.getTime() - today.getTime()) / (24 * 3600 * 1000));
+}
+
+/** 源码 FinishExamListAdapter.convert：起止不同天时追加 "~（周X） 起HH:mm" */
+function formatFinishTime(start: string, end: string): string {
+  const d: Date | null = parseDate(start);
+  if (d === null) {
+    return start;
+  }
+  const head: string = d.getFullYear() + '/' + pad2(d.getMonth() + 1) + '/' + pad2(d.getDate()) +
+    '（周' + WEEK_CHARS[d.getDay()] + '）';
+  const time: string = pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  const endD: Date | null = parseDate(end);
+  if (endD === null) {
+    return head + ' ' + time;
+  }
+  const endHead: string = endD.getFullYear() + '/' + pad2(endD.getMonth() + 1) + '/' + pad2(endD.getDate()) +
+    '~（周' + WEEK_CHARS[endD.getDay()] + '）';
+  return head + endHead + ' ' + time;
 }
 
 @Entry
@@ -155,6 +174,16 @@ struct ExamPage {
     this.getUIContext().getPromptAction().showToast({ message: message, duration: 2000 });
   }
 
+  /** 源码 showTime：1~9 天补前导 0（"0"+iB）；负数原样逐位 */
+  private dayBadgeChars(days: number): string[] {
+    const text: string = days > 0 && days < 10 ? '0' + String(days) : String(days);
+    return text.split('');
+  }
+
+  private examDays(item: ComingExamEntity): number | null {
+    return remainingDays(item.KSSJ);
+  }
+
   /** 源码 ExamComingPresenter.d → ExamModel.w deleteExam{kslx,kmmc}；成功后刷新未考 */
   private confirmDelete(item: ComingExamEntity): void {
     this.getUIContext().showAlertDialog({
@@ -221,21 +250,24 @@ struct ExamPage {
   @Builder
   dayBadges(days: number) {
     Row() {
-      Text('剩余')
-        .fontSize(16)
-        .fontColor('#747474')
-        .margin({ right: 4 })
+      if (days !== 0) {
+        // 源码 iB==0 时隐藏"剩余/天"两个文案（today 分支只渲染"今天"）
+        Text('剩余')
+          .fontSize(16)
+          .fontColor('#747474')
+          .margin({ right: 4 })
+      }
       if (days === 0) {
         Text('今天')
           .fontSize(20)
           .fontColor('#FF6C6C')
       } else {
-        ForEach(String(days).split(''), (ch: string) => {
+        ForEach(this.dayBadgeChars(days), (ch: string) => {
           Text(ch)
             .fontSize(18)
             .fontColor($r('app.color.white'))
             .backgroundColor(days < 15 ? '#FF6C6C' : '#73BE3D')
-            .borderRadius(2)
+            .borderRadius(3)
             .padding({ left: 5, right: 5, top: 1, bottom: 1 })
             .margin({ left: 1, right: 1 })
         }, (ch: string, index: number) => 'day_' + index + '_' + ch)
@@ -282,9 +314,11 @@ struct ExamPage {
               .margin({ left: 6, top: 1 })
           }
           if (item.LX === '2' && item.TGRXH === '') {
-            Text('⏰')
-              .fontSize(12)
-              .margin({ left: 4 })
+            // 源码 examination_attention_iv：examnation_attention 36dip=18vp
+            Image($r('app.media.examnation_attention'))
+              .width(18)
+              .height(18)
+              .margin({ left: 2, top: 2 })
           }
           Blank().layoutWeight(1)
         }
@@ -301,10 +335,8 @@ struct ExamPage {
             .layoutWeight(1)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
-          if (remainingDays(item.KSSJ) !== 0) {
-            this.dayBadges(remainingDays(item.KSSJ))
-          } else if (item.KSSJ !== '') {
-            this.dayBadges(0)
+          if (this.examDays(item) !== null) {
+            this.dayBadges(this.examDays(item) as number)
           }
         }
         .width('100%')
@@ -348,7 +380,7 @@ struct ExamPage {
         .textOverflow({ overflow: TextOverflow.Ellipsis })
       Row() {
         Image($r('app.media.examination_time')).width(15).height(15)
-        Text(formatExamTime(item.KSSJ))
+        Text(formatFinishTime(item.KSSJ, item.JSSJ))
           .fontSize(16)
           .fontColor('#747474')
           .margin({ left: 8 })
@@ -408,14 +440,14 @@ struct ExamPage {
           Column() {
             Text(label)
               .fontSize(14)
-              .fontColor(this.activeTab === index ? '#18B4ED' : '#333333')
+              .fontColor(this.activeTab === index ? '#18B4ED' : '#747474')
               .height(43)
               .textAlign(TextAlign.Center)
               .width('100%')
             Divider()
               .color(this.activeTab === index ? '#18B4ED' : Color.Transparent)
               .strokeWidth(2)
-              .width('100%')
+              .width(85)
           }
           .layoutWeight(1)
           .height(45)

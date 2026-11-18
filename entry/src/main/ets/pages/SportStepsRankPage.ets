@@ -134,8 +134,8 @@ struct SportStepsRankPage {
           Blank()
           Stack({ alignContent: Alignment.Center }) {
             Image($r('app.media.sport_steps_rankings_bubble'))
-              .width(84)
-              .height(84)
+              .width(168)
+              .height(168)
               .objectFit(ImageFit.Cover)
             Column() {
               Text('300').fontSize(32).fontWeight(FontWeight.Bold).fontColor('#3A7DF0').maxLines(1)
@@ -143,33 +143,33 @@ struct SportStepsRankPage {
             }
             .alignItems(HorizontalAlign.Center)
           }
-          .width(84)
-          .height(84)
+          .width(168)
+          .height(168)
           Blank()
         }
         .width('100%')
-        .margin({ top: 8 })
+        .margin({ top: 16 })
 
         Row() {
           Blank()
           Image($r('app.media.sport_steps_rankings_setting'))
-            .width(22)
-            .height(22)
+            .width(44)
+            .height(44)
             .objectFit(ImageFit.Cover)
-            .margin({ right: 2.5 })
+            .margin({ right: 5 })
             .onClick(() => {
               router.pushUrl({ url: 'pages/SportStepsSettingPage' });
             })
           Image($r('app.media.sport_steps_rankings_history'))
-            .width(22)
-            .height(22)
+            .width(44)
+            .height(44)
             .objectFit(ImageFit.Cover)
             .onClick(() => {
               router.pushUrl({ url: 'pages/SportStepsHistoryPage' });
             })
         }
         .width('100%')
-        .padding({ left: 4, top: 7.5, right: 4 })
+        .padding({ left: 8, top: 15, right: 8 })
 
         Column() {
           Blank()
@@ -180,16 +180,16 @@ struct SportStepsRankPage {
               .objectFit(ImageFit.Fill)
             Row() {
               this.rankCard('全校排名', '3')
-              Row().width(7.5)
+              Row().width(15)
               this.rankCard('部门排名', '1')
             }
             .width('100%')
-            .height(30)
-            .padding({ left: 7.5, right: 7.5 })
-            .margin({ top: 9 })
+            .height(60)
+            .padding({ left: 15, right: 15 })
+            .margin({ top: 18 })
           }
           .width('100%')
-          .height(48)
+          .height(96)
         }
         .width('100%')
         .height(280)
@@ -204,21 +204,21 @@ struct SportStepsRankPage {
           Text('*此数据仅供参考').fontSize(12).fontColor($r('app.color.common_color_3'))
         }
         .width('100%')
-        .padding({ left: 7.5, right: 7.5 })
-        .margin({ top: 8 })
+        .padding({ left: 15, right: 15 })
+        .margin({ top: 16 })
 
         Row() {
           this.tabItem('全校排行TOP10', 0)
           this.tabItem('部门排行TOP10', 1)
         }
         .width('100%')
-        .height(22.5)
+        .height(45)
         .justifyContent(FlexAlign.Center)
-        .padding({ bottom: 6 })
+        .padding({ bottom: 12 })
       }
       .width('100%')
       .backgroundColor(Color.White)
-      .borderRadius({ topLeft: 8, topRight: 8 })
+      .borderRadius({ topLeft: 16, topRight: 16 })
     }
     .width('100%')
     .backgroundColor('#7FC573')
@@ -238,7 +238,7 @@ struct SportStepsRankPage {
     }
     .layoutWeight(1)
     .height('100%')
-    .padding({ left: 7.5, right: 7.5 })
+    .padding({ left: 15, right: 15 })
     .backgroundColor(Color.White)
     .borderRadius(8)
   }
@@ -267,14 +267,14 @@ struct SportStepsRankPage {
   rankRow(row: RankRow, index: number) {
     Column() {
       if (index === 0) {
-        Divider().color($r('app.color.common_color_5')).strokeWidth(0.25)
-          .margin({ left: 7.5, right: 7.5 })
+        Divider().color($r('app.color.common_color_5')).strokeWidth(0.5)
+          .margin({ left: 15, right: 15 })
           .visibility(Visibility.Hidden)
       }
       Row() {
         Stack({ alignContent: Alignment.Center }) {
           if (index < 3) {
-            Image(this.medalOf(index) as Resource).width(16).height(16)
+            Image(this.medalOf(index) as Resource).width(32).height(32)
           } else {
             Text(String(index + 1))
               .fontSize(18)
@@ -282,21 +282,21 @@ struct SportStepsRankPage {
               .fontColor('#D5DDE5')
           }
         }
-        .width(25)
+        .width(50)
 
-        Divider().vertical(true).height(24).strokeWidth(0.25).color($r('app.color.common_color_5'))
-          .margin({ right: 10 })
+        Divider().vertical(true).height(24).strokeWidth(0.5).color($r('app.color.common_color_5'))
+          .margin({ right: 20 })
 
         Column() {
           Text(row.name).fontSize(16).fontColor(Color.Black).maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
           Text(row.college).fontSize(14).fontColor($r('app.color.common_color_3')).maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .margin({ top: 2 })
+            .margin({ top: 4 })
         }
         .layoutWeight(1)
         .alignItems(HorizontalAlign.Start)
-        .padding({ right: 5 })
+        .padding({ right: 10 })
 
         Text(String(row.steps) + '步').fontSize(18).fontColor('#3A7DF0')
 
@@ -304,24 +304,24 @@ struct SportStepsRankPage {
           Text(String(row.praiseNum)).fontSize(12).fontColor('#3A7DF0')
           Image(row.praised ? $r('app.media.sport_steps_rankings_praise')
             : $r('app.media.sport_steps_rankings_un_praise'))
-            .width(7.5)
-            .height(7.5)
-            .margin({ top: 0.5 })
+            .width(15)
+            .height(15)
+            .margin({ top: 1 })
         }
-        .padding({ left: 7.5, right: 7.5 })
+        .padding({ left: 15, right: 15 })
         .justifyContent(FlexAlign.Center)
         .onClick(() => {
           this.togglePraise(row);
         })
       }
       .width('100%')
-      .padding({ left: 7.5, top: 6, bottom: 6 })
+      .padding({ left: 15, top: 12, bottom: 12 })
       .alignItems(VerticalAlign.Center)
 
       Divider()
         .color($r('app.color.common_color_5'))
-        .strokeWidth(0.25)
-        .margin({ left: 7.5, right: 7.5, bottom: index === this.currentRows().length - 1 ? 7.5 : 0 })
+        .strokeWidth(0.5)
+        .margin({ left: 15, right: 15, bottom: index === this.currentRows().length - 1 ? 15 : 0 })
     }
     .width('100%')
   }

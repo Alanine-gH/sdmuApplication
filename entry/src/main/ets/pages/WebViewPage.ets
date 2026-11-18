@@ -17,10 +17,11 @@ import { ApiService } from '../network/ApiService';
  *
  * 【布局】mobile_campus_apppage_light_app：toolbar_normal + MultiStateView
  *   + 3dip 进度条 + WebView(common_rl_wv) 填充。
- * 【入参】navigationBarTitle（旧版同名；无则用 title）→ toolbar 初始标题；url；download（默认 false）；
- *   isZoom（默认 false：setSupportZoom/setBuiltInZoomControls，DisplayZoomControls=false）；
- *   isVerify（y()：加载时注入免登头）；WebShareContent（http 开头才显示分享图标）。
- * 【加载】I2()：无网络→ERROR_NETWORK；url 空→空态；isVerify→i3()：strE 缺失不加载；否则 loadUrl(url)。
+ * 【入参】navigationBarTitle（旧版同名；无则用 title）→ toolbar 初始标题；url；download（默认 false：
+ *   仅 true 才注册下载监听，源码 f1()）；isZoom（默认 false：setSupportZoom/setBuiltInZoomControls，
+ *   DisplayZoomControls=false）；isVerify（y()：加载时注入免登头）；WebShareContent（http 开头才显示分享图标）。
+ * 【加载】I2()：无网络→ERROR_NETWORK；url 空→空态；isVerify→i3()：strE 缺失→空态不加载（[W28 review] 对齐）；
+ *   否则 loadUrl(url)。
  *   i3() 头 = {Access-Token: AES(4字段AT, 协商key), Unique-Code: 会话 onlyCode, AppType:"ydxy"}
  *   （与 LightApp/StudyReport 免登链同源）。WebView 设置：JS、cacheMode -1、appCache、geolocation、
  *   domStorage、mediaPlaybackRequiresUserGesture=false、verticalScrollBar=false、savePassword=false。
@@ -54,6 +55,8 @@ struct WebViewPage {
   private isKeyReturn: boolean = false;
   private isToken: boolean = true;
   private shareContent: string = '';
+  private downloadEnabled: boolean = false;
+  private verifyBlocked: boolean = false;
   private headers: HttpHeader[] = [];
   private controller: webview.WebviewController = new webview.WebviewController();
   private downloadTask: request.agent.Task | null = null;
@@ -82,6 +85,7 @@ struct WebViewPage {
     this.isKeyReturn = params['isKeyReturn'] === true;
     this.isToken = params['isToken'] !== false;
     this.shareContent = WebViewPage.pickStr(params, 'WebShareContent');
+    this.downloadEnabled = params['download'] === true;
     this.showShare = this.shareContent.startsWith('http');
     if (this.isVerify) {
       this.buildVerifyHeaders();
@@ -119,9 +123,15 @@ struct WebViewPage {
     return '';
   }
 
-  /** 源码 i3()：Access-Token(AES 4字段) + Unique-Code + AppType；aesKey 缺失→不加载 */
+  /** 源码 i3()：Access-Token(AES 4字段) + Unique-Code + AppType；aesKey 缺失 → 空态不加载 */
   private buildVerifyHeaders(): void {
     try {
+      if (LoginSession.aesKey === '') {
+        // 源码 i3()：strE=="" → q2（空态）直接返回，不 loadUrl
+        this.verifyBlocked = true;
+        this.pageState = 'empty';
+        return;
+      }
       const at: string = HttpClient.buildWebEncryptedAccessToken();
       if (at !== '') {
         this.headers.push({ headerKey: 'Access-Token', headerValue: at });
@@ -134,6 +144,8 @@ struct WebViewPage {
     } catch (error) {
       const be = error as BusinessError;
       ApiService.logError('WebViewPage build headers fail: ' + be.message);
+      this.verifyBlocked = true;
+      this.pageState = 'empty';
     }
   }
 
@@ -275,7 +287,7 @@ struct WebViewPage {
               .zoomAccess(this.isZoom)
               .fileAccess(true)
               .onControllerAttached(() => {
-                if (this.targetUrl !== '') {
+                if (this.targetUrl !== '' && !this.verifyBlocked) {
                   this.controller.loadUrl(this.targetUrl, this.headers);
                 }
               })
@@ -294,7 +306,10 @@ struct WebViewPage {
                 this.onWebError(event.error.getErrorCode());
               })
               .onDownloadStart((event: OnDownloadStartEvent) => {
-                this.startDownload(event.url);
+                // 源码 f1()：仅 download 入参为 true 才注册 DownloadListener
+                if (this.downloadEnabled) {
+                  this.startDownload(event.url);
+                }
               })
               .onLoadIntercept((event: OnLoadInterceptEvent) => {
                 const url: string = event.data.getRequestUrl();

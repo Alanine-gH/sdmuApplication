@@ -37,6 +37,43 @@ struct ScoreCommentPage {
   private pageNum: number = 1;
   private pageSize: number = 10;
   private changed: boolean = false;
+  private firstShow: boolean = true;
+
+  onPageShow(): void {
+    // 源码 onActivityResult(8914)：从留言发布页返回 → pageNum=1 重新拉取
+    if (this.firstShow) {
+      this.firstShow = false;
+      return;
+    }
+    this.loadPage(1);
+  }
+
+  /** 源码 ScoreCommentListAdapter：e.i(PLSJ,"") 相对时间（非原始时间戳） */
+  private formatTime(plsj: string): string {
+    const m: RegExpMatchArray | null = plsj.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+    if (m === null) {
+      return '';
+    }
+    const d: Date = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6]));
+    const now: Date = new Date();
+    if (now.getTime() < d.getTime()) {
+      return '';
+    }
+    if (now.getFullYear() !== d.getFullYear() || now.getMonth() !== d.getMonth() || now.getDate() !== d.getDate()) {
+      return m[1] + '-' + m[2] + '-' + m[3];
+    }
+    const mins: number = Math.floor((now.getTime() - d.getTime()) / 60000);
+    if (mins === 0) {
+      return String(Math.floor((now.getTime() - d.getTime()) / 1000) % 60) + '秒前';
+    }
+    if (mins > 0 && mins <= 60) {
+      return String(mins) + '分钟前';
+    }
+    if (mins <= 60 || mins > 120) {
+      return m[4] + ':' + m[5];
+    }
+    return '1小时前';
+  }
 
   aboutToAppear(): void {
     const params: Record<string, Object> | undefined = router.getParams() as Record<string, Object> | undefined;
@@ -156,7 +193,7 @@ struct ScoreCommentPage {
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
             .layoutWeight(1)
-          Text(item.PLSJ)
+          Text(this.formatTime(item.PLSJ))
             .fontSize(12)
             .fontColor($r('app.color.common_color_4'))
             .maxLines(1)

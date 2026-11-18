@@ -113,18 +113,18 @@ struct PhotoPickerPage {
     return this.selectCount > 0 ? '完成(' + String(this.selectCount) + '/' + String(this.maxCount) + ')' : '完成';
   }
 
-  /** 源码 b 类：预览 → PhotoPagerActivity{current_item:0,photos,SELECTED_PHOTOS,MAX_COUNT} */
-  private openPager(): void {
-    const selected: string[] = this.selectedUris();
-    if (selected.length === 0) {
+  /** 源码 b 类：图片点击 → 预览 PhotoPagerActivity{photos(全部),SELECTED_PHOTOS,current_item:index,MAX_COUNT} */
+  private openPager(startIndex: number): void {
+    const all: string[] = this.photos.map((item: PickerPhotoItem): string => item.uri);
+    if (all.length === 0) {
       return;
     }
     router.pushUrl({
       url: 'pages/PhotoPagerPage',
       params: {
-        'photos': selected,
-        'current_item': 0,
-        'SELECTED_PHOTOS': selected,
+        'photos': all,
+        'current_item': startIndex,
+        'SELECTED_PHOTOS': this.selectedUris(),
         'MAX_COUNT': this.maxCount
       } as Record<string, Object>
     });
@@ -265,6 +265,9 @@ struct PhotoPickerPage {
     }
   }
 
+  /** 源码 item_photo：SquareItemLayout 内 iv_photo padding2 centerCrop + v_mask #99000000 margin2 +
+   *  v_selected photo_checkbox_bg（42px@1.5x=28vp intrinsic）padding5 margin5；
+   *  图片点击=预览（源码 b 类），圆勾点击=选中切换（源码 c 类） */
   @Builder
   photoCell(item: PickerPhotoItem, index: number) {
     Stack({ alignContent: Alignment.TopEnd }) {
@@ -272,28 +275,31 @@ struct PhotoPickerPage {
         .width('100%')
         .height('100%')
         .objectFit(ImageFit.Cover)
-        .padding(1)
+        .padding(2)
+        .onClick(() => {
+          this.openPager(index);
+        })
       if (item.selected) {
         Column()
           .width('100%')
           .height('100%')
-          .margin(1)
+          .margin(2)
           .backgroundColor('#99000000')
+          .onClick(() => {
+            this.openPager(index);
+          })
       }
       Image(item.selected ? $r('app.media.pictures_selected') : $r('app.media.picture_unselected'))
-        .width(18)
-        .height(18)
-        .margin(2.5)
-        .padding(2.5)
+        .width(28)
+        .height(28)
+        .margin(5)
+        .padding(5)
         .onClick(() => {
           this.toggleSelect(index);
         })
     }
     .width('100%')
     .aspectRatio(1)
-    .onClick(() => {
-      this.toggleSelect(index);
-    })
   }
 
   @Builder
@@ -356,7 +362,7 @@ struct PhotoPickerPage {
           .padding(10)
           .enabled(this.selectCount > 0)
           .onClick(() => {
-            this.openPager();
+            this.openPager(0);
           })
       }
       .width('100%')

@@ -63,9 +63,9 @@ struct LightAppPage {
   }
 
   aboutToAppear(): void {
-    // [W6 light-diag] 开启 WebView 远程调试（chrome://inspect 排障），置于 Web 组件创建前
+    // [release] 生产版关闭 WebView 远程调试（chrome://inspect 排障通道，仅开发期开启）
     try {
-      webview.WebviewController.setWebDebuggingAccess(true);
+      webview.WebviewController.setWebDebuggingAccess(false);
     } catch {
       this.diag('setWebDebuggingAccess failed (non-fatal)');
     }

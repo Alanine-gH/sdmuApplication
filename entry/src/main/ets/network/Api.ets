@@ -550,6 +550,7 @@ static readonly USER_PLACE_PERMISSION: string = '/mobileapi_ydxy/api/userplace/f
   static readonly CIRCLE_OPEN_GET_MARKET_INFO: string = '/mobileapi_ydxy/api/campus/circleOpen/getMarketInfo';
   static readonly CIRCLE_OPEN_GET_MARKET_COMMENTS: string = '/mobileapi_ydxy/api/campus/circleOpen/getMarketComments';
   static readonly CIRCLE_OPEN_GET_MARKET_LIKES: string = '/mobileapi_ydxy/api/campus/circleOpen/getMarketLikes';
+  // [W28 review] getMarketList/serchMarketList 均 e.d POST_CONTENT（MarketModel.h1/Y0 实证）
   static readonly CIRCLE_OPEN_GET_MARKET_LIST: string = '/mobileapi_ydxy/api/campus/circleOpen/getMarketList';
   static readonly CIRCLE_OPEN_SERCH_MARKET_LIST: string = '/mobileapi_ydxy/api/campus/circleOpen/serchMarketList';
   // ---- 校内 circle/addviewnum（SocialModel.K0 实证 ServerType.SCHOOL） ----
