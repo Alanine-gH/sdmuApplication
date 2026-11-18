@@ -25,7 +25,8 @@ import { ContactSearchAddressBook, ContactSearchAddressBookItem, ContactYellowPa
 import { ContactClassStudentBean, ContactAddressBookUserInfo, ContactAddressBookUser, ReimbursementEntry,
   ReadingBookEntry, ReadingHomeData, RatepayingEntry, ScheduleDetailRow, ScheduleMonthItem, ScheduleDetailEntry,
   SchoolViewIndex, SchoolViewModuleBean, YiBanBannerEntry, YiBanAppGroup, YiBanAppItem,
-  YiBanNewsEntry, YiBanArticleEntry, YiBanArticleImage, SchoolSceneryItem, SchoolDeletePic } from '../model/ContactModel';
+  YiBanNewsEntry, YiBanArticleEntry, YiBanArticleImage, SchoolSceneryItem, SchoolDeletePic,
+  ReimburseProjectDetail } from '../model/ContactModel';
 // [W26 partial-finish] 设置页/学习报告/扫码分流实体（源码 YDAPPInfo/AppBean/ScanURL/TermInfo）
 import { MainAppGroup, MainAppItem, ScanJumpUrl, StudyTermInfo } from '../model/ContactModel';
 import { ScoreItem, ExamItem, ScoreStatEntry, ScoreDetailEntry, ScoreRankEntry, ScoreCommentEntry,
@@ -47,7 +48,7 @@ import { TodoTabOA, OaTodoRow, OaTodoList, OaChannel, OaTodoSearchGroup, OaFormF
 import { MainNotificationV2 } from '../model/MessageModel';
 // [W21 supervise] 督评链实体（源码 supervise/entity/* Gson 字段 1:1）
 import { SuperviseCourseItem, SuperviseDayGroup, SuperviseListenRecord,
-  SuperviseDepartment, SuperviseTeacher } from '../model/SuperviseModel';
+  SuperviseDepartment, SuperviseTeacher, SuperviseCourseDetail, SuperviseListenDetail } from '../model/SuperviseModel';
 // [E3 meeting worker] 会议模块实体（源码 meeting/entity/* + gettimetable TermParamsEntity）
 import { MeetingTabEntity, JoinListEntity, JoinListItem, WeekPlanEntity, CurrentDayEntity,
   TermParamsEntity as MeetingTermParams } from '../model/MeetingApiModel';
@@ -406,6 +407,84 @@ export class ApiService {
       ApiService.pick(rec, ['DJJ']),
       ApiService.pick(rec, ['ISEVALUATE'])
     );
+  }
+
+  /** [P-C] 通用 string[] 字段解析（源码 List<String> Gson：非数组/元素非标量 → 跳过，不编造） */
+  static pickStringArray(rec: Record<string, Object>, key: string): string[] {
+    const out: string[] = [];
+    const v: Object = rec[key];
+    if (!Array.isArray(v)) {
+      return out;
+    }
+    for (const item of v as Object[]) {
+      if (typeof item === 'string') {
+        out.push(item as string);
+      } else if (typeof item === 'number') {
+        out.push(String(item as number));
+      }
+    }
+    return out;
+  }
+
+  /** [P-C] 源码 DetailsCourse.java（新增督导页详情；字段全大写 Gson 1:1 + itemList 日期串） */
+  static parseSuperviseCourseDetail(data: Object): SuperviseCourseDetail {
+    const rec: Record<string, Object> = ApiService.asRecord(data);
+    const bean: SuperviseCourseDetail = new SuperviseCourseDetail();
+    bean.BMMC = ApiService.pick(rec, ['BMMC']);
+    bean.DJJ = ApiService.pick(rec, ['DJJ']);
+    bean.GH = ApiService.pick(rec, ['GH']);
+    bean.KCMC = ApiService.pick(rec, ['KCMC']);
+    bean.QSJSZ = ApiService.pick(rec, ['QSJSZ']);
+    bean.SKBJ = ApiService.pick(rec, ['SKBJ']);
+    bean.SKDD = ApiService.pick(rec, ['SKDD']);
+    bean.SKLSXM = ApiService.pick(rec, ['SKLSXM']);
+    bean.XLH = ApiService.pick(rec, ['XLH']);
+    bean.XQJ = ApiService.pick(rec, ['XQJ']);
+    bean.itemList = ApiService.pickStringArray(rec, 'itemList');
+    return bean;
+  }
+
+  /** [P-C] 源码 DetailsListen.java（已完成督导详情；字段全大写 Gson 1:1 + itemList） */
+  static parseSuperviseListenDetail(data: Object): SuperviseListenDetail {
+    const rec: Record<string, Object> = ApiService.asRecord(data);
+    const bean: SuperviseListenDetail = new SuperviseListenDetail();
+    bean.BMMC = ApiService.pick(rec, ['BMMC']);
+    bean.COUSERID = ApiService.pick(rec, ['COUSERID']);
+    bean.DJ = ApiService.pick(rec, ['DJ']);
+    bean.DJJ = ApiService.pick(rec, ['DJJ']);
+    bean.GH = ApiService.pick(rec, ['GH']);
+    bean.ISEVALUATE = ApiService.pick(rec, ['ISEVALUATE']);
+    bean.KCMC = ApiService.pick(rec, ['KCMC']);
+    bean.LISTENTIME = ApiService.pick(rec, ['LISTENTIME']);
+    bean.NR = ApiService.pick(rec, ['NR']);
+    bean.QSJSZ = ApiService.pick(rec, ['QSJSZ']);
+    bean.REMIND = ApiService.pick(rec, ['REMIND']);
+    bean.REMINDTIME = ApiService.pick(rec, ['REMINDTIME']);
+    bean.SDRS = ApiService.pick(rec, ['SDRS']);
+    bean.SFKPL = ApiService.pick(rec, ['SFKPL']);
+    bean.SKDD = ApiService.pick(rec, ['SKDD']);
+    bean.SKLS = ApiService.pick(rec, ['SKLS']);
+    bean.SKLSXM = ApiService.pick(rec, ['SKLSXM']);
+    bean.XLH = ApiService.pick(rec, ['XLH']);
+    bean.XQJ = ApiService.pick(rec, ['XQJ']);
+    bean.YDRS = ApiService.pick(rec, ['YDRS']);
+    bean.itemList = ApiService.pickStringArray(rec, 'itemList');
+    return bean;
+  }
+
+  /** [P-C] 源码 reimburse/entity/Detail.java（项目详情；8 字段全大写 Gson 1:1） */
+  static parseReimburseProjectDetail(data: Object): ReimburseProjectDetail {
+    const rec: Record<string, Object> = ApiService.asRecord(data);
+    const bean: ReimburseProjectDetail = new ReimburseProjectDetail();
+    bean.CONTRACT_AMOUNT = ApiService.pick(rec, ['CONTRACT_AMOUNT']);
+    bean.OUTSIDE_AMOUNT = ApiService.pick(rec, ['OUTSIDE_AMOUNT']);
+    bean.PAY_AMOUNT = ApiService.pick(rec, ['PAY_AMOUNT']);
+    bean.PROJECT_MEMBER = ApiService.pick(rec, ['PROJECT_MEMBER']);
+    bean.PROJECT_NAME = ApiService.pick(rec, ['PROJECT_NAME']);
+    bean.PROJECT_STATUS = ApiService.pick(rec, ['PROJECT_STATUS']);
+    bean.PROJECT_TYPE = ApiService.pick(rec, ['PROJECT_TYPE']);
+    bean.RECEIVE_AMOUNT = ApiService.pick(rec, ['RECEIVE_AMOUNT']);
+    return bean;
   }
 
   static parseScoreDetail(data: Object): ScoreDetailEntry {
@@ -1088,6 +1167,86 @@ export class ApiService {
       return new ApiResponse<string>(0, result.message, ApiService.plainOf(result));
     }
     return new ApiResponse<string>(result.code, result.message, '');
+  }
+
+  // ===== [P-C placeholder] 3 个可达占位页数据层（源码 SuperviseModel/ReimburseModel 逐行）=====
+  /** [P-C] 源码 SuperviseModel.W0（SuperviseLectureAddActivity.R2）：POST detailsCourse {xlh} → DetailsCourse。
+   *  探针假 xlh code=0001 系统异常（端点存活）；无真实数据 → 空态 */
+  static async getSuperviseCourseDetail(xlh: string): Promise<ApiResponse<SuperviseCourseDetail>> {
+    const empty: SuperviseCourseDetail = new SuperviseCourseDetail();
+    const params: Record<string, Object> = { 'xlh': xlh };
+    const result: BizJsonResult = await ApiService.bizJson(Api.SUPERVISE_DETAILS_COURSE, 'POST', params);
+    if (result.code !== 0) {
+      return new ApiResponse<SuperviseCourseDetail>(result.code, result.message, empty);
+    }
+    return new ApiResponse<SuperviseCourseDetail>(0, result.message,
+      ApiService.parseSuperviseCourseDetail(result.data));
+  }
+
+  /** [P-C] 源码 SuperviseModel.T0（SuperviseLectureAddActivity.Q2）：POST addListenCourse
+   *  {courseId,listenTime,remind,remindtime} → String；c.g data=="true"=成功。探针假参 code=0001 */
+  static async addSuperviseListen(courseId: string, listenTime: string, remind: string,
+    remindtime: string): Promise<ApiResponse<string>> {
+    const params: Record<string, Object> = {
+      'courseId': courseId, 'listenTime': listenTime, 'remind': remind, 'remindtime': remindtime
+    };
+    const result: BizJsonResult = await ApiService.bizJson(Api.SUPERVISE_ADD_LISTEN, 'POST', params);
+    if (result.code === 0) {
+      return new ApiResponse<string>(0, result.message, ApiService.plainOf(result));
+    }
+    return new ApiResponse<string>(result.code, result.message, '');
+  }
+
+  /** [P-C] 源码 SuperviseModel.X0（SuperviseLectureFinishActivity.T2）：POST detailsListen {xlh} → DetailsListen。
+   *  探针假 xlh code=0001（端点存活）；无真实数据 → 空态 */
+  static async getSuperviseListenDetail(xlh: string): Promise<ApiResponse<SuperviseListenDetail>> {
+    const empty: SuperviseListenDetail = new SuperviseListenDetail();
+    const params: Record<string, Object> = { 'xlh': xlh };
+    const result: BizJsonResult = await ApiService.bizJson(Api.SUPERVISE_DETAILS_LISTEN, 'POST', params);
+    if (result.code !== 0) {
+      return new ApiResponse<SuperviseListenDetail>(result.code, result.message, empty);
+    }
+    return new ApiResponse<SuperviseListenDetail>(0, result.message,
+      ApiService.parseSuperviseListenDetail(result.data));
+  }
+
+  /** [P-C] 源码 SuperviseModel.V0（SuperviseLectureFinishActivity.S2）：POST deleteListen {xlh} → String；
+   *  c.g data=="true"=成功。探针假 xlh code=0 data=false（端点存活，业务失败） */
+  static async deleteSuperviseListen(xlh: string): Promise<ApiResponse<string>> {
+    const params: Record<string, Object> = { 'xlh': xlh };
+    const result: BizJsonResult = await ApiService.bizJson(Api.SUPERVISE_DELETE_LISTEN, 'POST', params);
+    if (result.code === 0) {
+      return new ApiResponse<string>(0, result.message, ApiService.plainOf(result));
+    }
+    return new ApiResponse<string>(result.code, result.message, '');
+  }
+
+  /** [P-C] 源码 SuperviseModel.d1（SuperviseLectureFinishActivity.U2）：POST updateListenCourse
+   *  {dj,ydrs,sdrs,nr,listenTime,remind,remindtime,xlh} → String；e.g data=="true"=成功。探针假参 code=0 data=false */
+  static async updateSuperviseListen(dj: string, ydrs: string, sdrs: string, nr: string,
+    listenTime: string, remind: string, remindtime: string, xlh: string): Promise<ApiResponse<string>> {
+    const params: Record<string, Object> = {
+      'dj': dj, 'ydrs': ydrs, 'sdrs': sdrs, 'nr': nr, 'listenTime': listenTime,
+      'remind': remind, 'remindtime': remindtime, 'xlh': xlh
+    };
+    const result: BizJsonResult = await ApiService.bizJson(Api.SUPERVISE_UPDATE_LISTEN, 'POST', params);
+    if (result.code === 0) {
+      return new ApiResponse<string>(0, result.message, ApiService.plainOf(result));
+    }
+    return new ApiResponse<string>(result.code, result.message, '');
+  }
+
+  /** [P-C] 源码 ReimburseModel.T0（ProjectDetailActivity.R2）：POST project/detail {PROJECT_NUMBER} → Detail；
+   *  a.g=content / a.f=EMPTY / a.e=ERROR。探针 POST HTTP200 空体、GET data= code=0001 → 测试账号无项目真实空态 */
+  static async getProjectDetail(projectNumber: string): Promise<ApiResponse<ReimburseProjectDetail>> {
+    const empty: ReimburseProjectDetail = new ReimburseProjectDetail();
+    const params: Record<string, Object> = { 'PROJECT_NUMBER': projectNumber };
+    const result: BizJsonResult = await ApiService.bizJson(Api.PROJECT_DETAIL, 'POST', params);
+    if (result.code !== 0) {
+      return new ApiResponse<ReimburseProjectDetail>(result.code, result.message, empty);
+    }
+    return new ApiResponse<ReimburseProjectDetail>(0, result.message,
+      ApiService.parseReimburseProjectDetail(result.data));
   }
 
   // ===== 成绩详情 / 课评（推断端点 + 降级） =====
@@ -2051,6 +2210,64 @@ export class ApiService {
   //   → 调用方按 code!=0 走真实错误态（message 透传），绝不编造帖子/评论/点赞数据。
   // push 域（yibaogao.com）：2026-11-18 实测不可达（WinError 10054/SSL EOF）
   //   → 真实网络失败，message='网络请求失败: ...'。
+
+  // ===== [P-B placeholder] 校园动态/最新动态/好友/举报/绩点排行 5 页数据层 =====
+
+  /**
+   * [P-B placeholder] NewNewsActivity.f1() hasSchoolCirclePhone=false 分支（GlobalParamInfo
+   * .getPhoneStatus().hasSchoolCirclePhone，2026-11-18 探针实测登录响应无此字段→false）：
+   * q.g("-1")→NewActivityPresenter.g→SocialModel.B：校内 circleOpen/getCircleList {lastId}（POST）。
+   * 实测 code=0001 系统异常 → 页面走真实错误态（绝不编造校园动态）。
+   */
+  static async getFreshCircleList(lastId: string): Promise<BizJsonResult> {
+    return ApiService.bizJson(Api.CIRCLE_OPEN_GET_CIRCLE_LIST, 'POST', { 'lastId': lastId });
+  }
+
+  /**
+   * [P-B placeholder] NewNewsActivity.f1()/Ex：q.h(1,1)→NewActivityPresenter.h→SocialModel.o：
+   * LIANYI freshpapers {pageNum,pageSize}（e.b GET data= + xxdm 头，push 域实测 SSL EOF 不可达）。
+   * 头条文章区 i(list) 仅在非空时显示，否则 read_container GONE（源码 i() 语义）。
+   */
+  static async pushGetFreshPapers(pageNum: number, pageSize: number): Promise<BizJsonResult> {
+    const response: ApiResponse<Object> = await HttpClient.pushBizGet(
+      Api.PUSH_HOST + Api.CIRCLE_LIANYI_FRESH_PAPERS,
+      { 'pageNum': String(pageNum), 'pageSize': String(pageSize) });
+    return ApiService.parsePushBizResult(response);
+  }
+
+  /**
+   * [P-B placeholder] NewNewsActivityEx.f1()（校园动态"最新动态"发帖成功 replaceUrl 落点）：
+   * q.f("-1")→NewActivityPresenter.f→SocialModel.v：LIANYI freshNewList {lastId}（push 域，不可达）。
+   */
+  static async pushGetFreshNewList(lastId: string): Promise<BizJsonResult> {
+    const response: ApiResponse<Object> = await HttpClient.pushBizGet(
+      Api.PUSH_HOST + Api.CIRCLE_LIANYI_FRESH_NEW_LIST, { 'lastId': lastId });
+    return ApiService.parsePushBizResult(response);
+  }
+
+  /**
+   * [P-B placeholder] FriendshipUserListActivity.R2()：
+   * FOLLOWING→FriendPresenter.c(page)→FriendModel.y→LIANYI getMyFollows {pageNum,pageSize:"10"}；
+   * FOLLOWER→FriendPresenter.b(page)→FriendModel.h0→LIANYI getMyFans {pageNum,pageSize:"10"}。
+   * 源码 pageSize=AgooConstants.ACK_REMOVE_PACKAGE="10"；响应 data JSON 数组逐字段解析成好友行。
+   * push 域实测 SSL EOF 不可达 → 页面真实错误态；且 hasSchoolCirclePhone=false 时 f1() 直接空态。
+   */
+  static async pushGetFriendList(following: boolean, pageNum: number): Promise<BizJsonResult> {
+    const path: string = following ? Api.FRIENDSHIP_GET_MY_FOLLOWS : Api.FRIENDSHIP_GET_MY_FANS;
+    const response: ApiResponse<Object> = await HttpClient.pushBizPost(
+      Api.PUSH_HOST + path, { 'pageNum': String(pageNum), 'pageSize': '10' });
+    return ApiService.parsePushBizResult(response);
+  }
+
+  /**
+   * [P-B placeholder] GradeReportActvity JS 桥 ybginterface：
+   * praise(broder,phb)→GradeReportModel.a→POST rank/gradeReport/praise {broder,phb}；
+   * cancelPraise→.b→POST rank/gradeReport/cancelPraise。探针实测两端点 code=0 ok。
+   */
+  static async gradeRankPraise(broder: string, phb: string, cancel: boolean): Promise<BizJsonResult> {
+    const path: string = cancel ? Api.GRADE_RANK_CANCEL_PRAISE : Api.GRADE_RANK_PRAISE;
+    return ApiService.bizJson(path, 'POST', { 'broder': broder, 'phb': phb });
+  }
 
   /** SocialModel.y0（hasSchoolCirclePhone=false 分支）：POST getCircleInfo {id} */
   static async getCircleInfo(id: string): Promise<BizJsonResult> {
@@ -5124,6 +5341,105 @@ export class ApiService {
     }
     return new ApiResponse<NewHadScore[]>(0, result.message, list);
   }
+
+  // ===== [P-A placeholder-fix] 5 个可达占位页数据层（源码级，probe_pa_placeholder.py 实测） =====
+
+  /** 源码 LibraryReportFactory.e.a.f15001a="schedule/termInfo"：GET 加密通道 → TermInfo{xn,xq}
+   *  实测 code=0（xn=2026-2027 xq=1）；库报表 WebView 免登需要 xn/xq 参与 JS 桥 praise/cancelPraise。 */
+  static async getReportTermInfo(): Promise<ApiResponse<ReportTermInfo>> {
+    const response: ApiResponse<Object> = await HttpClient.bizRequest(Api.SCHEDULE_TERM_INFO, 'GET', {});
+    const out: ReportTermInfo = new ReportTermInfo();
+    if (response.code !== 0) {
+      return new ApiResponse<ReportTermInfo>(response.code, response.message, out);
+    }
+    const rec: Record<string, Object> = ApiService.asRecord(response.data);
+    out.xn = ApiService.pick(rec, ['xn', 'XN']);
+    out.xq = ApiService.pick(rec, ['xq', 'XQ']);
+    return new ApiResponse<ReportTermInfo>(0, response.message, out);
+  }
+
+  /** 源码 e.c.a.b/c → LibraryReportModel.I（praise）/l0（cancelPraise）：
+   *   POST rank/libraryReport/praise|cancelPraise {broder,xn,xq}（加密 body）。 */
+  static async libraryReportPraise(cancel: boolean, broder: string, xn: string, xq: string):
+    Promise<ApiResponse<Object>> {
+    const path: string = cancel ? Api.RANK_LIBRARY_CANCEL_PRAISE : Api.RANK_LIBRARY_PRAISE;
+    const params: Record<string, Object> = { 'broder': broder, 'xn': xn, 'xq': xq };
+    const result: BizJsonResult = await ApiService.bizJson(path, 'POST', params);
+    return new ApiResponse<Object>(result.code, result.message, result.data);
+  }
+
+  /** 源码 f.c.a.b/c → OneCardReportModel.b（praise）/a（cancelPraise）：
+   *   POST rank/onecardReport/praise|cancelPraise {broder,time}（加密 body；实测 code=0）。 */
+  static async oneCardReportPraise(cancel: boolean, broder: string, time: string):
+    Promise<ApiResponse<Object>> {
+    const path: string = cancel ? Api.RANK_ONECARD_CANCEL_PRAISE : Api.RANK_ONECARD_PRAISE;
+    const params: Record<string, Object> = { 'broder': broder, 'time': time };
+    const result: BizJsonResult = await ApiService.bizJson(path, 'POST', params);
+    return new ApiResponse<Object>(result.code, result.message, result.data);
+  }
+
+  /** 源码 ChangeQqAndWechatActivity.b$c / c（module/c/i/d.java V0/W0/X0/Y0）：
+   *   POST /api/user/updateQq{qq}|updateWechat{wechat}|cleanQq{}|cleanWechat{}（实测全 code=0）。 */
+  static async changeQqWechat(kind: string, value: string): Promise<ApiResponse<Object>> {
+    let path: string;
+    let params: Record<string, Object>;
+    if (kind === 'QQ') {
+      path = value === '' ? Api.USER_CLEAN_QQ : Api.USER_UPDATE_QQ;
+      params = value === '' ? {} : { 'qq': value };
+    } else {
+      path = value === '' ? Api.USER_CLEAN_WECHAT : Api.USER_UPDATE_WECHAT;
+      params = value === '' ? {} : { 'wechat': value };
+    }
+    const result: BizJsonResult = await ApiService.bizJson(path, 'POST', params);
+    return new ApiResponse<Object>(result.code, result.message, result.data);
+  }
+
+  /** 源码 SchoolSearchModel.T0（school/g/d.java）bVar.j=false 明文 GET open/schoolMap/data
+   *  → Data{AREA[],BUBBLE[]}（probe 实测 code=0：AREA 1 条山东管理学院，BUBBLE 空）。 */
+  static async getSchoolMapData(): Promise<ApiResponse<SchoolMapData>> {
+    const empty: SchoolMapData = new SchoolMapData();
+    const response: ApiResponse<Object> = await HttpClient.plainBizGet(Api.SCHOOL_MAP_DATA, {});
+    if (response.code !== 0) {
+      return new ApiResponse<SchoolMapData>(response.code, response.message, empty);
+    }
+    const rec: Record<string, Object> = ApiService.asRecord(response.data);
+    const out: SchoolMapData = new SchoolMapData();
+    for (const one of ApiService.parseChildArray(rec, 'AREA')) {
+      out.AREA.push(ApiService.parseSchoolMapArea(one));
+    }
+    for (const one of ApiService.parseChildArray(rec, 'BUBBLE')) {
+      out.BUBBLE.push(ApiService.parseSchoolMapBubble(one));
+    }
+    return new ApiResponse<SchoolMapData>(0, response.message, out);
+  }
+
+  /** Data.AREABean{AREA_NAME,AREA_STATUS,CENCRE_NAME,CITY,LAN,LAT,PIC,XLH} Gson 1:1（LAN/LAT 服务端下发字符串） */
+  static parseSchoolMapArea(one: Object): SchoolMapArea {
+    const rec: Record<string, Object> = ApiService.asRecord(one);
+    const bean: SchoolMapArea = new SchoolMapArea();
+    bean.AREA_NAME = ApiService.pick(rec, ['AREA_NAME']);
+    bean.AREA_STATUS = ApiService.pick(rec, ['AREA_STATUS']);
+    bean.CENCRE_NAME = ApiService.pick(rec, ['CENCRE_NAME']);
+    bean.CITY = ApiService.pick(rec, ['CITY']);
+    bean.LAN = ApiService.pick(rec, ['LAN']);
+    bean.LAT = ApiService.pick(rec, ['LAT']);
+    bean.PIC = ApiService.pick(rec, ['PIC']);
+    bean.XLH = ApiService.pick(rec, ['XLH']);
+    return bean;
+  }
+
+  /** Data.BUBBLEBean{AREA_NAME,BUBBLE_NAME,BUBBLE_STATUS,LAN,LAT,XLH} Gson 1:1 */
+  static parseSchoolMapBubble(one: Object): SchoolMapBubble {
+    const rec: Record<string, Object> = ApiService.asRecord(one);
+    const bean: SchoolMapBubble = new SchoolMapBubble();
+    bean.AREA_NAME = ApiService.pick(rec, ['AREA_NAME']);
+    bean.BUBBLE_NAME = ApiService.pick(rec, ['BUBBLE_NAME']);
+    bean.BUBBLE_STATUS = ApiService.pick(rec, ['BUBBLE_STATUS']);
+    bean.LAN = ApiService.pick(rec, ['LAN']);
+    bean.LAT = ApiService.pick(rec, ['LAT']);
+    bean.XLH = ApiService.pick(rec, ['XLH']);
+    return bean;
+  }
 }
 
 /** buildTodoFormMap 输出（C3 bundle data+allSubmitFiles 等价） */
@@ -5166,5 +5482,41 @@ export class RemoteHomeTabEntry {
   jsid: string = '';
   title: string = '';
   identifying: string = '';
+}
+
+// ===== [P-A placeholder-fix] 5 个可达占位页实体 =====
+
+/** 源码 student_report/libraryReport/entity/TermInfo.java：private String xn; private String xq; */
+export class ReportTermInfo {
+  xn: string = '';
+  xq: string = '';
+}
+
+/** 源码 school/entity/Data.java：public List<AREABean> AREA; public List<BUBBLEBean> BUBBLE; */
+export class SchoolMapData {
+  AREA: SchoolMapArea[] = [];
+  BUBBLE: SchoolMapBubble[] = [];
+}
+
+/** 源码 Data.AREABean：AREA_NAME/AREA_STATUS/CENCRE_NAME/CITY/LAN/LAT/PIC/XLH */
+export class SchoolMapArea {
+  AREA_NAME: string = '';
+  AREA_STATUS: string = '';
+  CENCRE_NAME: string = '';
+  CITY: string = '';
+  LAN: string = '';
+  LAT: string = '';
+  PIC: string = '';
+  XLH: string = '';
+}
+
+/** 源码 Data.BUBBLEBean：AREA_NAME/BUBBLE_NAME/BUBBLE_STATUS/LAN/LAT/XLH */
+export class SchoolMapBubble {
+  AREA_NAME: string = '';
+  BUBBLE_NAME: string = '';
+  BUBBLE_STATUS: string = '';
+  LAN: string = '';
+  LAT: string = '';
+  XLH: string = '';
 }
 

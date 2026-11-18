@@ -83,3 +83,43 @@ export class SuperviseTeacher {
     this.BMMC = BMMC;
   }
 }
+
+/** [P-C] 源码 DetailsCourse.java（新增督导页 W0 detailsCourse → 课程详情，字段 Gson 1:1） */
+export class SuperviseCourseDetail {
+  BMMC: string = '';
+  DJJ: string = '';
+  GH: string = '';
+  KCMC: string = '';
+  QSJSZ: string = '';
+  SKBJ: string = '';
+  SKDD: string = '';
+  SKLSXM: string = '';
+  XLH: string = '';
+  XQJ: string = '';
+  itemList: string[] = [];
+}
+
+/** [P-C] 源码 DetailsListen.java（已完成督导详情 X0 detailsListen，字段 Gson 1:1） */
+export class SuperviseListenDetail {
+  BMMC: string = '';
+  COUSERID: string = '';
+  DJ: string = '';
+  DJJ: string = '';
+  GH: string = '';
+  ISEVALUATE: string = '';
+  KCMC: string = '';
+  LISTENTIME: string = '';
+  NR: string = '';
+  QSJSZ: string = '';
+  REMIND: string = '';
+  REMINDTIME: string = '';
+  SDRS: string = '';
+  SFKPL: string = '';
+  SKDD: string = '';
+  SKLS: string = '';
+  SKLSXM: string = '';
+  XLH: string = '';
+  XQJ: string = '';
+  YDRS: string = '';
+  itemList: string[] = [];
+}

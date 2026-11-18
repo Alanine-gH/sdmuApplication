@@ -253,6 +253,18 @@ export class ReimbursementEntry {
   USABLE_AMOUNT: string = '';
 }
 
+/** [P-C] 源码 reimburse/entity/Detail.java（项目详情 T0 project/detail → Detail，字段 Gson 1:1） */
+export class ReimburseProjectDetail {
+  CONTRACT_AMOUNT: string = '';
+  OUTSIDE_AMOUNT: string = '';
+  PAY_AMOUNT: string = '';
+  PROJECT_MEMBER: string = '';
+  PROJECT_NAME: string = '';
+  PROJECT_STATUS: string = '';
+  PROJECT_TYPE: string = '';
+  RECEIVE_AMOUNT: string = '';
+}
+
 /** [W25 misc-b] 图书数据（reading/entity/BaseReadingData.java 字段 1:1；SearchMyCollect/Search 继承其全部字段）
  *  [W28 final-b] 追加 CurrentBorrowBean 三字段 JYRQ/YHRQ/DAY（当前借阅列表专用，BaseReadingData 无）。 */
 export class ReadingBookEntry {

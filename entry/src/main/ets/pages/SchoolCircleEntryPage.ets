@@ -112,6 +112,10 @@ struct SchoolCircleEntryPage {
           .fontColor($r('app.color.common_color_1'))
           .padding({ left: 16, right: 24, top: 12, bottom: 12 })
           .width('100%')
+          .onClick(() => {
+            this.showMenu = false;
+            router.pushUrl({ url: 'pages/FriendUserListPage', params: { 'UserListType': 'FOLLOWING' } });
+          })
         Divider()
           .color($r('app.color.common_color_6'))
           .strokeWidth(0.5)
@@ -120,6 +124,10 @@ struct SchoolCircleEntryPage {
           .fontColor($r('app.color.common_color_1'))
           .padding({ left: 16, right: 24, top: 12, bottom: 12 })
           .width('100%')
+          .onClick(() => {
+            this.showMenu = false;
+            router.pushUrl({ url: 'pages/FriendUserListPage', params: { 'UserListType': 'FOLLOWER' } });
+          })
         Divider()
           .color($r('app.color.common_color_6'))
           .strokeWidth(0.5)

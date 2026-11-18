@@ -1,4 +1,4 @@
-﻿import { router } from '@kit.ArkUI';
+import { router } from '@kit.ArkUI';
 import { TitleBar } from '../components/TitleBar';
 
 /**
@@ -73,7 +73,8 @@ struct StudentReportHomePage {
             .alignItems(VerticalAlign.Center)
             .backgroundColor($r('app.color.white'))
             .onClick(() => {
-              router.pushUrl({ url: 'pages/' + this.pagePathOf(entry) });
+              // pagePath 已含 'pages/' 前缀（见 reportEntries 定义），不可再拼 'pages/'
+              router.pushUrl({ url: this.pagePathOf(entry) });
             })
 
             Divider()

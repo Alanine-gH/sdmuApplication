@@ -100,7 +100,37 @@ static readonly USER_PLACE_PERMISSION: string = '/mobileapi_ydxy/api/userplace/f
   //   WebView 直载目标 gradeReport/index；DetailActivity TermInfo → gradeReport/getRecentTermInfo
   static readonly GRADE_REPORT_INDEX: string = '/mobileapi_ydxy/api/gradeReport/index';
   static readonly GRADE_REPORT_TERM: string = '/mobileapi_ydxy/api/gradeReport/getRecentTermInfo';
+  // [P-B placeholder] GradeReportActvity（manifest action sdgy_gradeReport）WebView 直载目标
+  //   ReportFactory.g(b.f14965a="rank/gradeReport") = /mobileapi_ydxy/api/rank/gradeReport
+  //   探针实测：带免登头 200 HTML 10601B（title=绩点排行）/裸请求 code=0006 → 头必须。
+  static readonly GRADE_RANK_INDEX: string = '/mobileapi_ydxy/api/rank/gradeReport';
+  // GradeReportModel.a/c POST rank/gradeReport/praise|cancelPraise {broder,phb}（JS桥 ybginterface）
+  static readonly GRADE_RANK_PRAISE: string = '/mobileapi_ydxy/api/rank/gradeReport/praise';
+  static readonly GRADE_RANK_CANCEL_PRAISE: string = '/mobileapi_ydxy/api/rank/gradeReport/cancelPraise';
   static readonly INFORMATION_MK_CONFIG: string = '/mobileapi_ydxy/api/homepageModule/getInfomationMKConfig';
+
+  // ===== [P-A placeholder-fix] 5 个可达占位页真实端点（源码级，probe_pa_placeholder.py 实测） =====
+  // ReportFactory（student_report/b.java a()="api" b()=null c()=mobileapi_ydxy）：
+  //   g(path) = /mobileapi_ydxy/api/<path>；报表页为 WebView 免登 H5 loadUrl 目标。
+  // 实测（2026-11-18）：onecardReport/breakfast/getPersonal H5 HTTP 200（title 消费排行/我的主页）；
+  //   libraryReport H5 HTTP 404（服务器未部署该页 → HAP 忠实呈现真实网络错误态，不编造排名）；
+  //   onecard praise/cancelPraise code=0；termInfo GET code=0（xn=2026-2027 xq=1）。
+  static readonly RANK_LIBRARY_REPORT: string = '/mobileapi_ydxy/api/rank/libraryReport';
+  static readonly RANK_LIBRARY_PRAISE: string = '/mobileapi_ydxy/api/rank/libraryReport/praise';
+  static readonly RANK_LIBRARY_CANCEL_PRAISE: string = '/mobileapi_ydxy/api/rank/libraryReport/cancelPraise';
+  static readonly RANK_ONECARD_REPORT: string = '/mobileapi_ydxy/api/rank/onecardReport';
+  static readonly RANK_ONECARD_PRAISE: string = '/mobileapi_ydxy/api/rank/onecardReport/praise';
+  static readonly RANK_ONECARD_CANCEL_PRAISE: string = '/mobileapi_ydxy/api/rank/onecardReport/cancelPraise';
+  static readonly RANK_BREAKFAST_PERSONAL: string = '/mobileapi_ydxy/api/rank/breakfast/getPersonal';
+  // ChangeNickNameFactory（module/c/e.java a()="api" b()="user"）→ /mobileapi_ydxy/api/user/<name>；
+  //   d.java V0/W0/X0/Y0：updateQq{qq}/updateWechat{wechat}/cleanQq{}/cleanWechat{}（实测全 code=0）。
+  static readonly USER_UPDATE_QQ: string = '/mobileapi_ydxy/api/user/updateQq';
+  static readonly USER_UPDATE_WECHAT: string = '/mobileapi_ydxy/api/user/updateWechat';
+  static readonly USER_CLEAN_QQ: string = '/mobileapi_ydxy/api/user/cleanQq';
+  static readonly USER_CLEAN_WECHAT: string = '/mobileapi_ydxy/api/user/cleanWechat';
+  // SchoolSearchFactory（school/d.java a()="open" b()="schoolMap"）→ /mobileapi_ydxy/open/schoolMap/data；
+  //   SchoolSearchModel.T0 bVar.j=false 明文 GET（probe 实测 code=0：AREA 1 条山东管理学院，BUBBLE 空）。
+  static readonly SCHOOL_MAP_DATA: string = '/mobileapi_ydxy/open/schoolMap/data';
 
   // ===== T2 contact-worker 追加：通讯录模块端点 =====
   // 源码依据：contact/a.java ContactFactory（a()="api" b()="addressbook" c()=R.string.mobile_api="mobileapi_ydxy"）
@@ -573,6 +603,11 @@ static readonly USER_PLACE_PERMISSION: string = '/mobileapi_ydxy/api/userplace/f
   static readonly CIRCLE_LIANYI_POST: string = '/mobileapi_ydxy/api/circle/post';
   static readonly CIRCLE_LIANYI_GET_SOMEONE: string = '/mobileapi_ydxy/api/circle/getSomeoneCircleList';
   static readonly CIRCLE_LIANYI_RECENT_PIC: string = '/mobileapi_ydxy/api/circle/getCircleRecentlyPic';
+  // [P-B placeholder] NewNewsActivity/Ex 数据源（SocialFactory h="freshNewList"/i="freshpapers"，ServerType.LIANYI）
+  //   SocialNewsPage：hasSchoolCirclePhone=false → 校内 circleOpen/getCircleList（已有常量，实测 code=0001）；
+  //   头条文章 → freshpapers；SocialNewNewsPage(Ex)：列表 → freshNewList（push 域，实测 SSL EOF 不可达）。
+  static readonly CIRCLE_LIANYI_FRESH_NEW_LIST: string = '/mobileapi_ydxy/api/circle/freshNewList';
+  static readonly CIRCLE_LIANYI_FRESH_PAPERS: string = '/mobileapi_ydxy/api/circle/freshpapers';
   // ---- LIANYI push 域：market（MarketFactory a()="api" b()="market"，全部 ServerType.LIANYI） ----
   static readonly MARKET_LIANYI_PREFIX: string = '/mobileapi_ydxy/api/market/';
   static readonly MARKET_LIANYI_POSTINFO: string = '/mobileapi_ydxy/api/market/postInfo';
@@ -628,4 +663,24 @@ static readonly USER_PLACE_PERMISSION: string = '/mobileapi_ydxy/api/userplace/f
   // ===== [W28 final-b] 发票助手端点（RatepayingFactory module/c/f.java a()="api" b()="ratepaying"，
   //   RatepayingModel.T0 → e.b(GET) getDetail 无参 → Ratepaying[]）=====
   static readonly RECEIPT_ASSIST_DETAIL: string = '/mobileapi_ydxy/api/ratepaying/getDetail';
+
+  // ===== [P-C placeholder] 3 个可达占位页真实现端点（源码级 + Python probe_p_c_placeholder.py 实测）=====
+  // SuperviseFactory（supervise/a.java）a()="api" b()="superviseListen" → /mobileapi_ydxy/api/superviseListen/<name>；
+  // SuperviseModel（supervise/c/a.java）：e.d=POST body（k.m map）→ Q0；e.b=GET data= → R0。
+  // 请求形态对照 W21：本批 5 端点均 e.d POST 加密 body；假参探针均端点存活（0001/false）→ 真实空/错误态。
+  //   W0 detailsCourse  {xlh} → DetailsCourse（SuperviseLectureAddActivity.R2 课程详情）
+  //   T0 addListenCourse {courseId,listenTime,remind,remindtime} → String（新增督导提交，data "true"=成功）
+  //   X0 detailsListen  {xlh} → DetailsListen（SuperviseLectureFinishActivity.T2 已完成详情）
+  //   V0 deleteListen   {xlh} → String（删除听课，data "true"=成功）
+  //   d1 updateListenCourse {dj,ydrs,sdrs,nr,listenTime,remind,remindtime,xlh} → String（保存评价，data "true"=成功）
+  static readonly SUPERVISE_DETAILS_COURSE: string = '/mobileapi_ydxy/api/superviseListen/detailsCourse';
+  static readonly SUPERVISE_ADD_LISTEN: string = '/mobileapi_ydxy/api/superviseListen/addListenCourse';
+  static readonly SUPERVISE_DETAILS_LISTEN: string = '/mobileapi_ydxy/api/superviseListen/detailsListen';
+  static readonly SUPERVISE_DELETE_LISTEN: string = '/mobileapi_ydxy/api/superviseListen/deleteListen';
+  static readonly SUPERVISE_UPDATE_LISTEN: string = '/mobileapi_ydxy/api/superviseListen/updateListenCourse';
+  // ReimburseFactory（reimburse/b.java）a()="api" b()="project" f12640d="detail" →
+  //   ReimburseModel.T0（reimburse/d/b.java）e.d POST {PROJECT_NUMBER} → Detail；
+  //   考证：/reimburse/detail 映射 ProjectDetailActivity（非 V2=/new_reimburse/detail、非 AchievementListActivity）。
+  //   探针：POST body HTTP200 空体 / GET data= code=0001；测试账号无项目 → 真实空态。
+  static readonly PROJECT_DETAIL: string = '/mobileapi_ydxy/api/project/detail';
 }

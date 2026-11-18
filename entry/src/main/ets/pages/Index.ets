@@ -1,4 +1,4 @@
-﻿import { LoginSession } from '../network/LoginSession';
+import { LoginSession } from '../network/LoginSession';
 import { HttpClient } from '../network/HttpClient';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
@@ -180,27 +180,28 @@ struct AppsTab {
       });
   }
 
-  /** 点击分发（复刻原 APK module/app/util/a.java switch）：
-   *  LX=1 原生 → YYID 映射表 → HAP 原生页（无映射 toast）；
-   *  LX=2 H5 → LightAppPage 加载服务端下发 URL（CAS 免登/第三方认证地址） */
+  /** 点击分发（复刻 APK module/app/util/a.java + X5LightActivity.I2() 分支）：
+   *  1) YYID 原生映射命中 → HAP 原生页（课表/成绩/通讯录/督评等已翻译页）；
+   *  2) 其余全部走 LightAppPage——APK 所有非原生应用都是 LightActivity，
+   *     LX=2/4/8 及缺省由 LightAppPage 的 I2() 矩阵拼 springboard/单点/直载，
+   *     服务端 YYID 一律可用 springboard?yyid=<YYID> 免登打开，绝无“功能对接中”死路。 */
   private dispatchApp(name: string, yyid: string, lx: string, url: string): void {
-    // [R15 修正] APK module/app/util/a.java 是 yyid 特判（switch）优先于 LX 分支：
-    //   address_book 等服务端标 LX=2 但 APK 有原生实现的项走原生页。ROUTES 命中→原生优先。
     const target: string | undefined = YYID_ROUTES.get(yyid.toLowerCase());
     if (target !== undefined) {
       router.pushUrl({ url: target });
       return;
     }
-    if (lx === '2' || lx === '4' || lx === '8') {
-      if (url === '' && yyid === '') {
-        this.getUIContext().getPromptAction().showToast({ message: name + ' 暂无访问地址' });
-        return;
-      }
-      // [W1 light-url] 补传 yyid/lx：LightAppPage 按 APK 分支加工（LX=2/4 springboard 跳板、LX=8 query 单点）
+    // 有 yyid：走 LightAppPage，由其 I2() 矩阵加工（LX=2/4/8 或缺省 springboard）
+    if (yyid !== '') {
       router.pushUrl({ url: 'pages/LightAppPage', params: { title: name, url: url, yyid: yyid, lx: lx } });
       return;
     }
-    this.getUIContext().getPromptAction().showToast({ message: name + ' 功能对接中' });
+    // 无 yyid 但有直载 URL（少数本地清单项）：LightAppPage 直载
+    if (url !== '') {
+      router.pushUrl({ url: 'pages/LightAppPage', params: { title: name, url: url, yyid: '', lx: lx === '' ? '2' : lx } });
+      return;
+    }
+    this.getUIContext().getPromptAction().showToast({ message: name + ' 暂无访问地址' });
   }
 
   private myApps: AppGridItem[] = [

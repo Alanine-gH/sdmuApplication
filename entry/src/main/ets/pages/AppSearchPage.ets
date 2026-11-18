@@ -208,24 +208,25 @@ struct AppSearchPage {
 
   /**
    * module/app/util/a.f(context, appBean) 分流（Index.dispatchApp 同口径）：
-   * LX=2/4/8 → LightAppPage{title,url,yyid,lx}；LX=1 → YYID 路由映射。
+   * 1) YYID 原生映射命中 → 原生页；2) 其余全部走 LightAppPage（APK 非原生即 LightActivity），
+   * 由 I2() 矩阵拼 springboard/单点/直载，服务端 YYID 一律可免登打开，绝无“功能对接中”死路。
    */
   private dispatchApp(app: SearchAppBean): void {
-    if (app.lx === '2' || app.lx === '4' || app.lx === '8') {
-      router.pushUrl({
-        url: 'pages/LightAppPage',
-        params: { title: app.yymc, url: app.url, yyid: app.yyid, lx: app.lx }
-      });
+    const target: string | undefined = this.nativeMap().get(app.yyid.toLowerCase());
+    if (target !== undefined) {
+      router.pushUrl({ url: target });
       return;
     }
-    if (app.lx === '1') {
-      this.openNative(app);
-    }
+    // 任何未映射的 YYID（含 LX=1）都交给 LightAppPage 的 springboard 跳板打开
+    router.pushUrl({
+      url: 'pages/LightAppPage',
+      params: { title: app.yymc, url: app.url, yyid: app.yyid, lx: app.lx === '' ? '2' : app.lx }
+    });
   }
 
-  /** LX=1 原生 YYID → HAP 原生页映射（Index.YYID_ROUTES 同口径拷贝，页面间不互相依赖） */
-  private openNative(app: SearchAppBean): void {
-    const map: Map<string, string> = new Map([
+  /** LX=1 原生 YYID → HAP 原生页映射（Index.YYID_ROUTES 同口径，页面间不互相依赖） */
+  private nativeMap(): Map<string, string> {
+    return new Map([
       ['timetable', 'pages/SchedulePage'],
       ['score', 'pages/ScorePage'],
       ['mylibrary', 'pages/BookBorrowReportPage'],
@@ -245,12 +246,6 @@ struct AppSearchPage {
       ['receipt', 'pages/ReceiptListPage'],
       ['market', 'pages/MarketPage']
     ]);
-    const target: string | undefined = map.get(app.yyid.toLowerCase());
-    if (target !== undefined) {
-      router.pushUrl({ url: target });
-    } else {
-      this.getUIContext().getPromptAction().showToast({ message: app.yymc + ' 功能对接中' });
-    }
   }
 
   /** AppSearchAdapter.convert 图标：YYTB UUID → 服务端图标 URL（CommonFactory.a 公式） */
