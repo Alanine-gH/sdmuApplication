@@ -11,6 +11,7 @@
     "pages/UserDetailPage",
     "pages/Index",
     "pages/LoginPage",
+    "pages/PhoneLoginPage",
     "pages/NewsPage",
     "pages/NewsDetailPage",
     "pages/SchedulePage",
@@ -203,6 +204,7 @@
     "pages/TodoSupervisePage",
     "pages/IssueReviewPage",
     "pages/AttendancePersonalPage",
-    "pages/FeedbackRecordPage"
+    "pages/FeedbackRecordPage",
+    "pages/StudyReportPage"
   ]
 }

@@ -33,6 +33,10 @@
       "value": "用于获取大致位置信息"
     },
     {
+      "name": "write_contacts_reason",
+      "value": "用于将联系人保存到本地通讯录"
+    },
+    {
       "name": "school_account",
       "value": "请输入您的账号"
     },

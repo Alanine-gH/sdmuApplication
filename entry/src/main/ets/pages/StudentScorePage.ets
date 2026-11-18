@@ -1,182 +1,169 @@
-// 数据源：无服务器接口，页面数据为内置示例数据（离线演示用），未接 ApiService。
+import { router } from '@kit.ArkUI';
 import { TitleBar } from '../components/TitleBar';
+import { EmptyView } from '../components/EmptyView';
+import { LoadingView } from '../components/LoadingView';
+import { ApiService } from '../network/ApiService';
+import { ApiResponse } from '../model/ResponseModel';
+import { LoginSession } from '../network/LoginSession';
+import { StudentScoreGroup, StudentScoreChild } from '../model/ScoreModel';
+import { BusinessError } from '@kit.BasicServicesKit';
 
 /**
- * 学生成绩查看页 — 1:1 复刻 mobile_campus_score_activity_student_score.xml +
- * common_expandlv_rl.xml + score_fragment_webview.xml（原生复刻成绩表）
+ * 学生成绩单页 — 1:1 翻译原 APK StudentScoreActivity.java（score/view）+ ScoreAdapter（score/adapter/a.java）。
  *
- * activity_student_score.xml：LinearLayout vertical + toolbar_normal +
- *   divider_horizontal_grey_normal + common_expandlv_rl（MultiStateView content +
- *   ExpandableListView：groupIndicator=null、divider=divider_grey 0.8dip）
- *
- * score_fragment_webview.xml 原为 WebView 成绩报表 → 原生复刻成绩表：
- *   表头行（课程/学分/总评成绩/绩点）+ 各课程成绩行，字号 12fp、
- *   mobile_campus_score_shape_table_bg：#FFFFFF 底 0.5dip divider_grey 描边
+ * 【源码结构】J1 = mobile_campus_score_activity_student_score：
+ *   toolbar_normal（标题 String.format("%s成绩单", studentName)）+ divider + ExpandableListView。
+ * 【入口链】y(Intent)：studentName/studentId ← StudentSearchActivity.Q2（score/studentList 路由，
+ *   ScoreMainActivity 点击"查看学生具体成绩"→ Q0=StudentSearchActivity PARAMS=xn_xq → 点学生 → 本页）。
+ *   HAP 搜索页未翻译（映射表 todo），本页 studentName/studentId 缺省时回退登录会话本人学号/姓名
+ *   （真实存在值；实测 getStudentMsg 对测试学号 code=0001 → 真实空态，不编造数据）。
+ * 【数据】K2() → StudentSearchModel.V0（score/c/b.java）：GET api/avgCheck/getStudentMsg {xh}
+ *   → StudentMessage[{xn,xq,data:[{kcmc,xscj,bjpm}]}]；空 → MultiStateView 空态（q2）。
+ * 【组行】mobile_campus_score_item_score_parent：96dip 高 padding 24/24、
+ *   xn+"学年"（32sp mobile_campus_score_common_color1=#3267b1）+ "第"+xq+"学期"（marginLeft24 weight1）
+ *   + 箭头（展开 arrow_down / 收起 arrow_up）。
+ * 【子行】mobile_campus_score_item_score_child：padding 50/24/24/24、28sp、
+ *   kcmc（common_color_1 weight6）+ xscj（common_color_2 weight4 居中，ScoreAdapter.c()：
+ *   含数字 → xscj+"分"，否则原样——如"优"/"良"/"及格"）+ "排名"+bjpm（common_color_2）。
  */
-class StudentCourseScore {
-  courseName: string;
-  credit: string;
-  totalScore: string;
-  gpa: string;
-
-  constructor(courseName: string, credit: string, totalScore: string, gpa: string) {
-    this.courseName = courseName;
-    this.credit = credit;
-    this.totalScore = totalScore;
-    this.gpa = gpa;
-  }
-}
-
-class StudentScoreTermGroup {
-  termName: string;
-  courses: StudentCourseScore[];
-
-  constructor(termName: string, courses: StudentCourseScore[]) {
-    this.termName = termName;
-    this.courses = courses;
-  }
-}
-
-function buildStudentScoreGroups(): StudentScoreTermGroup[] {
-  const groups: StudentScoreTermGroup[] = [];
-  groups.push(new StudentScoreTermGroup('2025-2026学年 第一学期', [
-    new StudentCourseScore('高等数学（下）', '5.0', '88', '3.7'),
-    new StudentCourseScore('大学英语（四）', '3.0', '92', '4.0'),
-    new StudentCourseScore('数据结构与算法', '4.0', '85', '3.5'),
-    new StudentCourseScore('操作系统原理', '3.5', '79', '3.0'),
-    new StudentCourseScore('概率论与数理统计', '3.0', '81', '3.2')
-  ]));
-  groups.push(new StudentScoreTermGroup('2025-2026学年 第二学期', [
-    new StudentCourseScore('计算机网络', '3.5', '90', '3.9'),
-    new StudentCourseScore('数据库系统概论', '3.0', '86', '3.6'),
-    new StudentCourseScore('软件工程导论', '2.5', '77', '2.8'),
-    new StudentCourseScore('马克思主义基本原理', '3.0', '83', '3.3')
-  ]));
-  groups.push(new StudentScoreTermGroup('2024-2025学年 第二学期', [
-    new StudentCourseScore('高等数学（上）', '5.0', '76', '2.6'),
-    new StudentCourseScore('线性代数', '3.0', '84', '3.4'),
-    new StudentCourseScore('大学物理', '4.0', '71', '2.1'),
-    new StudentCourseScore('C语言程序设计', '3.5', '95', '4.3')
-  ]));
-  return groups;
-}
-
-@Component
-struct StudentScoreTermRow {
-  @Prop group: StudentScoreTermGroup = new StudentScoreTermGroup('', []);
-  @State expanded: boolean = false;
-
-  build() {
-    Column() {
-      // 分组头（ExpandableListView group 行）
-      Row() {
-        Text(this.group.termName)
-          .fontSize(15)
-          .fontColor($r('app.color.mobile_campus_score_common_color1'))
-          .layoutWeight(1)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-        Image(this.expanded ? $r('app.media.arrow_up') : $r('app.media.arrow_down'))
-          .width(14)
-          .height(14)
-          .objectFit(ImageFit.Contain)
-      }
-      .width('100%')
-      .height(48)
-      .padding({ left: 12, right: 12 })
-      .alignItems(VerticalAlign.Center)
-      .onClick(() => {
-        this.expanded = !this.expanded;
-      })
-
-      // 展开：原生复刻成绩表（score_fragment_webview）
-      if (this.expanded) {
-        Column() {
-          // 表头行
-          Row() {
-            Text('课程').fontSize(12).fontColor($r('app.color.black')).textAlign(TextAlign.Center)
-              .layoutWeight(6).height('100%')
-              .backgroundColor('#FFFFFF')
-              .border({ width: 0.5, color: $r('app.color.divider_grey') })
-            Text('学分').fontSize(12).fontColor($r('app.color.black')).textAlign(TextAlign.Center)
-              .layoutWeight(2).height('100%')
-              .backgroundColor('#FFFFFF')
-              .border({ width: 0.5, color: $r('app.color.divider_grey') })
-            Text('总评成绩').fontSize(12).fontColor($r('app.color.black')).textAlign(TextAlign.Center)
-              .layoutWeight(2).height('100%')
-              .backgroundColor('#FFFFFF')
-              .border({ width: 0.5, color: $r('app.color.divider_grey') })
-            Text('绩点').fontSize(12).fontColor($r('app.color.black')).textAlign(TextAlign.Center)
-              .layoutWeight(2).height('100%')
-              .backgroundColor('#FFFFFF')
-              .border({ width: 0.5, color: $r('app.color.divider_grey') })
-          }
-          .width('100%')
-          .height(36)
-
-          ForEach(this.group.courses, (course: StudentCourseScore, index: number) => {
-            Row() {
-              Text(course.courseName).fontSize(12).fontColor($r('app.color.black')).textAlign(TextAlign.Center)
-                .layoutWeight(6).height('100%').padding({ left: 2, right: 2 })
-                .backgroundColor('#FFFFFF')
-                .border({ width: 0.5, color: $r('app.color.divider_grey') })
-                .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-              Text(course.credit).fontSize(12).fontColor($r('app.color.black')).textAlign(TextAlign.Center)
-                .layoutWeight(2).height('100%')
-                .backgroundColor('#FFFFFF')
-                .border({ width: 0.5, color: $r('app.color.divider_grey') })
-              Text(course.totalScore).fontSize(12).fontColor($r('app.color.black')).textAlign(TextAlign.Center)
-                .layoutWeight(2).height('100%')
-                .backgroundColor('#FFFFFF')
-                .border({ width: 0.5, color: $r('app.color.divider_grey') })
-              Text(course.gpa).fontSize(12).fontColor($r('app.color.black')).textAlign(TextAlign.Center)
-                .layoutWeight(2).height('100%')
-                .backgroundColor('#FFFFFF')
-                .border({ width: 0.5, color: $r('app.color.divider_grey') })
-            }
-            .width('100%')
-            .height(36)
-          }, (course: StudentCourseScore, index: number) => this.group.termName + '_' + index + '_' + course.courseName)
-        }
-        .width('100%')
-        .padding({ left: 12, right: 12, bottom: 8 })
-      }
-
-      // ExpandableListView divider：divider_grey 0.8dip
-      Divider()
-        .color($r('app.color.divider_grey'))
-        .strokeWidth(0.8)
-    }
-    .width('100%')
-  }
-}
-
 @Entry
 @Component
 struct StudentScorePage {
-  @State groups: StudentScoreTermGroup[] = buildStudentScoreGroups();
+  @State studentName: string = '';
+  @State studentId: string = '';
+  @State groupList: StudentScoreGroup[] = [];
+  @State expandedFlags: boolean[] = [];
+  @State isLoading: boolean = true;
+
+  aboutToAppear(): void {
+    // 源码 y(Intent)：studentName/studentId；HAP 无搜索页 → 缺省回退登录会话本人（真实学号）
+    const params: Record<string, Object> | undefined =
+      router.getParams() as Record<string, Object> | undefined;
+    if (params) {
+      const name: Object = params['studentName'];
+      const id: Object = params['studentId'];
+      if (typeof name === 'string' && name !== '') {
+        this.studentName = name;
+      }
+      if (typeof id === 'string' && id !== '') {
+        this.studentId = id;
+      }
+    }
+    if (this.studentId === '') {
+      this.studentId = LoginSession.userId;
+    }
+    if (this.studentName === '') {
+      this.studentName = LoginSession.sessionName;
+    }
+    this.loadScoreMsg();
+  }
+
+  /** 源码 K2()：b.n(new a(StudentMessage.class)).j(studentId) → GET getStudentMsg {xh} */
+  private loadScoreMsg(): void {
+    ApiService.getStudentScoreMsg(this.studentId)
+      .then((response: ApiResponse<StudentScoreGroup[]>) => {
+        this.groupList = response.data;
+        this.expandedFlags = this.groupList.map((): boolean => false);
+        this.isLoading = false;
+      })
+      .catch((error: BusinessError) => {
+        ApiService.logError('StudentScore getStudentMsg fail: ' + error.message);
+        this.groupList = [];
+        this.isLoading = false;
+      });
+  }
+
+  /** 源码 ScoreAdapter.c()：正则 .*\d+.* 含数字 → "N分"，否则成绩原样（优/良/中等文字成绩） */
+  private scoreText(xscj: string): string {
+    if (/[0-9]/.test(xscj)) {
+      return xscj + '分';
+    }
+    return xscj;
+  }
+
+  @Builder
+  groupRow(index: number) {
+    Row() {
+      Text(this.groupList[index].xn + '学年')
+        .fontSize(16)
+        .fontColor($r('app.color.mobile_campus_score_common_color1'))
+      Text('第' + this.groupList[index].xq + '学期')
+        .fontSize(16)
+        .fontColor($r('app.color.mobile_campus_score_common_color1'))
+        .margin({ left: 12 })
+        .layoutWeight(1)
+      Image(this.expandedFlags[index] ? $r('app.media.arrow_down') : $r('app.media.arrow_up'))
+        .width(16)
+        .height(16)
+    }
+    .width('100%')
+    .height(48)
+    .padding({ left: 12, right: 12 })
+    .alignItems(VerticalAlign.Center)
+    .backgroundColor($r('app.color.white'))
+    .onClick(() => {
+      // ExpandableListView 组点击展开/收起
+      const flags: boolean[] = this.expandedFlags.slice();
+      flags[index] = !flags[index];
+      this.expandedFlags = flags;
+    })
+  }
+
+  @Builder
+  childRow(groupIndex: number, childIndex: number) {
+    Row() {
+      Text(this.groupList[groupIndex].children[childIndex].kcmc)
+        .fontSize(14)
+        .fontColor($r('app.color.common_color_1'))
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+        .layoutWeight(6)
+      Text(this.scoreText(this.groupList[groupIndex].children[childIndex].xscj))
+        .fontSize(14)
+        .fontColor($r('app.color.common_color_2'))
+        .maxLines(1)
+        .textAlign(TextAlign.Center)
+        .layoutWeight(4)
+      Text('排名' + this.groupList[groupIndex].children[childIndex].bjpm)
+        .fontSize(14)
+        .fontColor($r('app.color.common_color_2'))
+        .maxLines(1)
+    }
+    .width('100%')
+    .padding({ left: 25, right: 12, top: 12, bottom: 12 })
+    .backgroundColor($r('app.color.white'))
+  }
 
   build() {
     Column() {
-      TitleBar({ title: '学生成绩' })
-      // divider_horizontal_grey_normal
-      Divider()
-        .color($r('app.color.common_color_5'))
-        .strokeWidth(0.5)
-        .width('100%')
-      // common_expandlv_rl：ExpandableListView（白底列表）
-      Scroll() {
-        Column() {
-          ForEach(this.groups, (group: StudentScoreTermGroup, index: number) => {
-            StudentScoreTermRow({ group: group })
-          }, (group: StudentScoreTermGroup) => group.termName)
+      // 源码 T1：String.format("%s成绩单", studentName)
+      TitleBar({ title: this.studentName + '成绩单', showBack: true })
+      if (this.isLoading) {
+        LoadingView()
+      } else if (this.groupList.length === 0) {
+        // 源码 a.g：arrayList 空 → q2(MultiStateView 空态)；实测测试学号 0001 → 真实空态
+        EmptyView({ tipText: '暂无成绩数据' })
+      } else {
+        List() {
+          ForEach(this.groupList, (group: StudentScoreGroup, groupIndex: number) => {
+            ListItem() {
+              Column() {
+                this.groupRow(groupIndex)
+                if (this.expandedFlags[groupIndex]) {
+                  ForEach(group.children, (child: StudentScoreChild, childIndex: number) => {
+                    this.childRow(groupIndex, childIndex)
+                  }, (child: StudentScoreChild, cIdx: number) => groupIndex + '-' + child.kcmc + '-' + cIdx)
+                }
+              }
+              .width('100%')
+            }
+          }, (group: StudentScoreGroup) => group.xn + '-' + group.xq)
         }
         .width('100%')
+        .layoutWeight(1)
+        .scrollBar(BarState.Off)
+        .backgroundColor($r('app.color.main_bg'))
       }
-      .width('100%')
-      .layoutWeight(1)
-      .backgroundColor($r('app.color.main_bg'))
-      .align(Alignment.Top)
     }
     .width('100%')
     .height('100%')

@@ -1,202 +1,319 @@
-import { router } from '@kit.ArkUI';
+import { router, promptAction } from '@kit.ArkUI';
+import { BusinessError } from '@kit.BasicServicesKit';
 import { TitleBar } from '../components/TitleBar';
-
-/** 用户详情帖子模型 — social_post_item.xml */
-class UserDetailPost {
-  id: string;
-  time: string;
-  content: string;
-  photos: string[];
-  commentNum: string;
-  likeNum: string;
-
-  constructor(id: string, time: string, content: string, photos: string[], commentNum: string, likeNum: string) {
-    this.id = id;
-    this.time = time;
-    this.content = content;
-    this.photos = photos;
-    this.commentNum = commentNum;
-    this.likeNum = likeNum;
-  }
-}
-
-function buildUserPosts(): UserDetailPost[] {
-  return [
-    new UserDetailPost('up1', '10:25', '今天的银杏大道太美了，大家快去打卡拍照！',
-      ['app.media.social_banner_default'], '12', '86'),
-    new UserDetailPost('up2', '昨天', '求推荐几本机器学习入门书籍，最好有配套代码练习的～', [], '8', '23'),
-    new UserDetailPost('up3', '前天', '学校话剧社招新啦，喜欢表演的同学不要错过！', [], '35', '128')
-  ];
-}
+import { LoadingView } from '../components/LoadingView';
+import { ApiService } from '../network/ApiService';
+import { ApiResponse } from '../model/ResponseModel';
+import { LoginSession } from '../network/LoginSession';
+import { SocialUserInfo } from '../model/SocialModels';
+import { Constants } from '../data/Constants';
 
 /**
- * 用户详情 — 按源布局 1:1 复刻 social_fragment_page.xml + social_post_item.xml：
- *   LinearLayout vertical
- *   - include toolbar_normal（标题“个人主页”）
- *   - 头部：头像 px_to_dip_100=50vp 居中 + 昵称16fp + 院系/学校12fp common_color_3 + 加好友按钮
- *   - 三层分隔线
- *   - TA 的帖子列表 social_post_item + 评论/点赞行
+ * 用户主页（校圈他人资料+帖子列表入口）— 1:1 复刻 UserDetailActivity（my_user_detail.xml）+
+ * MyUserPresenter/FriendAdapterPresenter1。
+ * 【通道实证 2026-11-18 probe_w20_social.py】
+ *   - 资料 = GetUserInfoModel.R → POST /mobileapi_ydxy/api/user/getUserInfo
+ *     {targetSchoolId,targetUserId,targetUserType,type:""}（校内，实测 code=0 全字段：
+ *     userName/nickname/sex/userType/department/professionName/className/avatar/schoolName）
+ *     → 真实渲染（实体消费字段：学院/专业/班级行、姓名行、性别图标）；
+ *   - 最近图片 getCircleRecentlyPic @ push 域（实测不可达）→ 空隐藏；
+ *   - 关注关系 getRelationship / addFriend / deleteFriend / updateNoteName @ push 域（FriendshipFactory
+ *     i()=d(ServerType.LIANYI) 实证）→ 实测不可达：关系加载失败按源码 setRelationship(null) 静默保持
+ *     默认"关注"态；关注/取关失败 toast network_or_service_error"连接不到网络，请稍后再试"；
+ *   - 帖子入口 f3() → MyPostActivity {user_id,user_name,user_type,school_id}。
  */
 @Entry
 @Component
 struct UserDetailPage {
-  @State userName: string = '小柚子';
-  @State userSex: string = '女';
-  @State userSchool: string = '信息科学与技术学院 · 数据科学与大数据技术';
-  @State isFriend: boolean = false;
-  @State posts: UserDetailPost[] = buildUserPosts();
+  @State user: SocialUserInfo | null = null;
+  @State pageState: number = 0; // 0=loading 1=content 2=error
+  @State errMsg: string = '';
+  @State followStatus: string = '0'; // 0=未关注 1=已关注 3=互相关注（RelationObj.status，push 域不可达默认 0）
+  @State recentPics: string[] = [];
+  private targetId: string = '';
+  private targetType: string = '';
+  private targetSchoolId: string = '';
+
+  aboutToAppear(): void {
+    const params: Record<string, Object> = (router.getParams() ?? {}) as Record<string, Object>;
+    const pick = (k: string): string => {
+      const v: Object | undefined = params[k];
+      return typeof v === 'string' ? v as string : '';
+    };
+    this.targetId = pick('targetId');
+    this.targetType = pick('targetUserType');
+    this.targetSchoolId = pick('targetSchoolId') === '' ? LoginSession.schoolId : pick('targetSchoolId');
+    this.loadUser();
+    this.loadRecentPics();
+    this.loadRelationship();
+  }
+
+  /** 源码 V.c()：目标资料（校内 getUserInfo，实测 code=0） */
+  private async loadUser(): Promise<void> {
+    if (this.targetId === '') {
+      this.errMsg = '缺少用户参数';
+      this.pageState = 2;
+      return;
+    }
+    this.pageState = 0;
+    const result = await ApiService.getTargetUserInfo(this.targetSchoolId, this.targetId, this.targetType);
+    if (result.code !== 0) {
+      this.errMsg = result.message;
+      this.pageState = 2;
+      return;
+    }
+    this.user = SocialUserInfo.fromRecord(ApiService.asRecord(result.data));
+    this.pageState = 1;
+  }
+
+  /** 源码 V.b()：最近图片 getCircleRecentlyPic @ push 域（不可达 → 隐藏） */
+  private loadRecentPics(): void {
+    ApiService.pushGetCircleRecentPics(this.targetId, this.targetType, this.targetSchoolId)
+      .then((response: ApiResponse<Object>) => {
+        if (response.code !== 0) {
+          return;
+        }
+        const raw: Object[] = Array.isArray(response.data) ? response.data as Object[] : [];
+        const pics: string[] = [];
+        for (const one of raw) {
+          const pic: string = typeof one === 'string' ? one as string : '';
+          if (pic !== '') {
+            pics.push(pic);
+          }
+        }
+        this.recentPics = pics.slice(0, 3);
+      })
+      .catch((error: BusinessError) => ApiService.logError('recent pics: ' + error.message));
+  }
+
+  /** 源码 W.d()：关注关系（push 域不可达 → 源码 setRelationship(null) 静默保持默认态） */
+  private loadRelationship(): void {
+    ApiService.pushGetRelationship(this.targetId, this.targetType, this.targetSchoolId)
+      .then((response: ApiResponse<Object>) => {
+        if (response.code !== 0) {
+          return;
+        }
+        const rec: Record<string, Object> = ApiService.asRecord(response.data);
+        const status: string = ApiService.pick(rec, ['status']);
+        if (status === '1' || status === '3') {
+          this.followStatus = status;
+        }
+      })
+      .catch((error: BusinessError) => ApiService.logError('relationship: ' + error.message));
+  }
+
+  /** 源码 i3/b()：关注 addFriend（push 域 → 真实失败 toast network_or_service_error；
+   *  成功 toast"关注成功"后 W.d() 重拉关系） */
+  private follow(): void {
+    ApiService.pushAddFriend(this.targetId, this.targetType, this.targetSchoolId, '')
+      .then((response: ApiResponse<Object>) => {
+        if (response.code === 0) {
+          promptAction.showToast({ message: '关注成功' });
+          this.loadRelationship();
+        } else {
+          promptAction.showToast({ message: '连接不到网络，请稍后再试' });
+        }
+      })
+      .catch((error: BusinessError) => promptAction.showToast({ message: '连接不到网络，请稍后再试' }));
+  }
+
+  /** 源码 k3/a()：取关确认 deleteFriend（成功 W.d() 重拉关系，失败 toast network_or_service_error） */
+  private unfollowConfirm(): void {
+    AlertDialog.show({
+      message: '是否确定不再关注该人',
+      primaryButton: { value: '取消', action: (): void => { } },
+      secondaryButton: {
+        value: '确定',
+        action: (): void => {
+          ApiService.pushDeleteFriend(this.targetId, this.targetType, this.targetSchoolId)
+            .then((response: ApiResponse<Object>) => {
+              if (response.code === 0) {
+                this.loadRelationship();
+              } else {
+                promptAction.showToast({ message: '连接不到网络，请稍后再试' });
+              }
+            })
+            .catch((error: BusinessError) => promptAction.showToast({ message: '连接不到网络，请稍后再试' }));
+        }
+      }
+    });
+  }
+
+  /** 源码 b/f3()：帖子列表入口 */
+  private goPosts(): void {
+    router.pushUrl({
+      url: 'pages/MyPostPage',
+      params: {
+        'user_id': this.targetId,
+        'user_name': this.user === null ? '' : (this.user as SocialUserInfo).userName,
+        'user_type': this.targetType,
+        'school_id': this.targetSchoolId
+      }
+    });
+  }
+
+  private avatarSrc(): ResourceStr {
+    if (this.user !== null && (this.user as SocialUserInfo).avatar !== '') {
+      const a: string = (this.user as SocialUserInfo).avatar;
+      return a.startsWith('http') ? a : Constants.SOCKET_HOST + '/' + a;
+    }
+    return $r('app.media.default_avatar');
+  }
+
+  /** 源码 my_user_detail_add 按钮：关注/已关注/互相关注三态 */
+  @Builder
+  followButton() {
+    Row() {
+      Text(this.followStatus === '3' ? '互相关注' : this.followStatus === '1' ? '已关注' : '关注')
+        .fontSize(14)
+        .fontColor(Color.White)
+        .backgroundColor($r('app.color.common_color_12'))
+        .borderRadius(14)
+        .padding({ left: 18, right: 18, top: 6, bottom: 6 })
+        .onClick(() => {
+          if (this.followStatus === '0') {
+            this.follow();
+          } else {
+            this.unfollowConfirm();
+          }
+        })
+    }
+    .width('100%')
+    .justifyContent(FlexAlign.Center)
+    .margin({ top: 12 })
+  }
+
+  /** 源码 资料行（学院/专业/班级，空隐藏） */
+  @Builder
+  infoRow(label: string, value: string) {
+    Row() {
+      Text(label)
+        .fontSize(14)
+        .fontColor($r('app.color.common_color_3'))
+        .width(60)
+      Text(value)
+        .fontSize(14)
+        .fontColor($r('app.color.common_color_1'))
+        .layoutWeight(1)
+    }
+    .width('100%')
+    .margin({ top: 8 })
+  }
+
+  /** 源码 my_user_detail 头部：背景头像 + 居中头像 + 姓名+性别 + 真实姓名 */
+  @Builder
+  profileHead(u: SocialUserInfo) {
+    Stack({ alignContent: Alignment.TopStart }) {
+      Column()
+        .width('100%')
+        .height(180)
+        .backgroundColor($r('app.color.common_color_12'))
+        .opacity(0.5)
+      Column() {
+        Blank()
+          .height(30)
+        Image(this.avatarSrc())
+          .width(72)
+          .height(72)
+          .borderRadius(36)
+          .objectFit(ImageFit.Cover)
+        Row({ space: 4 }) {
+          Text(u.displayName())
+            .fontSize(17)
+            .fontColor(Color.White)
+            .fontWeight(FontWeight.Bold)
+          Text(u.sex === '男' ? '♂' : u.sex === '女' ? '♀' : '')
+            .fontSize(15)
+            .fontColor(u.sex === '男' ? '#6ec6ff' : '#ff9db3')
+            .visibility(u.sex === '男' || u.sex === '女' ? Visibility.Visible : Visibility.None)
+        }
+        .margin({ top: 8 })
+        Text(u.userName)
+          .fontSize(13)
+          .fontColor(Color.White)
+          .opacity(0.9)
+          .visibility(u.userName === '' ? Visibility.None : Visibility.Visible)
+          .margin({ top: 2 })
+      }
+      .width('100%')
+      .alignItems(HorizontalAlign.Center)
+    }
+    .width('100%')
+    .height(180)
+  }
 
   build() {
     Column() {
-      TitleBar({ title: '个人主页' })
-      Scroll() {
-        Column() {
+      TitleBar({
+        title: '',
+        showBack: true,
+        onBack: (): void => {
+          router.back();
+        }
+      })
+      if (this.pageState === 0) {
+        LoadingView()
+          .layoutWeight(1)
+      } else if (this.pageState === 2) {
+        Column({ space: 12 }) {
+          Text('ⓘ')
+            .fontSize(44)
+            .fontColor($r('app.color.common_color_4'))
+          Text(this.errMsg === '' ? '加载失败' : this.errMsg)
+            .fontSize(14)
+            .fontColor($r('app.color.common_color_3'))
+            .textAlign(TextAlign.Center)
+            .padding({ left: 30, right: 30 })
+          Text('重试')
+            .fontSize(14)
+            .fontColor($r('app.color.common_color_12'))
+            .onClick(() => {
+              this.loadUser();
+            })
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .justifyContent(FlexAlign.Center)
+      } else if (this.user !== null) {
+        Scroll() {
           Column() {
-            Image($r('app.media.default_avatar'))
-              .width(50)
-              .height(50)
-              .borderRadius(25)
-              .margin({ top: 20 })
-            Row() {
-              Text(this.userName)
-                .fontSize(16)
-                .fontColor($r('app.color.common_color_1'))
-              Text(this.userSex)
-                .fontSize(12)
-                .fontColor(this.userSex === '女' ? '#FF6C6C' : '#18B4ED')
-                .margin({ left: 4 })
-            }
-            .margin({ top: 8 })
-
-            Text(this.userSchool)
-              .fontSize(12)
-              .fontColor($r('app.color.common_color_3'))
-              .margin({ top: 4 })
-
-            Text(this.isFriend ? '已添加' : '+ 加好友')
-              .fontSize(13)
-              .fontColor(this.isFriend ? $r('app.color.common_color_3') : $r('app.color.white'))
-              .padding({ left: 14, right: 14, top: 5, bottom: 5 })
-              .borderRadius(14)
-              .backgroundColor(this.isFriend ? $r('app.color.main_bg') : $r('app.color.ybg_blue'))
-              .border({ width: 0.5, color: this.isFriend ? $r('app.color.common_color_5') : Color.Transparent })
-              .margin({ top: 12, bottom: 20 })
+            this.profileHead(this.user as SocialUserInfo)
+            Column() {
+              this.infoRow('学院', (this.user as SocialUserInfo).department)
+              this.infoRow('专业', (this.user as SocialUserInfo).professionName)
+              this.infoRow('班级', (this.user as SocialUserInfo).className)
+              this.followButton()
+              Row() {
+                Text('TA的帖子')
+                  .fontSize(14)
+                  .fontColor($r('app.color.common_color_1'))
+                Blank()
+                Text('›')
+                  .fontSize(16)
+                  .fontColor($r('app.color.common_color_3'))
+              }
+              .width('100%')
+              .height(44)
+              .padding({ left: 15, right: 15 })
+              .margin({ top: 14 })
+              .backgroundColor($r('app.color.white'))
               .onClick(() => {
-                this.isFriend = !this.isFriend;
+                this.goPosts();
               })
+            }
+            .width('100%')
+            .padding(15)
           }
           .width('100%')
-          .alignItems(HorizontalAlign.Center)
-          .backgroundColor($r('app.color.main_bg'))
-
-          Divider()
-            .color($r('app.color.common_color_5'))
-            .strokeWidth(0.5)
-          Divider()
-            .color($r('app.color.common_color_6'))
-            .strokeWidth(2)
-          Divider()
-            .color($r('app.color.common_color_5'))
-            .strokeWidth(0.5)
-
-          ForEach(this.posts, (post: UserDetailPost) => {
-            Column() {
-              Column() {
-                Row() {
-                  Image($r('app.media.default_avatar'))
-                    .width(40)
-                    .height(40)
-                    .borderRadius(20)
-                  Column() {
-                    Text(this.userName)
-                      .fontSize(16)
-                      .fontColor($r('app.color.common_color_1'))
-                      .width('100%')
-                    Row() {
-                      Text(this.userSchool)
-                        .fontSize(12)
-                        .fontColor($r('app.color.common_color_3'))
-                        .layoutWeight(1)
-                      Text(post.time)
-                        .fontSize(12)
-                        .fontColor($r('app.color.common_color_3'))
-                    }
-                    .width('100%')
-                    .margin({ top: 2 })
-                  }
-                  .layoutWeight(1)
-                  .height(40)
-                  .padding({ left: 5 })
-                  .justifyContent(FlexAlign.Center)
-                }
-                .width('100%')
-                .margin({ bottom: 5 })
-
-                Text(post.content)
-                  .fontSize(15)
-                  .fontColor($r('app.color.common_color_1'))
-                  .padding({ top: 5, bottom: 4 })
-                  .width('100%')
-
-                if (post.photos.length > 0) {
-                  Flex({ wrap: FlexWrap.Wrap }) {
-                    ForEach(post.photos, (photo: string) => {
-                      Image($r(photo))
-                        .width(105)
-                        .height(105)
-                        .objectFit(ImageFit.Cover)
-                        .borderRadius(3)
-                        .margin({ right: 5, bottom: 5 })
-                    }, (photo: string) => post.id + photo)
-                  }
-                  .width('100%')
-                  .padding({ top: 9 })
-                }
-              }
-              .width('100%')
-              .padding({ left: 15, right: 15, top: 10, bottom: 7 })
-              .backgroundColor($r('app.color.main_bg'))
-              .onClick(() => {
-                router.pushUrl({ url: 'pages/PostDetailPage' });
-              })
-
-              Row() {
-                Image($r('app.media.social_comment'))
-                  .width(18)
-                  .height(18)
-                Text(post.commentNum)
-                  .fontSize(15)
-                  .fontColor($r('app.color.common_color_3'))
-                  .margin({ left: 7, right: 40 })
-                Image($r('app.media.social_like'))
-                  .width(18)
-                  .height(18)
-                Text(post.likeNum)
-                  .fontSize(15)
-                  .fontColor($r('app.color.common_color_3'))
-                  .margin({ left: 7 })
-                Blank()
-                Image($r('app.media.social_more'))
-                  .width(18)
-                  .height(18)
-              }
-              .width('100%')
-              .padding({ left: 15, right: 15, top: 10, bottom: 10 })
-              .backgroundColor($r('app.color.main_bg'))
-
-              Divider()
-                .color($r('app.color.common_color_5'))
-                .strokeWidth(0.5)
-            }
-          }, (post: UserDetailPost) => post.id)
         }
+        .width('100%')
+        .layoutWeight(1)
+        .scrollBar(BarState.Off)
+        .backgroundColor($r('app.color.main_bg'))
       }
-      .scrollBar(BarState.Off)
-      .layoutWeight(1)
-      .backgroundColor($r('app.color.common_color_6'))
     }
     .width('100%')
     .height('100%')
-    .backgroundColor($r('app.color.common_color_6'))
+    .backgroundColor($r('app.color.main_bg'))
   }
 }

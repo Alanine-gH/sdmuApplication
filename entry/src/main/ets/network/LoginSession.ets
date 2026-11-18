@@ -161,6 +161,27 @@ export class LoginSession {
   }
 
 
+  /**
+   * 会话失效清理 — 复刻源码 NetUtils.f() code=1000 分支 `d.a.f(new UserEntity())`：
+   * 用户实体整体重置（sessionKey/userId/userType/schoolId/资料全字段清空）并立即落盘，
+   * 下次 restoreSession 不再复活过期 sessionKey；isLogin 同步置 false（Index 启动判定走登录页）。
+   * 保留 deviceCode/aesKey/onlyCode（设备协商产物，APK Hawk 同语义保留，重登免重新协商）。
+   */
+  static async clearSession(): Promise<void> {
+    LoginSession.sessionKey = '';
+    LoginSession.userType = '';
+    LoginSession.userId = '';
+    LoginSession.schoolId = '';
+    LoginSession.sessionName = '';
+    LoginSession.sessionCollege = '';
+    LoginSession.sessionMajor = '';
+    LoginSession.sessionClass = '';
+    LoginSession.sessionGrade = '';
+    LoginSession.sessionPhone = '';
+    await LoginSession.persistSession();
+    LoginSession.log('会话已清除（登录失效统一处理）');
+  }
+
   /** 兜底获取UIAbility上下文（EntryAbility未注入时） */
   private static fallbackContext(): common.UIAbilityContext | null {
     try {
@@ -303,6 +324,9 @@ export class LoginSession {
     LoginSession.log('parsed sessionKey len=' + LoginSession.sessionKey.length +
       ' userId=' + LoginSession.userId + ' userType=' + LoginSession.userType +
       ' schoolId=' + LoginSession.schoolId);
+    // 确保新 session 持久化：调用方显式 persist 之外的兜底（幂等，重复写入同值无害）；
+    // 防止未来新增 parseUserEntity 调用路径漏 persist 导致新 sessionKey 重启丢失
+    LoginSession.persistSession();
     return new UserInfo(
       pick('userId'),
       pick('userName'),
@@ -316,6 +340,75 @@ export class LoginSession {
       '',
       pick('session_key')
     );
+  }
+
+  // ===== [W4 sms-login] 手机号登录：登录前协商复用（APK GetKeyUtil 启动即协商同款） =====
+  /** 确保加密通道已协商：已有持久化 deviceCode+aesKey+onlyCode 直接复用；
+   *  否则走完整协商（GET 公钥 → 生成 aesKey → RSA 协商 → 解密 onlyCode）。
+   *  APK 依据：GetKeyUtil 在应用启动即完成协商，checkLoginPhone/SendSms/loginBySms
+   *  三个 /open/auth/ 接口的加密 body 均使用同一协商 aesKey（IdentifyCodeModel 链路）。
+   *  复刻自 login() 第0-4步，独立成方法供手机号登录页在 SendSms 前调用。
+   */
+  static async ensureNegotiated(): Promise<boolean> {
+    try {
+      // 第0步：恢复已有UC（有则复用，无则新生成）
+      LoginSession.step = 'restoreUC';
+      if (LoginSession.deviceCode === '') {
+        await LoginSession.restoreSession();
+        if (LoginSession.deviceCode === '') {
+          LoginSession.deviceCode = LoginSession.randomUuid();
+        }
+      }
+      if (LoginSession.aesKey !== '' && LoginSession.onlyCode !== '') {
+        LoginSession.log('ensureNegotiated 复用 UC=' + LoginSession.deviceCode);
+        return true;
+      }
+      // 第1步：GET动态公钥
+      LoginSession.step = 'fetchPubKey';
+      const pubResp: ApiResponse<Object> = await HttpClient.requestRaw(
+        '/mobileapi_ydxy/open/security/asym/key', 'GET', '', 'application/json',
+        LoginSession.deviceCode, 'public');
+      let pubKey: string = Constants.RSA_PUBLIC_KEY;
+      if (pubResp.code === 0 && pubResp.data !== null && pubResp.data !== undefined) {
+        const fetched: string = pubResp.data as string;
+        if (fetched !== '' && fetched.length > 100) {
+          pubKey = fetched;
+        }
+      }
+      // 第2步：生成key+协商body
+      LoginSession.step = 'genKey';
+      LoginSession.aesKey = CryptoUtil.generateKey();
+      LoginSession.step = 'rsaNegotiate';
+      const negotiateBody: string = await CryptoUtil.buildNegotiateBody(LoginSession.aesKey, pubKey);
+      // 第3步：POST协商（UC=设备UC，全链路复用）
+      LoginSession.step = 'negotiateRequest';
+      const negoResp: ApiResponse<Object> = await HttpClient.requestRaw(
+        '/mobileapi_ydxy/open/security/asym/key', 'POST', negotiateBody, 'text/plain',
+        LoginSession.deviceCode, 'private');
+      if (negoResp.code !== 0) {
+        LoginSession.log('ensureNegotiated FAIL [' + LoginSession.step + '] code=' + negoResp.code +
+          ' msg=' + negoResp.message);
+        return false;
+      }
+      const negoData: string = negoResp.data as string ?? '';
+      if (negoData === '') {
+        LoginSession.log('ensureNegotiated FAIL 协商响应data为空');
+        return false;
+      }
+      // 第4步：解密onlyCode（业务请求Unique-Code仍用deviceCode，同 login() 实测结论）
+      LoginSession.step = 'decryptOnlyCode';
+      LoginSession.onlyCode = await CryptoUtil.decryptAES(negoData, LoginSession.aesKey);
+      // 第5步：持久化新协商产物（APK GetKeyUtil 启动即协商并持久化 UC/aesKey/onlyCode；
+      // 冷启动进入手机号登录时免重复协商。此时无登录态，会话用户字段本就为空，覆盖安全）
+      await LoginSession.persistSession();
+      LoginSession.log('ensureNegotiated OK UC=' + LoginSession.deviceCode);
+      return true;
+    } catch (error) {
+      const be = error as BusinessError;
+      LoginSession.log('ensureNegotiated EXCEPTION step=' + LoginSession.step +
+        ' code=' + be.code + ' msg=' + be.message);
+      return false;
+    }
   }
 }
 

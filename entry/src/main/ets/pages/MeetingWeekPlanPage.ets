@@ -1,337 +1,350 @@
 import { router } from '@kit.ArkUI';
+import { scanBarcode, scanCore } from '@kit.ScanKit';
+import { ApiService } from '../network/ApiService';
+import { ApiResponse } from '../model/ResponseModel';
+import { BusinessError } from '@kit.BasicServicesKit';
 import { TitleBar } from '../components/TitleBar';
+import { LoadingView } from '../components/LoadingView';
+import { EmptyView } from '../components/EmptyView';
+import { MeetingWeekDetailEntity } from '../model/MeetingApiModel';
 
 /**
- * 周计划 — 1:1 复刻（px_to_dip_N = N/2 vp, px_to_sp_N = N/2 fp）：
- * mobile_campus_meeting_fragment_week_plan.xml：weekView marginTop 8 + 会议列表
- * mobile_campus_meeting_weekdate_layout.xml：日期行 padding 10（日期 16fp #B2BDC9 / 今天 16fp #B2BDC9
- *   weight1 marginLeft 20 / 星期 16fp 主色居右）+ 星期表头（px_to_sp_26=13fp，paddingTop/Bottom 5）
- *   + MeetingWeekPager 44vp（7 个日期格，选中主色圆底白字）
- * mobile_campus_meeting_view_weekplan_detail.xml：详情卡白底：tvTitle 19fp margin 18/19/15 单行；
- *   tvCancelContent 14fp #FF6666；btnCancel 14fp #C80D28 边框圆角 padding 5/12；imgCancel 61vp；
- *   0.5 分隔线 #F2F2F2；layoutContainer marginTop 12（复用会议条目）
- * 条目复刻 meeting_view_main_child.xml
+ * 周程会议详情页 — MeetingWeekDetailActivity.java(247行) 源码级翻译
+ * 【映射表勘误】本页 APK 源码 = MeetingWeekDetailActivity（路由 a0=/meeting/weekdetail），
+ *   映射表原标注 MeetingWeekPlanFragment 有误：该 Fragment 是 MeetingMainActivity"周程会议"页签，
+ *   已由 E3 完整翻进 MeetingPage（MeetingWeekPlanFragment.java 234 行），页面拆分见 review_E3。
+ * 【源码链路】MeetingPage 子项点击（TASK_TYPE=weekPlan → bundle{xlh}）/ 周程列表点击 →
+ *   MeetingWeekDetailActivity.y(intent)：t=IS_JOIN、u=appInfo.XLH 或 r="xlh" → f1() →
+ *   Y2() = MeetingPImpl.e0(new a(MeetingWeekDetail.class)).K(r) → MeetingModel.i1：
+ *   GET getWeekPlanDetails {xlh} → MeetingWeekDetail。
+ * 【布局】mobile_campus_meeting_activity_week_detail.xml：toolbar + MultiStateView(#F2F2F2)
+ *   + ScrollView(detailView + detailFileView gone) + layoutBottom 底栏。
+ * 【detailView】WeekPlanWeekDetailView.setData（mobile_campus_meeting_view_weekplan_detail.xml，
+ *   与 MeetingDetailActivity 同款视图）：tvTitle=ZT(19fp) + 行项（非空才加）：
+ *   会议地点(DD)/会议时间(KSSJ\nJSSJ 恒显)/举办单位(ZBDW)/主持人(ZCR topMargin12)/
+ *   联系电话(LXDH)/参会人员(CYRY)/备注(BZ)。
+ * 【底栏】widget.d(MobileDetailBottomBtnView)：f1 里 k(0)（不覆盖 XML arrow_up 图标）；
+ *   初始文案 XML="查看参会情况"；详情成功回调 m(IS_MY_WEEK_PLAN=="0"?"添加到个人会议":"取消添加到个人会议")；
+ *   点击 c：s!=null → IS_MY_WEEK_PLAN=="0" → W2()=i0().w(r) → MeetingModel.U0 POST addMyWeekPlan {xlh}
+ *   成功 → s.IS_MY_WEEK_PLAN="1" + "已将该会议添加到首页【我的会议】"；否则 X2()=i0().z(r) →
+ *   MeetingModel.X0 POST cancelWeekPlan {xlh} 成功 → "已将该会议取消添加到个人会议"。
+ * 【右上图标】toolbar gVar.k(mobile_campus_meeting_scan)，成功回调 p.setVisibility(0)（初始 gone）；
+ *   点击 b：s!=null → 扫码（ScanBookQRNewActivity, requestCode 415）→ onActivityResult(415)
+ *   → h2(d0=/meeting/attend, 无 bundle) → MeetingAttendPage（无 result 走服务器校验）。
+ * 【接口实测】probe_w18_meeting_remain.py：getWeekPlanDetails 真实 xlh code=0 全字段；
+ *   addMyWeekPlan 无效 xlh code=2014"周程详情出错"/cancelWeekPlan code=2004（写端点连通，不真实写入）。
+ * 【数据规则】禁止 mock；失败/空态走真实空态。
  */
-
-interface WeekDay {
-  dayLabel: string;
-  dateNum: string;
-  selected: boolean;
-  hasMeeting: boolean;
-}
-
-interface WeekPlanItem {
-  id: string;
-  day: string;
-  title: string;
-  hasReport: boolean;
-  mustAttend: boolean;
-  location: string;
-  time: string;
-  cancelled: boolean;
-}
-
-function buildWeekDays(): WeekDay[] {
-  const days: WeekDay[] = [
-    { dayLabel: '周日', dateNum: '15', selected: false, hasMeeting: false },
-    { dayLabel: '周一', dateNum: '16', selected: false, hasMeeting: false },
-    { dayLabel: '周二', dateNum: '17', selected: true, hasMeeting: true },
-    { dayLabel: '周三', dateNum: '18', selected: false, hasMeeting: true },
-    { dayLabel: '周四', dateNum: '19', selected: false, hasMeeting: false },
-    { dayLabel: '周五', dateNum: '20', selected: false, hasMeeting: false },
-    { dayLabel: '周六', dateNum: '21', selected: false, hasMeeting: false }
-  ];
-  return days;
-}
-
-function buildWeekItems(): WeekPlanItem[] {
-  const item1: WeekPlanItem = {
-    id: 'w1', day: '17', title: '2026年秋季学期教学工作推进会', hasReport: true, mustAttend: false,
-    location: '行政楼三楼会议室', time: '09:00 - 11:00', cancelled: false
-  };
-  const item2: WeekPlanItem = {
-    id: 'w2', day: '17', title: '学生工作例会', hasReport: false, mustAttend: true,
-    location: '学生活动中心201', time: '14:30 - 16:00', cancelled: false
-  };
-  const item3: WeekPlanItem = {
-    id: 'w3', day: '18', title: '期末考试安排协调会', hasReport: true, mustAttend: false,
-    location: '教务处会议室', time: '10:00 - 11:30', cancelled: true
-  };
-  return [item1, item2, item3];
-}
-
-@Component
-struct WeekPlanChildItem {
-  item: WeekPlanItem = {
-    id: '', day: '', title: '', hasReport: false, mustAttend: false, location: '', time: '', cancelled: false
-  };
-
-  build() {
-    Row() {
-      Text(this.item.day)
-        .fontSize(20)
-        .fontColor(this.item.cancelled ? $r('app.color.common_color_3') : $r('app.color.common_color_1'))
-        .width(44)
-        .textAlign(TextAlign.Center)
-
-      Image($r('app.media.mobile_campus_meeting_timeline'))
-        .width(16)
-        .height(44)
-        .objectFit(ImageFit.Contain)
-
-      Column() {
-        Row() {
-          if (this.item.hasReport) {
-            Text('报告')
-              .fontSize(9)
-              .fontColor($r('app.color.ybg_white'))
-              .textAlign(TextAlign.Center)
-              .width(24)
-              .height(16)
-              .backgroundColor($r('app.color.mobile_campus_primary_color_default'))
-              .borderRadius(3)
-              .margin({ right: 4 })
-          }
-          Text(this.item.title)
-            .fontSize(17)
-            .fontColor(this.item.cancelled
-              ? $r('app.color.common_color_3')
-              : $r('app.color.common_color_1'))
-            .layoutWeight(1)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .decoration({ type: this.item.cancelled ? TextDecorationType.LineThrough : TextDecorationType.None })
-          if (this.item.mustAttend) {
-            Text('必须参加')
-              .fontSize(11)
-              .fontColor($r('app.color.mobile_campus_meeting_must_attend_text'))
-              .padding({ left: 8, right: 8, top: 2, bottom: 2 })
-              .border({
-                width: 1,
-                color: $r('app.color.mobile_campus_meeting_must_attend_border'),
-                radius: 3
-              })
-              .margin({ left: 4, right: 4 })
-          }
-        }
-        .width('100%')
-        .alignItems(VerticalAlign.Center)
-
-        Row() {
-          Image($r('app.media.mobile_campus_meeting_location_s'))
-            .width(12)
-            .height(12)
-            .margin({ right: 6 })
-          Text(this.item.location)
-            .fontSize(12)
-            .fontColor($r('app.color.common_color_3'))
-            .maxLines(1)
-        }
-        .width('100%')
-        .margin({ top: 6 })
-        .alignItems(VerticalAlign.Center)
-
-        Row() {
-          Image($r('app.media.mobile_campus_meeting_time_s'))
-            .width(12)
-            .height(12)
-            .margin({ right: 6 })
-          Text(this.item.time)
-            .fontSize(12)
-            .fontColor($r('app.color.common_color_3'))
-            .maxLines(1)
-        }
-        .width('100%')
-        .margin({ top: 6 })
-        .alignItems(VerticalAlign.Center)
-      }
-      .layoutWeight(1)
-      .alignItems(HorizontalAlign.Start)
-      .margin({ left: 10, top: 14, bottom: 14 })
-    }
-    .width('100%')
-    .backgroundColor($r('app.color.white'))
-    .padding({ left: 8 })
-    .alignItems(VerticalAlign.Top)
-    .onClick(() => {
-      router.pushUrl({ url: 'pages/MeetingDetailPage', params: { id: this.item.id } });
-    })
-  }
-}
-
-@Component
-struct WeekPlanDetailCard {
-  item: WeekPlanItem = {
-    id: '', day: '', title: '', hasReport: false, mustAttend: false, location: '', time: '', cancelled: false
-  };
-
-  build() {
-    Column() {
-      Row() {
-        Text(this.item.title)
-          .fontSize(19)
-          .fontColor(this.item.cancelled
-            ? $r('app.color.common_color_3')
-            : $r('app.color.common_color_1'))
-          .margin({ left: 18, top: 19, bottom: 15 })
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-          .layoutWeight(1)
-
-        if (this.item.cancelled) {
-          Image($r('app.media.mobile_campus_meeting_cancel'))
-            .width(61)
-            .height(61)
-        } else {
-          Text('取消')
-            .fontSize(14)
-            .fontColor($r('app.color.mobile_campus_meeting_must_attend_text'))
-            .padding({ left: 12, right: 12, top: 5, bottom: 5 })
-            .border({ width: 1, color: '#C80D28', radius: 4 })
-            .margin({ right: 18 })
-        }
-      }
-      .width('100%')
-      .alignItems(VerticalAlign.Top)
-
-      if (this.item.cancelled) {
-        Text('注：发起人由于临时原因取消会议')
-          .fontSize(14)
-          .fontColor('#FF6666')
-          .margin({ left: 18, bottom: 12 })
-          .width('100%')
-      }
-
-      Divider()
-        .color($r('app.color.mobile_campus_bg_color'))
-        .strokeWidth(0.5)
-        .width('100%')
-
-      Column() {
-        WeekPlanChildItem({ item: this.item })
-      }
-      .width('100%')
-      .margin({ top: 12 })
-    }
-    .width('100%')
-    .backgroundColor($r('app.color.white'))
-    .alignItems(HorizontalAlign.Start)
-  }
-}
-
 @Entry
 @Component
 struct MeetingWeekPlanPage {
-  @State weekDays: WeekDay[] = buildWeekDays();
-  @State planItems: WeekPlanItem[] = buildWeekItems();
-  private weekHeaders: string[] = ['日', '一', '二', '三', '四', '五', '六'];
+  /** 周程详情数据（源码 s） */
+  @State detail: MeetingWeekDetailEntity = new MeetingWeekDetailEntity();
+  /** 加载/失败/空态（MultiStateView） */
+  @State loading: boolean = true;
+  @State loadFail: boolean = false;
+  @State isEmpty: boolean = false;
+  /** 底栏文案（源码 widget.d.m；初始 XML 文案） */
+  @State bottomBtnText: string = '查看参会情况';
+  /** 详情成功后扫码图标可见（源码 p.setVisibility(0)） */
+  @State scanVisible: boolean = false;
+  private xlh: string = '';
 
-  private selectDay(dayLabel: string): void {
-    const updated: WeekDay[] = [];
-    for (const d of this.weekDays) {
-      const target: WeekDay = {
-        dayLabel: d.dayLabel, dateNum: d.dateNum, hasMeeting: d.hasMeeting,
-        selected: d.dayLabel === dayLabel
-      };
-      updated.push(target);
+  aboutToAppear(): void {
+    // 源码 y(intent)：appInfo.XLH 优先，否则 intent "xlh"（HAP 直传 xlh）
+    const params: object | undefined = router.getParams() as object | undefined;
+    if (params !== null && params !== undefined) {
+      const record = params as Record<string, Object>;
+      const v: Object | undefined = record['xlh'];
+      if (typeof v === 'string') {
+        this.xlh = v as string;
+      }
     }
-    this.weekDays = updated;
+    this.loadDetail();
   }
 
-  build() {
-    Column() {
-      TitleBar({ title: '周计划', showBack: true })
+  /** 源码 onActivityResult(415) 等价：从签到页返回（扫码成功跳 attend 无参） */
+  onPageShow(): void {
+    // 源码 414 分支（p.setVisibility(8)）发起方不在本 Activity 源码内，HAP 无对应链路，保留语义注释
+  }
 
-      Scroll() {
-        Column() {
-          // weekdate_layout：weekView marginTop 8
-          Column() {
-            Row() {
-              Text('2026年11月')
-                .fontSize(16)
-                .fontColor($r('app.color.mobile_campus_schedule_color2'))
-              Text('今天 11月17日')
-                .fontSize(16)
-                .fontColor($r('app.color.mobile_campus_schedule_color2'))
-                .layoutWeight(1)
-                .margin({ left: 20 })
-              Text('月视图')
-                .fontSize(16)
-                .fontColor($r('app.color.mobile_campus_primary_color_default'))
-            }
-            .width('100%')
-            .padding(10)
-            .alignItems(VerticalAlign.Center)
-
-            Row() {
-              ForEach(this.weekHeaders, (header: string, index: number) => {
-                Text(header)
-                  .fontSize(13)
-                  .fontColor(index === 0 || index === 6
-                    ? $r('app.color.mobile_campus_schedule_color2')
-                    : $r('app.color.common_color_1'))
-                  .textAlign(TextAlign.Center)
-                  .layoutWeight(1)
-              }, (header: string) => 'wh_' + header)
-            }
-            .width('100%')
-            .padding({ top: 5, bottom: 5 })
-
-            // MeetingWeekPager 44vp
-            Row() {
-              ForEach(this.weekDays, (day: WeekDay) => {
-                Column() {
-                  Text(day.dateNum)
-                    .fontSize(15)
-                    .fontColor(day.selected
-                      ? $r('app.color.white')
-                      : $r('app.color.common_color_1'))
-                    .textAlign(TextAlign.Center)
-                  if (day.hasMeeting) {
-                    Circle({ width: 4, height: 4 })
-                      .fill(day.selected ? $r('app.color.white') : $r('app.color.mobile_campus_primary_color_default'))
-                      .margin({ top: 2 })
-                  }
-                }
-                .width(32)
-                .height(32)
-                .borderRadius(16)
-                .backgroundColor(day.selected
-                  ? $r('app.color.mobile_campus_primary_color_default')
-                  : Color.Transparent)
-                .justifyContent(FlexAlign.Center)
-                .alignItems(HorizontalAlign.Center)
-                .onClick(() => {
-                  this.selectDay(day.dayLabel);
-                })
-              }, (day: WeekDay) => day.dayLabel + (day.selected ? '_sel' : ''))
-            }
-            .width('100%')
-            .height(44)
-            .justifyContent(FlexAlign.SpaceAround)
-            .alignItems(VerticalAlign.Center)
-          }
-          .width('100%')
-          .margin({ top: 8 })
-          .backgroundColor($r('app.color.white'))
-
-          // view_weekplan_detail 详情卡列表
-          ForEach(this.planItems, (item: WeekPlanItem) => {
-            WeekPlanDetailCard({ item: item })
-              .margin({ top: 12 })
-          }, (item: WeekPlanItem) => item.id)
+  /** 源码 Y2()：l.e0(new a).K(r) → MeetingModel.i1 GET getWeekPlanDetails {xlh} */
+  private loadDetail(): void {
+    if (this.xlh === '') {
+      this.loadFail = true;
+      this.loading = false;
+      return;
+    }
+    ApiService.getMeetingWeekPlanDetails(this.xlh)
+      .then((response: ApiResponse<MeetingWeekDetailEntity>) => {
+        if (response.code === 1000) {
+          // 登录失效统一处理已在网络层触发（HttpClient.bizRequest 拦截：清会话+toast+跳登录）
+          this.loading = false;
+          return;
         }
-        .width('100%')
-        .padding({ bottom: 24 })
+        if (response.code === 0 && response.data.ZT !== '') {
+          // 源码 a.g()：o.setData + s=meetingWeekDetail + 底栏文案 + 扫码图标可见
+          this.detail = response.data;
+          this.loadFail = false;
+          this.isEmpty = false;
+          this.bottomBtnText = response.data.IS_MY_WEEK_PLAN === '0' ? '添加到个人会议' : '取消添加到个人会议';
+          this.scanVisible = true;
+        } else if (response.code === 0) {
+          // 源码 a.g() data==null → q2(n) 空态
+          this.isEmpty = true;
+        } else {
+          this.loadFail = true;
+        }
+        this.loading = false;
+      })
+      .catch((error: BusinessError) => {
+        ApiService.logError('MeetingWeekPlanPage loadDetail fail: ' + error.message);
+        this.loadFail = true;
+        this.loading = false;
+      });
+  }
+
+  /** 源码 c.onClick：s!=null → IS_MY_WEEK_PLAN=="0" 添加，否则取消 */
+  private onBottomBtnClick(): void {
+    if (this.detail.XLH === '' && this.detail.ZT === '') {
+      return;
+    }
+    if (this.detail.IS_MY_WEEK_PLAN === '0') {
+      this.submitAddWeekPlan();
+    } else {
+      this.submitCancelWeekPlan();
+    }
+  }
+
+  /** 源码 W2() → MeetingPImpl.i0(new e).w(r) → MeetingModel.U0：POST addMyWeekPlan {xlh} */
+  private submitAddWeekPlan(): void {
+    ApiService.addMyWeekPlan(this.xlh)
+      .then((response: ApiResponse<string>) => {
+        if (response.code === 1000) {
+          return;
+        }
+        if (response.code === 0) {
+          // 源码 e.g()：s.IS_MY_WEEK_PLAN="1" + 底栏重建 + 文案 + toast
+          this.detail.IS_MY_WEEK_PLAN = '1';
+          this.bottomBtnText = '取消添加到个人会议';
+          this.toast('已将该会议添加到首页【我的会议】');
+        } else {
+          // 源码 e.f(str2)：m(str2) toast 服务器文案
+          this.toast(response.message === '' ? '添加失败' : response.message);
+        }
+      })
+      .catch((error: BusinessError) => {
+        ApiService.logError('MeetingWeekPlanPage addMyWeekPlan fail: ' + error.message);
+        this.toast('添加失败');
+      });
+  }
+
+  /** 源码 X2() → MeetingPImpl.i0(new d).z(r) → MeetingModel.X0：POST cancelWeekPlan {xlh} */
+  private submitCancelWeekPlan(): void {
+    ApiService.cancelWeekPlan(this.xlh)
+      .then((response: ApiResponse<string>) => {
+        if (response.code === 1000) {
+          return;
+        }
+        if (response.code === 0) {
+          // 源码 d.g()：s.IS_MY_WEEK_PLAN="0" + 文案 + toast
+          this.detail.IS_MY_WEEK_PLAN = '0';
+          this.bottomBtnText = '添加到个人会议';
+          this.toast('已将该会议取消添加到个人会议');
+        } else {
+          this.toast(response.message === '' ? '取消失败' : response.message);
+        }
+      })
+      .catch((error: BusinessError) => {
+        ApiService.logError('MeetingWeekPlanPage cancelWeekPlan fail: ' + error.message);
+        this.toast('取消失败');
+      });
+  }
+
+  /** 源码 b.onClick：s!=null → 扫码（ScanBookQRNewActivity 415）→ 成功跳 attend（无参） */
+  private onScanClick(): void {
+    if (this.detail.ZT === '' && this.detail.XLH === '') {
+      return;
+    }
+    const options: scanBarcode.ScanOptions = { scanTypes: [scanCore.ScanType.QR_CODE] };
+    scanBarcode.startScan(options)
+      .then((_result: scanBarcode.ScanResult) => {
+        // 源码 onActivityResult(415)：h2(d0=/meeting/attend, null) → MeetingAttendPage 无 result
+        this.pushRoute('pages/MeetingAttendPage', {});
+      })
+      .catch((error: BusinessError) => {
+        ApiService.logError('MeetingWeekPlanPage startScan fail: ' + error.message);
+      });
+  }
+
+  private pushRoute(url: string, params: Record<string, Object>): void {
+    try {
+      router.pushUrl({ url: url, params: params }).catch((error: BusinessError) => {
+        ApiService.logError('MeetingWeekPlanPage route fail @' + url + ': ' + error.message);
+      });
+    } catch (error) {
+      const err = error as BusinessError;
+      ApiService.logError('MeetingWeekPlanPage route throw @' + url + ': ' + err.message);
+    }
+  }
+
+  private toast(message: string): void {
+    this.getUIContext().getPromptAction().showToast({ message: message });
+  }
+
+  // 登录失效统一处理已下沉网络层（HttpClient.bizRequest code=1000 拦截），页面 1000 分支只 return
+
+  build() {
+    Stack() {
+      Column() {
+        TitleBar({ title: '会议详情', showBack: true })
+        // 右上扫码图标（toolbar gVar.k）：详情成功回调才可见（源码 p.setVisibility(0)）
+        if (this.scanVisible && !this.loading && !this.loadFail && !this.isEmpty) {
+          Image($r('app.media.mobile_campus_meeting_scan'))
+            .width(20)
+            .height(20)
+            .margin({ right: 15 })
+            .onClick(() => {
+              this.onScanClick();
+            })
+        }
+        if (this.loading) {
+          LoadingView()
+        } else if (this.isEmpty) {
+          EmptyView({ tipText: '暂无会议详情' })
+        } else if (this.loadFail || this.detail.ZT === '') {
+          EmptyView({ tipText: '获取会议详情失败' })
+        } else {
+          this.contentView()
+        }
       }
       .width('100%')
-      .layoutWeight(1)
-      .align(Alignment.Top)
-      .scrollBar(BarState.Off)
-      .backgroundColor($r('app.color.mobile_campus_bg_color'))
+      .height('100%')
+      .alignItems(HorizontalAlign.Start)
     }
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.mobile_campus_bg_color'))
+    .alignContent(Alignment.Center)
+  }
+
+  /** mobile_campus_meeting_activity_week_detail.xml：ScrollView(detailView) + layoutBottom 底栏 */
+  @Builder
+  contentView() {
+    Column() {
+      Scroll() {
+        Column() {
+          this.weekDetailView()
+        }
+        .width('100%')
+        .alignItems(HorizontalAlign.Start)
+      }
+      .width('100%')
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
+      .align(Alignment.Top)
+
+      // layoutBottom：widget.d（mobile_campus_meeting_view_detail_btn 白底 48dip）
+      this.bottomBar()
+    }
+    .width('100%')
+    .height('100%')
+  }
+
+  /** WeekPlanWeekDetailView.setData：tvTitle=ZT + 行项（非空才加，顺序同源码） */
+  @Builder
+  weekDetailView() {
+    Column() {
+      Text(this.detail.ZT)
+        .fontSize(19)
+        .fontColor($r('app.color.common_color_1'))
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+        .width('100%')
+        .margin({ left: 18, top: 19, bottom: 15 })
+      Divider()
+        .color($r('app.color.mobile_campus_bg_color'))
+        .strokeWidth(0.5)
+        .width('100%')
+      Column() {
+        if (this.detail.DD !== '') {
+          this.detailRow($r('app.media.mobile_campus_meeting_local_2'), '会议地点', this.detail.DD, 0)
+        }
+        // 源码：会议时间行恒显（无判空）
+        this.detailRow($r('app.media.mobile_campus_meeting_time_2'), '会议时间',
+          this.detail.KSSJ + '\n' + this.detail.JSSJ, 0)
+        if (this.detail.ZBDW !== '') {
+          this.detailRow($r('app.media.mobile_campus_meeting_class'), '举办单位', this.detail.ZBDW, 0)
+        }
+        if (this.detail.ZCR !== '') {
+          // 源码：主持人行 topMargin 12dip
+          this.detailRow($r('app.media.mobile_campus_meeting_staff'), '主持人', this.detail.ZCR, 12)
+        }
+        if (this.detail.LXDH !== '') {
+          // 源码：WeekPlanWeekDetailView 未调用 enablePhoneLink → 普通行（不发短信场景）
+          this.detailRow($r('app.media.mobile_campus_meeting_contact_number'), '联系电话', this.detail.LXDH, 0)
+        }
+        if (this.detail.CYRY !== '') {
+          this.detailRow($r('app.media.mobile_campus_meeting_staff'), '参会人员', this.detail.CYRY, 0)
+        }
+        if (this.detail.BZ !== '') {
+          this.detailRow($r('app.media.mobile_campus_meeting_edit'), '备注', this.detail.BZ, 0)
+        }
+      }
+      .width('100%')
+      .margin({ top: 12 })
+      .padding({ bottom: 6 })
+      .backgroundColor($r('app.color.white'))
+    }
+    .width('100%')
+    .backgroundColor($r('app.color.white'))
+  }
+
+  /** WeekPlanDetailItemView 复刻（与 MeetingDetailActivity 同款视图，样式对齐 MeetingDetailPage.detailRow） */
+  @Builder
+  detailRow(icon: Resource, label: string, value: string, topMargin: number) {
+    Row() {
+      Image(icon)
+        .width(12)
+        .height(12)
+        .margin({ right: 6 })
+      Text(label)
+        .fontSize(12)
+        .fontColor($r('app.color.common_color_3'))
+        .width(56)
+      Text(value)
+        .fontSize(13)
+        .fontColor($r('app.color.common_color_1'))
+        .layoutWeight(1)
+        .maxLines(7)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+    }
+    .width('100%')
+    .padding({ left: 18, right: 18, top: 8, bottom: 8 })
+    .alignItems(VerticalAlign.Top)
+    .margin({ top: topMargin })
+  }
+
+  /** mobile_campus_meeting_view_detail_btn：白底 48dip + tvSituation 16fp 主色（icon 源码 k(0) 不覆盖 XML arrow_up） */
+  @Builder
+  bottomBar() {
+    Column() {
+      Divider()
+        .color($r('app.color.common_color_5'))
+        .strokeWidth(0.5)
+        .width('100%')
+      Text(this.bottomBtnText)
+        .fontSize(16)
+        .fontColor($r('app.color.mobile_campus_primary_color_default'))
+        .textAlign(TextAlign.Center)
+        .width('100%')
+        .height(47.5)
+        .onClick(() => {
+          this.onBottomBtnClick();
+        })
+    }
+    .width('100%')
+    .height(48)
+    .backgroundColor($r('app.color.white'))
   }
 }

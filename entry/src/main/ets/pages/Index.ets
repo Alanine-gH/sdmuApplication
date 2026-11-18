@@ -1,4 +1,4 @@
-import { LoginSession } from '../network/LoginSession';
+﻿import { LoginSession } from '../network/LoginSession';
 import { HttpClient } from '../network/HttpClient';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
@@ -49,12 +49,52 @@ class ServerAppGroup {
   }
 }
 
+/**
+ * 服务端应用图标（APK CommonFactory.a：ServiceBaseUrl.d() + "/mobileapi_ydxy/open/image/" + YYTB；
+ * d.d() = 服务器 serverUrl，即 Constants.SOCKET_HOST）。
+ * 加载失败回落本地占位图，与 APK Glide placeholder/error 行为一致。
+ */
+@Component
+struct ServerIcon {
+  /** 图标网络地址；空串时直接显示本地占位 */
+  @Prop url: string = '';
+  @State private iconFailed: boolean = false;
+
+  build() {
+    if (this.url === '' || this.iconFailed) {
+      Image($r('app.media.default_app_icon'))
+        .width(34)
+        .height(34)
+        .objectFit(ImageFit.Contain)
+    } else {
+      Image(this.url)
+        .width(34)
+        .height(34)
+        .objectFit(ImageFit.Contain)
+        // 加载过程中显示占位（Glide placeholder 同款体验）
+        .alt($r('app.media.default_app_icon'))
+        .onError(() => {
+          this.iconFailed = true;
+        })
+    }
+  }
+}
+
 /** LX=1 原生 YYID → HAP 原生页映射（原 APK ARouter 同口径，小写） */
 const YYID_ROUTES: Map<string, string> = new Map([
   ['timetable', 'pages/SchedulePage'],
   ['score', 'pages/ScorePage'],
   ['mylibrary', 'pages/BookBorrowReportPage'],
   ['campusview', 'pages/SchoolSceneryPage'],
+  // [W26 partial-finish] 路由考证修正：APK 无 SchoolIntroActivity——宫格 yyid=schoolIntro
+  //   （manifest action sdgy_schoolIntro L448-453）→ SchoolSituationLaunchActivity（f1() g2(a.b1
+  //   =/school/situation，base/e/a.java L121-122 + strings L643-644 + ARouter$$Group$$school
+  //   L18 /school/situation→SchoolSituationActivity）→ SchoolSituationPage（W25 源码级实现，
+  //   /open/schoolIntro/index 实测 200 真实数据）。原 SchoolIntroPage 占位页无 APK 对应物已移除。
+  ['schoolintro', 'pages/SchoolSituationPage'],
+  ['address_book', 'pages/ContactPage'],
+  ['studyreport', 'pages/StudyReportPage'],
+  ['schedule', 'pages/ScheduleMainActivity'],
   ['news', 'pages/NewsPage'],
   ['contact', 'pages/ContactPage'],
   ['meeting', 'pages/MeetingPage'],
@@ -72,9 +112,22 @@ struct AppsTab {
   @State serverGroups: ServerAppGroup[] = [];
   /** 数据源标记：server=服务端下发 / local=本地清单 */
   @State dataSource: string = 'local';
+  /** onActivityResult(5467) 返回刷新等价：编辑常用应用页 toggle 成功后置时间戳，本页监听重拉 */
+  @StorageLink('common_app_changed') @Watch('onCommonAppChanged') commonAppChanged: number = 0;
 
   aboutToAppear(): void {
-    // 复刻原 APK YDXYAppModel.V0：GET /api/app/list?data=enc({zdlx,khdbb,type})
+    this.loadApps();
+  }
+
+  /** AppFragmentV2.onActivityResult：i3==-1 && i2==5467 → clear + c2() + b2(true) 重拉 */
+  onCommonAppChanged(propName: string): void {
+    if (this.commonAppChanged > 0) {
+      this.loadApps();
+    }
+  }
+
+  /** 复刻原 APK YDXYAppModel.V0：GET /api/app/list?data=enc({zdlx,khdbb,type}) */
+  private loadApps(): void {
     const params: Record<string, Object> = {
       'zdlx': '3',
       'khdbb': Constants.CLIENT_VERSION,
@@ -131,20 +184,23 @@ struct AppsTab {
    *  LX=1 原生 → YYID 映射表 → HAP 原生页（无映射 toast）；
    *  LX=2 H5 → LightAppPage 加载服务端下发 URL（CAS 免登/第三方认证地址） */
   private dispatchApp(name: string, yyid: string, lx: string, url: string): void {
-    if (lx === '2' || lx === '4' || lx === '8') {
-      if (url === '') {
-        this.getUIContext().getPromptAction().showToast({ message: name + ' 暂无访问地址' });
-        return;
-      }
-      router.pushUrl({ url: 'pages/LightAppPage', params: { title: name, url: url } });
-      return;
-    }
+    // [R15 修正] APK module/app/util/a.java 是 yyid 特判（switch）优先于 LX 分支：
+    //   address_book 等服务端标 LX=2 但 APK 有原生实现的项走原生页。ROUTES 命中→原生优先。
     const target: string | undefined = YYID_ROUTES.get(yyid.toLowerCase());
     if (target !== undefined) {
       router.pushUrl({ url: target });
-    } else {
-      this.getUIContext().getPromptAction().showToast({ message: name + ' 功能对接中' });
+      return;
     }
+    if (lx === '2' || lx === '4' || lx === '8') {
+      if (url === '' && yyid === '') {
+        this.getUIContext().getPromptAction().showToast({ message: name + ' 暂无访问地址' });
+        return;
+      }
+      // [W1 light-url] 补传 yyid/lx：LightAppPage 按 APK 分支加工（LX=2/4 springboard 跳板、LX=8 query 单点）
+      router.pushUrl({ url: 'pages/LightAppPage', params: { title: name, url: url, yyid: yyid, lx: lx } });
+      return;
+    }
+    this.getUIContext().getPromptAction().showToast({ message: name + ' 功能对接中' });
   }
 
   private myApps: AppGridItem[] = [
@@ -278,6 +334,10 @@ struct AppsTab {
           .fontSize(22)
           .fontColor([$r('app.color.common_color_1')])
           .margin({ right: 20, top: 14 })
+          .onClick(() => {
+            // WorkFragment$e：搜索图标 → e.a.z=/app/AppSearchActivity（HAP AppSearchPage）
+            router.pushUrl({ url: 'pages/AppSearchPage' });
+          })
       }
       .width('100%')
       .backgroundColor($r('app.color.white'))
@@ -293,10 +353,9 @@ struct AppsTab {
                   ForEach(group.apps, (item: ServerAppItem) => {
                     GridItem() {
                       Column() {
-                        Image($r('app.media.default_app_icon'))
-                          .width(34)
-                          .height(34)
-                          .objectFit(ImageFit.Contain)
+                        // APK 同款：YYTB UUID 拼服务端图标 URL，失败回落本地占位
+                        ServerIcon({ url: item.yytb === '' ? '' :
+                          Constants.SOCKET_HOST + '/mobileapi_ydxy/open/image/' + item.yytb })
                         Text(item.yymc)
                           .fontSize(12)
                           .fontColor($r('app.color.common_color_1'))
@@ -345,6 +404,14 @@ struct AppsTab {
               Text('点击添加 >')
                 .fontSize(13)
                 .fontColor($r('app.color.common_color_3'))
+                .onClick(() => {
+                  // AppTitleAdapter.d 回调（AppFragmentV2$e）→ a1(getActivity(), e.a.x, bundle, 5467)：
+                  // e.a.x = R$string.mobile_campus_router_edit_common_app = "/app/EditCommonAppActivity"
+                  // → ARouter$$Group$$app 映射 newUI 包 EditCommonAppActivity（标题"添加常用应用"，
+                  //   MToolBar 右图标再进 EditCommonAppSearchPage）；HAP 等价 EditCommonAppPage，
+                  //   onActivityResult(5467) 返回刷新由 @StorageLink('common_app_changed') 等价）
+                  router.pushUrl({ url: 'pages/EditCommonAppPage' });
+                })
             }
             .width('100%')
             .height(38)
@@ -603,6 +670,7 @@ struct Index {
     .backgroundColor($r('app.color.main_bg'))
   }
 }
+
 
 
 

@@ -1,4 +1,4 @@
-import { TitleBar } from '../components/TitleBar';
+﻿import { TitleBar } from '../components/TitleBar';
 
 /**
  * 绑定邮箱页 — 1:1 复刻 mobile_campus_my_item_personalinfo_bindemial_item.xml
@@ -11,7 +11,7 @@ import { TitleBar } from '../components/TitleBar';
 @Entry
 @Component
 struct BindEmailPage {
-  @State email: string = 'zhangxm@sdmu.edu.cn';
+  @State email: string = ''; // 零容忍：不展示编造邮箱，真实绑定值由会话/服务端下发;
 
   private goBind(): void {
     this.getUIContext().getPromptAction().showToast({ message: '前往绑定邮箱' });

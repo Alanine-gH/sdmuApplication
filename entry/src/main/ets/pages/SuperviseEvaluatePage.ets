@@ -1,11 +1,29 @@
 import { router } from '@kit.ArkUI';
+import { BusinessError } from '@kit.BasicServicesKit';
+import { ApiService } from '../network/ApiService';
+import { ApiResponse } from '../model/ResponseModel';
 import { TitleBar } from '../components/TitleBar';
 
 /**
- * 评课表单 — 1:1 复刻 mobile_campus_supervise_activity_supervise_evaluate.xml
- * 内容卡复刻 layout_evaluate_show.xml / layout_evaluate_editable.xml 结构
- * 提交按钮：shape_evaluate #1B68B7（enabled），文字 selector_filter（enabled 白色）
+ * 教学评价表单 — 源码级翻译 [W21 supervise]（SuperviseEvaluateActivity.java 逐行 → ArkTS）：
+ *
+ * 【布局】mobile_campus_supervise_activity_supervise_evaluate.xml：白卡 padH12 padB18 mt12
+ *   应到/实到两列（TextStyle3 label + TextStyle5 输入框 68 宽 padV8 底 #F8F8F9 描边 #DFE4EA 圆角4），
+ *   灰细线，"课程评价"17sp 居中 mt24，BaseRatingBar（numStars=5 rating=0 starSize=20 starPadding=8），
+ *   supervise_evaluate_content lines=5 hint=mobile_campus_supervise_evaluate_hint
+ *   "本次课程整体效果如何呢？"；底部"提交评价"（selector_evaluate_btn：shape_evaluate #1B68B7）
+ *
+ * 【路由参数】y(Intent)：xlh = intent.getStringExtra("xlh")（SuperviseMinePastListFragment.d.a 回传）
+ * 【校验】Q2() 顺序：应到人数不能为空 → 实到人数不能为空 → (rating<1) 请在评分条进行评分 →
+ *   教学评价不能为空（首错 toast，提交终止）
+ * 【提交】b.onClick → L2(String.valueOf((int)rating), ydrs, sdrs, nr, xlh) → SuperviseModel.U0：
+ *   POST commentsListenCourse {dj, ydrs, sdrs, nr, xlh}；c.g：data=="true"(STATUS_TRUE) 成功 →
+ *   x2("评论成功") + setResult(-1) + finish；否则 m(str2) toast(message)。
+ *   2026-11-18 probe_w21_supervise.py：假 xlh → code=0001 系统异常（端点存活）。
+ * 【回传】成功 setResult → MineActivity.onActivityResult 120 RESULT_OK → 两 Fragment 重拉
+ *   （HAP：AppStorage 'supervise_evaluate_done'='1' + router.back）。
  */
+
 class SuperviseStar {
   index: number;
   lit: boolean;
@@ -30,6 +48,21 @@ struct SuperviseEvaluatePage {
     new SuperviseStar(4, false),
     new SuperviseStar(5, false)
   ];
+  @State isSubmitting: boolean = false;
+  /** 源码 r：intent "xlh"（听课示例行唯一标识，提交必需） */
+  private xlh: string = '';
+
+  aboutToAppear(): void {
+    // 源码 y(Intent)：this.r = intent.getStringExtra("xlh")
+    const params: object | undefined = router.getParams() as object | undefined;
+    if (params !== undefined && params !== null) {
+      const rec: Record<string, Object> = params as Record<string, Object>;
+      const xlhV: Object = rec['xlh'];
+      if (typeof xlhV === 'string') {
+        this.xlh = xlhV as string;
+      }
+    }
+  }
 
   private refreshStars(rating: number): void {
     this.starRating = rating;
@@ -38,13 +71,66 @@ struct SuperviseEvaluatePage {
     });
   }
 
+  /** 源码 Q2()：首错校验串（空串=通过） */
+  private validateForm(): string {
+    if (this.attendanceExpect === '') {
+      return '应到人数不能为空';
+    }
+    if (this.attendanceActual === '') {
+      return '实到人数不能为空';
+    }
+    if (this.starRating < 1) {
+      return '请在评分条进行评分';
+    }
+    if (this.evaluateContent === '') {
+      return '教学评价不能为空';
+    }
+    return '';
+  }
+
+  /** 源码 b.onClick：Q2 非空 → m(strQ2) toast 终止；通过 → L2 提交 */
   private submitEvaluate(): void {
-    router.back();
+    if (this.isSubmitting) {
+      return;
+    }
+    const invalid: string = this.validateForm();
+    if (invalid !== '') {
+      this.getUIContext().getPromptAction().showToast({ message: invalid });
+      return;
+    }
+    this.isSubmitting = true;
+    // 源码 L2：dj=String.valueOf((int)rating), ydrs=O2(), sdrs=M2(), nr=N2(), xlh=r
+    ApiService.submitSuperviseComment(String(this.starRating), this.attendanceExpect,
+      this.attendanceActual, this.evaluateContent, this.xlh)
+      .then((response: ApiResponse<string>) => {
+        this.isSubmitting = false;
+        if (response.code === 1000) {
+          // 登录失效统一处理已在网络层触发（HttpClient.bizRequest 拦截：清会话+toast+跳登录）
+          return;
+        }
+        if (response.code === 0 && response.data === 'true') {
+          // 源码 c.g：x2("评论成功") + setResult(-1) + finish
+          this.getUIContext().getPromptAction().showToast({ message: '评论成功' });
+          AppStorage.setOrCreate<string>('supervise_evaluate_done', '1');
+          router.back();
+        } else {
+          // 源码 c.g：data!="true" → m(str2) toast(message)
+          this.getUIContext().getPromptAction().showToast({
+            message: response.message === '' ? '提交失败' : response.message
+          });
+        }
+      })
+      .catch((error: BusinessError) => {
+        this.isSubmitting = false;
+        ApiService.logError('SuperviseEvaluatePage submit fail: ' + error.message);
+        this.getUIContext().getPromptAction().showToast({ message: '提交失败' });
+      });
   }
 
   build() {
     Column() {
-      TitleBar({ title: '听课评价', showBack: true })
+      // T1：R$string.mobile_campus_supervise_activity_evaluate_title = "教学评价"
+      TitleBar({ title: '教学评价', showBack: true })
 
       // 白色内容卡：marginTop 12，padding L/R 12，bottom 18
       Column() {

@@ -115,6 +115,105 @@ export class MainNotificationV2 {
 }
 
 /**
+ * [W12 message-series] 校圈消息实体 — 逐字段翻译 push 模块（work/multimodule/push/entity）：
+ *   - SocialPushMessageItem ← MessageItem.java {content, contentType, ext, id, readStatus, sendTime, state, title, type, url}
+ *   - SocialPushMessageExt  ← MessageExt.java {circleId, circle_type, ext_params, likeTime, picture, pl_content, type, userId, userName, userType}
+ *   - SocialPushMessageList ← MessageList.java {list: MessageItem[], timestamp}
+ * 请求源码实证（PushModel.java c/b/c/b/b.java）：POST https://www.yibaogao.com/mobileapi/campus/push/<name>
+ *   {type:"circle", page, pageSize:"20"} + 请求头 xxdm=登录会话 schoolId；响应 data 加密。
+ * 2026-11-18 实测：该域名校园网不可达（https SSL EOF / http 502）→ 页面按失败走真实空态。
+ */
+export class SocialPushMessageExt {
+  circleId: string = '';
+  circle_type: string = '';
+  likeTime: string = '';
+  picture: string = '';
+  pl_content: string = '';
+  type: string = '';
+  userId: string = '';
+  userName: string = '';
+  userType: string = '';
+
+  static fromRecord(rec: Record<string, Object>): SocialPushMessageExt {
+    const ext: SocialPushMessageExt = new SocialPushMessageExt();
+    const keys: string[] = ['circleId', 'circle_type', 'likeTime', 'picture', 'pl_content', 'type', 'userId', 'userName', 'userType'];
+    for (const key of keys) {
+      const v: Object = rec[key];
+      if (typeof v === 'string') {
+        if (key === 'circleId') { ext.circleId = v as string; }
+        else if (key === 'circle_type') { ext.circle_type = v as string; }
+        else if (key === 'likeTime') { ext.likeTime = v as string; }
+        else if (key === 'picture') { ext.picture = v as string; }
+        else if (key === 'pl_content') { ext.pl_content = v as string; }
+        else if (key === 'type') { ext.type = v as string; }
+        else if (key === 'userId') { ext.userId = v as string; }
+        else if (key === 'userName') { ext.userName = v as string; }
+        else if (key === 'userType') { ext.userType = v as string; }
+      }
+    }
+    return ext;
+  }
+}
+
+export class SocialPushMessageItem {
+  content: string = '';
+  contentType: string = '';
+  ext: SocialPushMessageExt | null = null;
+  id: string = '';
+  readStatus: string = '';
+  sendTime: string = '';
+  state: string = '';
+  title: string = '';
+  type: string = '';
+  url: string = '';
+
+  static fromRecord(rec: Record<string, Object>): SocialPushMessageItem {
+    const row: SocialPushMessageItem = new SocialPushMessageItem();
+    const keys: string[] = ['content', 'contentType', 'id', 'readStatus', 'sendTime', 'state', 'title', 'type', 'url'];
+    for (const key of keys) {
+      const v: Object = rec[key];
+      if (typeof v === 'string') {
+        if (key === 'content') { row.content = v as string; }
+        else if (key === 'contentType') { row.contentType = v as string; }
+        else if (key === 'id') { row.id = v as string; }
+        else if (key === 'readStatus') { row.readStatus = v as string; }
+        else if (key === 'sendTime') { row.sendTime = v as string; }
+        else if (key === 'state') { row.state = v as string; }
+        else if (key === 'title') { row.title = v as string; }
+        else if (key === 'type') { row.type = v as string; }
+        else if (key === 'url') { row.url = v as string; }
+      }
+    }
+    const ext: Object = rec['ext'];
+    if (typeof ext === 'object' && ext !== null) {
+      row.ext = SocialPushMessageExt.fromRecord(ext as Record<string, Object>);
+    }
+    return row;
+  }
+}
+
+/** SocialUserAvatarUtil 补头像链：SocialModel.J → GET getAvatarByUser {userIds:"a,b"} → UserTX[]{USERID, TX} */
+export class SocialPushUserTx {
+  USERID: string = '';
+  TX: string = '';
+
+  static fromRecord(rec: Record<string, Object>): SocialPushUserTx {
+    const row: SocialPushUserTx = new SocialPushUserTx();
+    const uid: Object = rec['USERID'];
+    if (typeof uid === 'string') {
+      row.USERID = uid as string;
+    } else if (typeof uid === 'number') {
+      row.USERID = String(uid as number);
+    }
+    const tx: Object = rec['TX'];
+    if (typeof tx === 'string') {
+      row.TX = tx as string;
+    }
+    return row;
+  }
+}
+
+/**
  * SystemSwitch 消息开关子集 — 源码 GlobalParamInfo.getSystemSwitch() 的三个开关：
  *   messages_page_tabs（"2"=未读/已读双页签）、all_messages_read、all_messages_delete、
  *   batch_messages_delete（"1"=启用）。

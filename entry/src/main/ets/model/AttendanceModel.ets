@@ -80,3 +80,26 @@ export class AttendanceBossIndex {
   date: string = '';
   num: string = '';
 }
+
+// ===== [W27 final-a] 个人考勤详情实体（源码 AttendanceDetail.java 字段 1:1） =====
+
+/** 异常记录（AttendanceDetail.ErrorRecordBean） */
+export class AttendanceDetailErrorRecord {
+  errorDetailName: string = '';
+  errorDetailTimes: string = '';
+  errorDetailType: string = '';
+}
+
+/** 个人考勤详情（AttendanceDetail）：AttendancePersonalActivity.W2 → POST detail {month,id} */
+export class AttendanceDetail {
+  attendanceByDay: AttendanceByDayBean[] = [];
+  attendanceGroup: string = '';
+  classes: string = '';
+  date: string = '';
+  dayOfAttendance: string = '';
+  days: string = '';
+  departmentName: string = '';
+  errorRecord: AttendanceDetailErrorRecord[] = [];
+  imgUrl: string = '';
+  userName: string = '';
+}

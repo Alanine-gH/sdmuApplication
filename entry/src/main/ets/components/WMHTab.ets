@@ -1,4 +1,4 @@
-﻿import { router } from '@kit.ArkUI';
+import { router } from '@kit.ArkUI';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
@@ -7,8 +7,10 @@ import { TodoItem } from '../model/TodoModel';
 /**
  * 微门户 Tab — 按 APK 实拍（学生账号登录后 getHomeTab/getList 下发结果）逐块复刻：
  *   1. 一卡通付款码行：白底，蓝色圆角图标 44vp + 标题 18fp #333333，行高 64vp，可点。
- *   2. 通知条：#F2F2F2 背景，喇叭图标 + 「【上课通知】您明天有课，请提前做好上课准备」
- *      15fp #333333 + 右侧红圆数字 1 + 灰色 >；点击跳统一通知。
+ *   2. 通知条（消息提醒横幅）：#F2F2F2 背景，喇叭图标 + 「【上课通知】您明天有课，请提前做好上课准备」
+ *      15fp #333333 + 右侧红圆数字 1 + 灰色 >；点击跳消息列表（APK 源码依据：
+ *      MessageRemindAdapter 监听器 WMHFragment$i0$/$h0 的 a()/b() 均 navigate e.a.B0 =
+ *      strings mobile_campus_router_message_list_activity = /main/MessageListActivity）。
  *   3. 应用宫格：两列白卡（扫一扫 / 发票助手）——彩色圆底图标 + 名称 18fp + 副标题 14fp #999999。
  *   4. 其余区域 #F2F2F2 空白（与 APK 服务端未下发其他模块时的表现一致）。
  */
@@ -102,7 +104,9 @@ export struct WMHTab {
     .backgroundColor($r('app.color.common_color_6'))
     .margin({ top: 9, bottom: 9 })
     .onClick(() => {
-      router.pushUrl({ url: 'pages/UnifyNotificationPage' });
+      // APK MessageRemindAdapter：tvText(标题)/tvMore(更多>)/tvMessageCount(红点) 三处点击
+      // 统一走 WMHFragment$i0 a()/b() → /main/MessageListActivity，即消息列表页。
+      router.pushUrl({ url: 'pages/MessageListPage' });
     })
   }
 
@@ -157,7 +161,7 @@ export struct WMHTab {
               .height(120)
               .color($r('app.color.common_color_6'))
             this.gridCell($r('app.color.blue_default'), $r('sys.symbol.doc_text'),
-              '发票助手', '轻松开发票', 'pages/ReceiptListPage')
+              '发票助手', '轻松开发票', 'pages/ReceiptAssistPage')
           }
           .width('100%')
           .alignItems(VerticalAlign.Center)

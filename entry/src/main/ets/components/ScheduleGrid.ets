@@ -1,5 +1,8 @@
 import { ApiService } from '../network/ApiService';
-import { CourseItem } from '../model/CourseModel';
+import { ApiResponse } from '../model/ResponseModel';
+import { CourseItem, ScheduleTermParams, SCHEDULE_FALLBACK_START, SCHEDULE_FALLBACK_END,
+  parseYmdMs, apkCurrentWeek } from '../model/CourseModel';
+import { BusinessError } from '@kit.BasicServicesKit';
 
 /**
  * 首页课表子Tab — 1:1 复刻 report_item_indextimetable.xml + report_item_indextimetable_item.xml
@@ -26,32 +29,64 @@ export struct ScheduleGrid {
   @State todayCourses: CourseItem[] = [];
   @State weekLabel: string = '';
   @State dateLabel: string = '';
+  // 服务器学期参数算出的当前周（timetable_djz 过滤依据）
+  @State weekNo: number = 1;
+  private semesterStartMs: number = 0;
+  private semesterEndMs: number = 0;
 
   aboutToAppear(): void {
-    ApiService.getScheduleList()
-      .then((response) => {
-        // 取今日课程（CourseItem.dayOfWeek：1=周一 … 7=周日）
+    // 学期起始日：termInfo.ksrq（失败兜底 2026-08-24，2026-11-17 服务器实测）→ APK GetTimeTableUtil.e() 当前周
+    this.semesterStartMs = parseYmdMs(SCHEDULE_FALLBACK_START);
+    this.semesterEndMs = parseYmdMs(SCHEDULE_FALLBACK_END);
+    this.refreshWeekLabel();
+    ApiService.getScheduleTermParams()
+      .then((response: ApiResponse<ScheduleTermParams>) => {
+        const term: ScheduleTermParams = response.data;
+        if (term.hasStart()) {
+          const startMs: number = parseYmdMs(term.ksrq);
+          const endMs: number = parseYmdMs(term.jsrq);
+          if (startMs > 0) {
+            this.semesterStartMs = startMs;
+          }
+          if (endMs > 0) {
+            this.semesterEndMs = endMs;
+          }
+        }
+        this.refreshWeekLabel();
+        return ApiService.getScheduleList();
+      })
+      .then((response: ApiResponse<CourseItem[]>) => {
+        // 取本周今日课程（APK：timetable_djz==当前周 + timetable_xqj==星期几）
         const today: Date = new Date();
         const dayOfWeek: number = today.getDay() === 0 ? 7 : today.getDay();
         const list: CourseItem[] = [];
         for (const course of response.data) {
-          if (course.dayOfWeek === dayOfWeek) {
-            list.push(course);
+          if (course.dayOfWeek !== dayOfWeek) {
+            continue;
           }
+          if (course.djz > 0 && course.djz !== this.weekNo) {
+            continue;
+          }
+          list.push(course);
         }
         list.sort((a: CourseItem, b: CourseItem): number => a.sectionStart - b.sectionStart);
         this.todayCourses = list;
       })
-      .catch(() => {
+      .catch((error: BusinessError) => {
+        hilog.info(0x0000, 'SDMU', 'ScheduleGrid fail: %{public}s', error.message);
         this.todayCourses = [];
       });
-    // 学期起始周一 2026-09-07，计算当前周次与日期（tv_week/tv_date/tv_curweek）
-    const semesterStart: Date = new Date(2026, 8, 7);
+  }
+
+  /** APK GetTimeTableUtil.e()：服务器学期起始日 → 当前周；不在学期区间兜底第 1 周 */
+  private refreshWeekLabel(): void {
     const now: Date = new Date();
-    let week: number = Math.floor((now.getTime() - semesterStart.getTime()) / (7 * 24 * 3600 * 1000)) + 1;
+    const todayMidnight: number = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    let week: number = apkCurrentWeek(this.semesterStartMs, this.semesterEndMs, todayMidnight);
     if (week < 1) {
       week = 1;
     }
+    this.weekNo = week;
     this.weekLabel = '第' + week + '周';
     this.dateLabel = (now.getMonth() + 1) + '月' + now.getDate() + '日';
   }

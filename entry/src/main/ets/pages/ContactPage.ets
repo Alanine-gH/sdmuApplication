@@ -104,8 +104,7 @@ struct ContactPage {
     request
       .then((response: ApiResponse<ContactInitData[]>) => {
         if (response.code === 1000) {
-          this.getUIContext().getPromptAction().showToast({ message: '登录已失效，请重新登录' });
-          router.replaceUrl({ url: 'pages/LoginPage' });
+          // 登录失效统一处理已在网络层触发（HttpClient.bizRequest 拦截：清会话+toast+跳登录）
           return;
         }
         if (response.code === 0) {
@@ -284,8 +283,8 @@ struct ContactPage {
           group.topContactList.splice(childIdx, 1);
           this.groups = this.groups.slice();
         } else if (response.code === 1000) {
-          this.getUIContext().getPromptAction().showToast({ message: '登录已失效，请重新登录' });
-          router.replaceUrl({ url: 'pages/LoginPage' });
+          // 登录失效统一处理已在网络层触发（HttpClient.bizRequest 拦截：清会话+toast+跳登录）
+          return;
         } else {
           this.getUIContext().getPromptAction().showToast({ message: response.message });
         }

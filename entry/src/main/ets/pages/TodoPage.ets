@@ -43,6 +43,8 @@ interface TodoNavParams {
   startTime: string;
   addName: string;
   nodeName: string;
+  currentnodeid: string;
+  authorCn: string;
 }
 
 /** TodoFragment 每实例状态（m=pageNum、j=adapter datas、PullToRefresh 状态） */
@@ -79,7 +81,7 @@ struct TodoPage {
     ApiService.getOaTodoTabs()
       .then((response: ApiResponse<TodoTabOA[]>) => {
         if (response.code === 1000) {
-          this.onSessionExpired();
+          // 登录失效统一处理已在网络层触发（HttpClient.bizRequest 拦截：清会话+toast+跳登录）
           return;
         }
         if (response.code === 0 && response.data.length > 0) {
@@ -175,8 +177,8 @@ struct TodoPage {
     ApiService.getOaTodoList(rule, pageNum)
       .then((response: ApiResponse<OaTodoList>) => {
         if (response.code === 1000) {
+          // 登录失效统一处理已在网络层触发（HttpClient.bizRequest 拦截：清会话+toast+跳登录）
           this.patchState(idx, this.idleState(this.listStates[idx]));
-          this.onSessionExpired();
           return;
         }
         if (response.code === 0) {
@@ -257,12 +259,6 @@ struct TodoPage {
     this.getUIContext().getPromptAction().showToast({ message: message });
   }
 
-  /** 源码 code=1000 →"登录已失效，请重新登录" + 跳登录页（PersonalDetailPage 同款） */
-  private onSessionExpired(): void {
-    this.getUIContext().getPromptAction().showToast({ message: '登录已失效，请重新登录' });
-    router.replaceUrl({ url: 'pages/LoginPage' });
-  }
-
   // ===== 源码 d.onItemClick：appid!="ydbg" toast；否则详情页（db 带返回刷新）=====
   private onRowClick(row: OaTodoRow, type: string): void {
     if (row.appid === '' || row.appid !== 'ydbg') {
@@ -277,9 +273,13 @@ struct TodoPage {
       hj: row.hj,
       startTime: row.startTime,
       addName: row.addName_cn,
-      nodeName: row.currentnodename
+      nodeName: row.currentnodename,
+      currentnodeid: row.currentnodeid,
+      authorCn: row.author_cn
     };
-    router.pushUrl({ url: 'pages/TodoReadPage', params: params });
+    // [W14 todo-series] 路由补全：源码 TodoFragment.d → e.a.J(/todo/detail) → 编辑子页 /todo/edit；
+    // HAP 精简为直达表单编辑页 EditTodoDetailPage（transactionDetails 管道拉 TodoDetail）
+    router.pushUrl({ url: 'pages/EditTodoDetailPage', params: params });
   }
 
   // ===== 源码 a.a(int)→g 确认框："是否取消关注？/是否添加关注？" =====
@@ -309,7 +309,7 @@ struct TodoPage {
       ApiService.deleteOaFollows(row.orUnid)
         .then((response: ApiResponse<Object>) => {
           if (response.code === 1000) {
-            this.onSessionExpired();
+            // 登录失效统一处理已在网络层触发（HttpClient.bizRequest 拦截：清会话+toast+跳登录）
             return;
           }
           if (response.code === 0) {
@@ -325,7 +325,7 @@ struct TodoPage {
     ApiService.getOaTodoChannels()
       .then((response: ApiResponse<OaChannel[]>) => {
         if (response.code === 1000) {
-          this.onSessionExpired();
+          // 登录失效统一处理已在网络层触发（HttpClient.bizRequest 拦截：清会话+toast+跳登录）
           return;
         }
         if (response.code === 0 && response.data.length > 0) {
@@ -357,7 +357,7 @@ struct TodoPage {
     ApiService.addOaFollows(this.pendingDocUnid, joined)
       .then((response: ApiResponse<Object>) => {
         if (response.code === 1000) {
-          this.onSessionExpired();
+          // 登录失效统一处理已在网络层触发（HttpClient.bizRequest 拦截：清会话+toast+跳登录）
           return;
         }
         if (response.code === 0) {

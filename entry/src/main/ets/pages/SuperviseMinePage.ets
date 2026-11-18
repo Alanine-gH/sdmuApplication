@@ -1,252 +1,149 @@
 import { router } from '@kit.ArkUI';
 import { BusinessError } from '@kit.BasicServicesKit';
-import { TitleBar } from '../components/TitleBar';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
-import { SuperviseRecordItem, SuperviseMineData } from '../model/SuperviseModel';
+import { SuperviseListenRecord } from '../model/SuperviseModel';
+import { EmptyView } from '../components/EmptyView';
+import { LoadingView } from '../components/LoadingView';
 
 /**
- * 我的督导 — 1:1 复刻自：
- *   mobile_campus_supervise_activity_supervise_mine.xml（TabLayout 48vp + ViewPager）
- *   mobile_campus_supervise_view_mine.xml（未督导列表项）
- *   mobile_campus_supervise_view_mine_past.xml（已督导列表项，右侧"评课"按钮）
- *   mobile_campus_supervise_layout_evaluate_show.xml（教学评价展示面板）
- *   mobile_campus_supervise_activity_supervise_evaluate.xml（评课表单：应到/实到、星级、评语、提交）
+ * 我的听课页 — 源码级翻译 [W21 supervise]（SuperviseMineActivity.java + 两 Fragment 逐行 → ArkTS）：
+ *
+ * 【布局】mobile_campus_supervise_activity_supervise_mine.xml：竖排
+ *   toolbar：标题"我的听课"（T1: gVar.n("我的听课")）
+ *   TabLayout（48dip 白底，indicator 2dip #1B68B7，fixed center）：
+ *     a.f15253a = {"待听课", "已过期"}（顺序源码 1:1；选中 #1B68B7 / 未选 common_color_3）
+ *   ViewPager：SuperviseMineListenFragment（tab0）/ SuperviseMinePastListFragment（tab1）
+ *
+ * 【tab0 待听课】SuperviseMineListenFragment.Q1 → SuperviseModel.Z0：GET getNotListening → NotListening[]
+ *   行 mobile_campus_supervise_view_mine.xml：横排 padV8；tvDate=LISTENTIME 17sp#1B68B7 宽106 padL12；
+ *   右列（内容高 111.5）：tvTitle=KCMC 17sp、tvTeacher=SKLSXM 13sp mt15（teacher 图标 pad8）、
+ *   tvLocation=SKDD 13sp mt16（location 图标）、tvTime="周XQJ 第DJJ节" 13sp mt16（time 图标）；灰细线
+ *   b.onItemClick → bundle{xlh} → /supervise/ongoing（K0）= SuperviseComingPage
+ * 【tab1 已过期】SuperviseMinePastListFragment.R1 → SuperviseModel.a1：GET getStaleListening → StaleListening[]
+ *   行 mobile_campus_supervise_view_mine_past.xml（高 112）：同上右列 + tvComment（80x32 圆角4
+ *   selector_mine：enabled 蓝描边 / disabled 灰描边；selector_mine 色：enabled #1B68B7 / disabled #999999）；
+ *   ISEVALUATE=="0" → "评价" enabled → d.a → bundle{xlh} → /supervise/evaluate（L0）
+ *   requestCode 120，onActivityResult RESULT_OK → R1() 重拉两列表；否则 "已评价" disabled
+ *   b.onItemClick → bundle{xlh} → /supervise/finished（J0）= SuperviseFinishedPage
+ * 【回传】评价提交成功（SuperviseEvaluatePage）→ AppStorage 'supervise_evaluate_done' →
+ *   onPageShow 消费并重拉（onActivityResult 120 RESULT_OK 等价管道）。
+ * 2026-11-18 probe_w21_supervise.py：getNotListening/getStaleListening 均 code=0 空数组 → 真实空态。
  */
-
-class LectureRecord {
-  dateLabel: string;
-  weekLabel: string;
-  title: string;
-  teacher: string;
-  location: string;
-  time: string;
-  evaluated: boolean;
-  attendanceExpect: string;
-  attendanceActual: string;
-  score: number;
-  comment: string;
-
-  constructor(dateLabel: string, weekLabel: string, title: string, teacher: string, location: string, time: string,
-    evaluated: boolean, attendanceExpect: string, attendanceActual: string, score: number, comment: string) {
-    this.dateLabel = dateLabel;
-    this.weekLabel = weekLabel;
-    this.title = title;
-    this.teacher = teacher;
-    this.location = location;
-    this.time = time;
-    this.evaluated = evaluated;
-    this.attendanceExpect = attendanceExpect;
-    this.attendanceActual = attendanceActual;
-    this.score = score;
-    this.comment = comment;
-  }
-}
 
 @Entry
 @Component
 struct SuperviseMinePage {
   @State selectedTabIndex: number = 0;
-  @State pastRecords: LectureRecord[] = [
-    new LectureRecord('11-09', '周一', '高等数学（下）', '张建国', '明理楼B302', '08:30-10:00', true, '56', '54', 4,
-      '教学目标明确，重点突出；板书规范，推导过程完整。课堂互动稍显不足，建议增加随堂提问环节。'),
-    new LectureRecord('11-05', '周四', '数据结构', '李慧敏', '计算机楼A215', '14:00-15:40', true, '48', '47', 5,
-      '案例驱动教学，思路清晰，代码演示到位，学生参与度高，整体效果优秀。'),
-    new LectureRecord('11-02', '周一', '大学英语（四）', '王雪梅', '外语楼208', '10:00-11:40', true, '50', '46', 3,
-      '语音语调标准，课堂氛围活跃；部分学生注意力不集中，建议加强课堂管理。')
-  ];
-  @State futureRecords: LectureRecord[] = [
-    new LectureRecord('11-16', '周一', '大学物理（下）', '赵国强', '实验楼C105', '16:00-17:40', false, '', '', 0, ''),
-    new LectureRecord('11-18', '周三', '线性代数', '陈立群', '明理楼B410', '08:00-09:40', false, '', '', 0, ''),
-    new LectureRecord('11-20', '周五', '教育学原理', '孙美玲', '文科楼302', '14:00-15:40', false, '', '', 0, '')
-  ];
-  @State sheetVisible: boolean = false;
-  @State sheetMode: string = 'show';
-  @State sheetTitle: string = '';
-  @State sheetTeacher: string = '';
-  @State sheetExpect: string = '';
-  @State sheetActual: string = '';
-  @State sheetScore: number = 0;
-  @State sheetComment: string = '';
+  /** tab0 待听课（SuperviseMineAdapter.data） */
+  @State futureRecords: SuperviseListenRecord[] = [];
+  /** tab1 已过期（SuperviseMinePastAdapter.data） */
+  @State pastRecords: SuperviseListenRecord[] = [];
+  @State isLoadingListen: boolean = true;
+  @State isLoadingPast: boolean = true;
+  private static readonly EVALUATE_DONE_KEY: string = 'supervise_evaluate_done';
 
   aboutToAppear(): void {
-    ApiService.getSuperviseMine()
-      .then((response: ApiResponse<SuperviseMineData>) => {
+    // 源码两 Fragment f1() 各自独立拉取
+    this.loadNotListening();
+    this.loadStaleListening();
+  }
+
+  onPageShow(): void {
+    // 源码 MineActivity.onActivityResult(120, RESULT_OK) → 两 Fragment 重拉
+    const done: string | undefined = AppStorage.get<string>(SuperviseMinePage.EVALUATE_DONE_KEY);
+    if (done !== undefined && done === '1') {
+      AppStorage.setOrCreate<string>(SuperviseMinePage.EVALUATE_DONE_KEY, '');
+      this.loadNotListening();
+      this.loadStaleListening();
+    }
+  }
+
+  /** 源码 SuperviseMineListenFragment.Q1 → d.a.v(...).o()：GET getNotListening */
+  private loadNotListening(): void {
+    this.isLoadingListen = true;
+    ApiService.getSuperviseNotListening()
+      .then((response: ApiResponse<SuperviseListenRecord[]>) => {
         if (response.code !== 0) {
-          console.info('SuperviseMinePage degrade: code=' + response.code + ' msg=' + response.message);
+          ApiService.logError('SuperviseMinePage notListening degrade: code=' + response.code +
+            ' msg=' + response.message);
         }
-        const data: SuperviseMineData = response.data;
-        if (data.pastRecords.length > 0) {
-          this.pastRecords = data.pastRecords.map((entry: SuperviseRecordItem): LectureRecord => {
-            return new LectureRecord(entry.dateLabel, entry.weekLabel, entry.title, entry.teacher, entry.location,
-              entry.time, entry.evaluated, entry.attendanceExpect, entry.attendanceActual, entry.score,
-              entry.comment);
-          });
-        }
-        if (data.futureRecords.length > 0) {
-          this.futureRecords = data.futureRecords.map((entry: SuperviseRecordItem): LectureRecord => {
-            return new LectureRecord(entry.dateLabel, entry.weekLabel, entry.title, entry.teacher, entry.location,
-              entry.time, entry.evaluated, entry.attendanceExpect, entry.attendanceActual, entry.score,
-              entry.comment);
-          });
-        }
+        this.futureRecords = response.data;
+        this.isLoadingListen = false;
       })
       .catch((error: BusinessError) => {
-        console.info('SuperviseMinePage load fail: ' + error.message);
+        ApiService.logError('SuperviseMinePage notListening fail: ' + error.message);
+        this.futureRecords = [];
+        this.isLoadingListen = false;
       });
   }
 
-  private openShowSheet(record: LectureRecord): void {
-    this.sheetMode = 'show';
-    this.sheetTitle = record.title;
-    this.sheetTeacher = record.teacher;
-    this.sheetExpect = record.attendanceExpect;
-    this.sheetActual = record.attendanceActual;
-    this.sheetScore = record.score;
-    this.sheetComment = record.comment;
-    this.sheetVisible = true;
-  }
-
-  private openEditSheet(record: LectureRecord): void {
-    this.sheetMode = 'edit';
-    this.sheetTitle = record.title;
-    this.sheetTeacher = record.teacher;
-    this.sheetExpect = record.attendanceExpect;
-    this.sheetActual = record.attendanceActual;
-    this.sheetScore = record.score;
-    this.sheetComment = record.comment;
-    this.sheetVisible = true;
-  }
-
-  private submitEvaluate(): void {
-    this.sheetVisible = false;
-  }
-
-  // layout_evaluate_show.xml / activity_supervise_evaluate.xml
-  @Builder
-  superviseEvaluateSheetBuilder() {
-    Column() {
-      Text(this.sheetTitle)
-        .fontSize(15)
-        .fontColor($r('app.color.common_color_1'))
-        .width('100%')
-        .textAlign(TextAlign.Center)
-        .maxLines(1)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
-        .padding({ top: 12, bottom: 4 })
-      Text(this.sheetTeacher)
-        .fontSize(13)
-        .fontColor($r('app.color.common_color_3'))
-        .width('100%')
-        .textAlign(TextAlign.Center)
-        .padding({ bottom: 8 })
-
-      Divider()
-        .color($r('app.color.common_color_5'))
-        .strokeWidth(0.5)
-        .width('100%')
-
-      // 应到人数 / 实到人数
-      Row() {
-        Column() {
-          Text('应到人数')
-            .fontSize(13)
-            .fontColor($r('app.color.common_color_1'))
-          Text(this.sheetExpect !== '' ? this.sheetExpect : '--')
-            .fontSize(17)
-            .fontColor($r('app.color.blue_default'))
-            .margin({ top: 4 })
+  /** 源码 SuperviseMinePastListFragment.R1 → d.a.x(...).p()：GET getStaleListening */
+  private loadStaleListening(): void {
+    this.isLoadingPast = true;
+    ApiService.getSuperviseStaleListening()
+      .then((response: ApiResponse<SuperviseListenRecord[]>) => {
+        if (response.code !== 0) {
+          ApiService.logError('SuperviseMinePage staleListening degrade: code=' + response.code +
+            ' msg=' + response.message);
         }
-        .layoutWeight(1)
-        .alignItems(HorizontalAlign.Start)
+        this.pastRecords = response.data;
+        this.isLoadingPast = false;
+      })
+      .catch((error: BusinessError) => {
+        ApiService.logError('SuperviseMinePage staleListening fail: ' + error.message);
+        this.pastRecords = [];
+        this.isLoadingPast = false;
+      });
+  }
 
-        Column() {
-          Text('实到人数')
-            .fontSize(13)
-            .fontColor($r('app.color.common_color_1'))
-          Text(this.sheetActual !== '' ? this.sheetActual : '--')
-            .fontSize(17)
-            .fontColor($r('app.color.blue_default'))
-            .margin({ top: 4 })
-        }
-        .layoutWeight(1)
-        .alignItems(HorizontalAlign.Start)
-      }
-      .width('100%')
-      .alignItems(VerticalAlign.Center)
-      .margin({ top: 24, bottom: 21 })
-
-      // 课程评价（评分星级）
-      Text('课程评价')
-        .fontSize(17)
-        .fontColor($r('app.color.common_color_1'))
-        .width('100%')
-        .textAlign(TextAlign.Center)
-        .margin({ top: 12 })
-
-      Row() {
-        ForEach([1, 2, 3, 4, 5], (starNum: number) => {
-          Image(starNum <= this.sheetScore ?
-            $r('app.media.mobile_campus_supervise_star_light') :
-            $r('app.media.mobile_campus_supervise_star_grey'))
-            .width(20)
-            .height(20)
-            .margin({ left: 4, right: 4 })
-            .onClick(() => {
-              if (this.sheetMode === 'edit') {
-                this.sheetScore = starNum;
-              }
-            })
-        }, (starNum: number) => starNum.toString())
-      }
-      .margin({ top: 21, bottom: 17 })
-      .justifyContent(FlexAlign.Center)
-
-      // 评课内容 / 展示评语
-      Text(this.sheetComment !== '' ? this.sheetComment : (this.sheetMode === 'edit' ?
-        '本次课程整体效果如何呢？' : '暂无评课内容'))
-        .fontSize(13)
-        .fontColor($r('app.color.common_color_1'))
-        .width('100%')
-        .textAlign(TextAlign.Start)
-        .padding(7)
-        .margin({ top: 15 })
-        .minLines(5)
-        .maxLines(8)
-      Blank()
-        .layoutWeight(1)
-
-      // 提交评价（编辑模式）
-      if (this.sheetMode === 'edit') {
-        Text('提交评价')
-          .fontSize(17)
-          .fontColor(Color.White)
-          .width('100%')
-          .textAlign(TextAlign.Center)
-          .padding({ top: 10, bottom: 10 })
-          .backgroundColor('#1B68B7')
-          .margin({ bottom: 12 })
-          .onClick(() => {
-            this.submitEvaluate();
-          })
-      }
-    }
-    .width('100%')
-    .height('100%')
-    .padding({ left: 12, right: 12 })
-    .backgroundColor($r('app.color.white'))
+  /** 源码 SuperviseMineAdapter.getView tvTime："周XQJ 第DJJ节" */
+  private timeText(record: SuperviseListenRecord): string {
+    return '周' + record.XQJ + ' 第' + record.DJJ + '节';
   }
 
   build() {
     Column() {
-      // toolbar_normal.xml
-      TitleBar({ title: '我的督导', showBack: true })
+      // toolbar_normal.xml："我的听课"
+      Column() {
+        Row() {
+          Text('＜')
+            .fontSize(16)
+            .fontColor($r('app.color.common_color_1'))
+            .width(40)
+            .height('100%')
+            .textAlign(TextAlign.Center)
+            .margin({ left: 15 })
+            .onClick(() => {
+              router.back();
+            })
+          Text('我的听课')
+            .fontSize(17)
+            .fontColor($r('app.color.ybg_blue'))
+            .layoutWeight(1)
+            .textAlign(TextAlign.Center)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+          Blank()
+            .width(55)
+        }
+        .width('100%')
+        .height(44)
+        .alignItems(VerticalAlign.Center)
 
-      // TabLayout：48vp，指示条 2vp #1B68B7，选中 #1B68B7 / 未选中 #999999
+        Divider()
+          .color($r('app.color.common_color_5'))
+          .strokeWidth(0.5)
+          .width('100%')
+      }
+      .width('100%')
+      .backgroundColor($r('app.color.main_bg'))
+
+      // TabLayout：48dip 白底 indicator 2dip #1B68B7；a.f15253a 待听课/已过期
       Column() {
         Row() {
           Column() {
-            Text('已督导')
+            Text('待听课')
               .fontSize(15)
               .fontColor(this.selectedTabIndex === 0 ? '#1B68B7' : $r('app.color.common_color_3'))
               .layoutWeight(1)
@@ -264,7 +161,7 @@ struct SuperviseMinePage {
           })
 
           Column() {
-            Text('未督导')
+            Text('已过期')
               .fontSize(15)
               .fontColor(this.selectedTabIndex === 1 ? '#1B68B7' : $r('app.color.common_color_3'))
               .layoutWeight(1)
@@ -294,197 +191,251 @@ struct SuperviseMinePage {
       .width('100%')
       .backgroundColor($r('app.color.white'))
 
-      // ViewPager：已督导 / 未督导
+      // ViewPager：tab0 待听课 / tab1 已过期（失败/空 → 空态，不展示编造记录）
       if (this.selectedTabIndex === 0) {
-        List({ space: 0 }) {
-          ForEach(this.pastRecords, (record: LectureRecord) => {
-            ListItem() {
-              Row() {
-                Text(record.dateLabel + '\n' + record.weekLabel)
-                  .fontSize(17)
-                  .fontColor('#1B6BB7')
-                  .width(106)
-                  .padding({ left: 12 })
-                  .textAlign(TextAlign.Start)
-                  .lineHeight(24)
-                Column() {
-                  Row() {
-                    Column() {
-                      Text(record.title)
-                        .fontSize(17)
-                        .fontColor($r('app.color.common_color_1'))
-                        .maxLines(1)
-                        .textOverflow({ overflow: TextOverflow.Ellipsis })
-                      Row() {
-                        Image($r('app.media.mobile_campus_supervise_teacher'))
-                          .width(12)
-                          .height(12)
-                          .margin({ right: 8 })
-                        Text(record.teacher)
-                          .fontSize(13)
-                          .fontColor($r('app.color.common_color_3'))
-                      }
-                      .margin({ top: 15 })
-
-                      Row() {
-                        Image($r('app.media.mobile_campus_supervise_location'))
-                          .width(12)
-                          .height(12)
-                          .margin({ right: 8 })
-                        Text(record.location)
-                          .fontSize(13)
-                          .fontColor($r('app.color.common_color_3'))
-                      }
-                      .margin({ top: 8 })
-
-                      Row() {
-                        Image($r('app.media.mobile_campus_supervise_time'))
-                          .width(16)
-                          .height(16)
-                          .margin({ right: 8 })
-                        Text(record.time)
-                          .fontSize(13)
-                          .fontColor($r('app.color.common_color_3'))
-                      }
-                      .margin({ top: 8 })
-                    }
-                    .height(111)
-                    .layoutWeight(1)
-                    .alignItems(HorizontalAlign.Start)
-                    .justifyContent(FlexAlign.Center)
-
-                    Text(record.evaluated ? '查看' : '评课')
-                      .fontSize(14)
-                      .fontColor('#1B68B7')
-                      .width(80)
-                      .height(32)
-                      .textAlign(TextAlign.Center)
-                      .borderRadius(4)
-                      .border({ width: 1, color: '#1B68B7' })
-                      .margin({ right: 12 })
-                      .onClick(() => {
-                        if (record.evaluated) {
-                          this.openShowSheet(record);
-                        } else {
-                          this.openEditSheet(record);
-                        }
-                      })
-                  }
-                  .alignItems(VerticalAlign.Center)
-                  .height(112)
-
-                  Divider()
-                    .color($r('app.color.common_color_5'))
-                    .strokeWidth(0.5)
-                    .width('100%')
-                }
-                .layoutWeight(1)
-                .height(112)
-                .alignItems(HorizontalAlign.Start)
-              }
-              .width('100%')
-              .height(112)
-              .alignItems(VerticalAlign.Center)
-              .backgroundColor($r('app.color.white'))
-              .onClick(() => {
-                this.openShowSheet(record);
-              })
-            }
-          }, (record: LectureRecord) => record.dateLabel + record.title)
-        }
-        .width('100%')
-        .layoutWeight(1)
-        .backgroundColor($r('app.color.common_color_6'))
+        this.listenList()
       } else {
-        List({ space: 0 }) {
-          ForEach(this.futureRecords, (record: LectureRecord) => {
-            ListItem() {
-              Row() {
-                Text(record.dateLabel + '\n' + record.weekLabel)
-                  .fontSize(17)
-                  .fontColor('#1B6BB7')
-                  .width(106)
-                  .padding({ left: 12 })
-                  .textAlign(TextAlign.Start)
-                  .lineHeight(24)
-                Column() {
-                  Column() {
-                    Text(record.title)
-                      .fontSize(17)
-                      .fontColor($r('app.color.common_color_1'))
-                      .maxLines(1)
-                      .textOverflow({ overflow: TextOverflow.Ellipsis })
-                    Row() {
-                      Image($r('app.media.mobile_campus_supervise_teacher'))
-                        .width(12)
-                        .height(12)
-                        .margin({ right: 8 })
-                      Text(record.teacher)
-                        .fontSize(13)
-                        .fontColor($r('app.color.common_color_3'))
-                    }
-                    .margin({ top: 15 })
-
-                    Row() {
-                      Image($r('app.media.mobile_campus_supervise_location'))
-                        .width(12)
-                        .height(12)
-                        .margin({ right: 8 })
-                      Text(record.location)
-                        .fontSize(13)
-                        .fontColor($r('app.color.common_color_3'))
-                    }
-                    .margin({ top: 8 })
-
-                    Row() {
-                      Image($r('app.media.mobile_campus_supervise_time'))
-                        .width(16)
-                        .height(16)
-                        .margin({ right: 8 })
-                      Text(record.time)
-                        .fontSize(13)
-                        .fontColor($r('app.color.common_color_3'))
-                    }
-                    .margin({ top: 8 })
-                  }
-                  .height(111)
-                  .layoutWeight(1)
-                  .alignItems(HorizontalAlign.Start)
-                  .justifyContent(FlexAlign.Center)
-
-                  Divider()
-                    .color($r('app.color.common_color_5'))
-                    .strokeWidth(0.5)
-                    .width('100%')
-                }
-                .layoutWeight(1)
-                .height(112)
-                .alignItems(HorizontalAlign.Start)
-              }
-              .width('100%')
-              .height(112)
-              .padding({ top: 8, bottom: 8 })
-              .alignItems(VerticalAlign.Center)
-              .backgroundColor($r('app.color.white'))
-              .onClick(() => {
-                this.openEditSheet(record);
-              })
-            }
-          }, (record: LectureRecord) => record.dateLabel + record.title)
-        }
-        .width('100%')
-        .layoutWeight(1)
-        .backgroundColor($r('app.color.common_color_6'))
+        this.pastList()
       }
     }
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.common_color_6'))
-    .bindSheet($$this.sheetVisible, this.superviseEvaluateSheetBuilder(), {
-      height: 480,
-      dragBar: true,
-      showClose: true,
-      backgroundColor: $r('app.color.white')
-    } as SheetOptions)
+  }
+
+  /** tab0：mobile_campus_supervise_view_mine.xml 行（padV8，内容高 111.5） */
+  @Builder
+  listenList() {
+    if (this.isLoadingListen) {
+      LoadingView()
+    } else if (this.futureRecords.length === 0) {
+      EmptyView()
+    } else {
+      List({ space: 0 }) {
+        ForEach(this.futureRecords, (record: SuperviseListenRecord) => {
+          ListItem() {
+            this.listenRow(record)
+          }
+        }, (record: SuperviseListenRecord) => record.XLH + '_' + record.KCMC)
+      }
+      .width('100%')
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
+      .backgroundColor($r('app.color.common_color_6'))
+    }
+  }
+
+  @Builder
+  listenRow(record: SuperviseListenRecord) {
+    Column() {
+      Row() {
+        Text(record.LISTENTIME)
+          .fontSize(17)
+          .fontColor('#1B68B7')
+          .width(106)
+          .padding({ left: 12 })
+          .height('100%')
+          .textAlign(TextAlign.Start)
+        Column() {
+          Column() {
+            Text(record.KCMC)
+              .fontSize(17)
+              .fontColor($r('app.color.common_color_1'))
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+            Row() {
+              Image($r('app.media.mobile_campus_supervise_teacher'))
+                .width(12)
+                .height(12)
+                .margin({ right: 8 })
+              Text(record.SKLSXM)
+                .fontSize(13)
+                .fontColor($r('app.color.common_color_3'))
+                .maxLines(1)
+            }
+            .margin({ top: 15 })
+            .alignItems(VerticalAlign.Center)
+
+            Row() {
+              Image($r('app.media.mobile_campus_supervise_location'))
+                .width(12)
+                .height(12)
+                .margin({ right: 8 })
+              Text(record.SKDD)
+                .fontSize(13)
+                .fontColor($r('app.color.common_color_3'))
+                .maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+            }
+            .margin({ top: 8 })
+            .alignItems(VerticalAlign.Center)
+
+            Row() {
+              Image($r('app.media.mobile_campus_supervise_time'))
+                .width(16)
+                .height(16)
+                .margin({ right: 8 })
+              Text(this.timeText(record))
+                .fontSize(13)
+                .fontColor($r('app.color.common_color_3'))
+            }
+            .margin({ top: 8 })
+            .alignItems(VerticalAlign.Center)
+          }
+          .height(111.5)
+          .layoutWeight(1)
+          .alignItems(HorizontalAlign.Start)
+          .justifyContent(FlexAlign.Center)
+
+          Divider()
+            .color($r('app.color.common_color_5'))
+            .strokeWidth(0.5)
+            .width('100%')
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
+      }
+      .width('100%')
+      .padding({ top: 8, bottom: 8 })
+      .alignItems(VerticalAlign.Center)
+      .backgroundColor($r('app.color.white'))
+      // 源码 b.onItemClick：bundle{xlh=NotListening.XLH} → /supervise/ongoing（K0）
+      .onClick(() => {
+        router.pushUrl({ url: 'pages/SuperviseComingPage',
+          params: { 'xlh': record.XLH } as Record<string, string> });
+      })
+    }
+    .width('100%')
+  }
+
+  /** tab1：mobile_campus_supervise_view_mine_past.xml 行（高 112 + 右侧评价钮） */
+  @Builder
+  pastList() {
+    if (this.isLoadingPast) {
+      LoadingView()
+    } else if (this.pastRecords.length === 0) {
+      EmptyView()
+    } else {
+      List({ space: 0 }) {
+        ForEach(this.pastRecords, (record: SuperviseListenRecord) => {
+          ListItem() {
+            this.pastRow(record)
+          }
+        }, (record: SuperviseListenRecord) => record.XLH + '_' + record.KCMC)
+      }
+      .width('100%')
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
+      .backgroundColor($r('app.color.common_color_6'))
+    }
+  }
+
+  @Builder
+  pastRow(record: SuperviseListenRecord) {
+    Column() {
+      Row() {
+        Text(record.LISTENTIME)
+          .fontSize(17)
+          .fontColor('#1B68B7')
+          .width(106)
+          .padding({ left: 12 })
+          .height('100%')
+          .textAlign(TextAlign.Start)
+        Column() {
+          Row() {
+            Column() {
+              Text(record.KCMC)
+                .fontSize(17)
+                .fontColor($r('app.color.common_color_1'))
+                .maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+              Row() {
+                Image($r('app.media.mobile_campus_supervise_teacher'))
+                  .width(12)
+                  .height(12)
+                  .margin({ right: 8 })
+                Text(record.SKLSXM)
+                  .fontSize(13)
+                  .fontColor($r('app.color.common_color_3'))
+                  .maxLines(1)
+              }
+              .margin({ top: 15 })
+              .alignItems(VerticalAlign.Center)
+
+              Row() {
+                Image($r('app.media.mobile_campus_supervise_location'))
+                  .width(12)
+                  .height(12)
+                  .margin({ right: 8 })
+                Text(record.SKDD)
+                  .fontSize(13)
+                  .fontColor($r('app.color.common_color_3'))
+                  .maxLines(1)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis })
+              }
+              .margin({ top: 8 })
+              .alignItems(VerticalAlign.Center)
+
+              Row() {
+                Image($r('app.media.mobile_campus_supervise_time'))
+                  .width(16)
+                  .height(16)
+                  .margin({ right: 8 })
+                Text(this.timeText(record))
+                  .fontSize(13)
+                  .fontColor($r('app.color.common_color_3'))
+              }
+              .margin({ top: 8 })
+              .alignItems(VerticalAlign.Center)
+            }
+            .height(111.5)
+            .layoutWeight(1)
+            .alignItems(HorizontalAlign.Start)
+            .justifyContent(FlexAlign.Center)
+
+            // tvComment：selector_mine 双态（ISEVALUATE=="0" → 评价 enabled / 已评价 disabled）
+            Text(record.ISEVALUATE === '0' ? '评价' : '已评价')
+              .fontSize(14)
+              .fontColor(record.ISEVALUATE === '0' ? '#1B68B7' : '#999999')
+              .width(80)
+              .height(32)
+              .textAlign(TextAlign.Center)
+              .borderRadius(4)
+              .border({
+                width: 1,
+                color: record.ISEVALUATE === '0' ? '#1B68B7' : '#999999'
+              })
+              .margin({ right: 12 })
+              .onClick(() => {
+                if (record.ISEVALUATE === '0') {
+                  // 源码 d.a：bundle{xlh} → /supervise/evaluate（L0）requestCode 120 → RESULT_OK 重拉
+                  router.pushUrl({ url: 'pages/SuperviseEvaluatePage',
+                    params: { 'xlh': record.XLH } as Record<string, string> });
+                }
+              })
+          }
+          .width('100%')
+          .alignItems(VerticalAlign.Center)
+
+          Divider()
+            .color($r('app.color.common_color_5'))
+            .strokeWidth(0.5)
+            .width('100%')
+        }
+        .layoutWeight(1)
+        .height(112)
+        .alignItems(HorizontalAlign.Start)
+      }
+      .width('100%')
+      .height(112)
+      .alignItems(VerticalAlign.Center)
+      .backgroundColor($r('app.color.white'))
+      // 源码 b.onItemClick：bundle{xlh=StaleListening.XLH} → /supervise/finished（J0）
+      .onClick(() => {
+        router.pushUrl({ url: 'pages/SuperviseFinishedPage',
+          params: { 'xlh': record.XLH } as Record<string, string> });
+      })
+    }
+    .width('100%')
   }
 }

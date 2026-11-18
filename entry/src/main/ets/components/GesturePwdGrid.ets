@@ -1,51 +1,91 @@
-﻿import { GestureGridPair } from '../model/GestureGridPair';
+import { GestureGridPair } from '../model/GestureGridPair';
 
 /**
- * 手势密码九宫格 — 1:1 复刻 GesturePwdLayout
- * 3x3 圆点 + 选中连线；大格 336vp（间距 112）、小格 72vp（间距 24）
- * allowInteract=false 时仅展示 displaySeq 图案（小图预览）
+ * 手势密码九宫格 — 1:1 复刻 GesturePwdLayout + GesturePwdCircleView（lyyd/base/widget）
+ * [W22 launch-chain] 按源码升级：
+ *   - 圆点 = 单实心圆（无外环）：未选 #F3F6FD 半径 gw/18；选中 #1B68B7 半径 (gw/47*8)/2；
+ *     错误 #EB5757（colorCheckedErr，文字白 colorUnCheckedErrText）
+ *   - 大格（allowInteract=true）圆内显示数字 1..9（isShowText=ifAllowInteract，textSize 80px=40fp 加粗）；
+ *     count=4（CDJS）时文字为 1,2,3,技,4,5,6,师,7,8,9,学,工,贸,职,院
+ *   - 内边距 pad = (gw/47)*3/2（interact）| (gw/9)/2（非 interact），取整除
+ *   - 命中区 = 圆点矩形四周收缩 marginRate 0.2（ifClickOnView）
+ *   - 按下即清空上一笔画（ACTION_DOWN lockPath.reset+resetPwd）；连线宽 3px=1.5vp
+ *   - 错误态：check 失败后圆点/连线转红（ifCheckOnErr），下次按下恢复
+ *   - 抬起必回 onSwipeFinish（源码 e() 先于长度校验），seq≥4 才回 onFinish
+ *   - 未达 minLength(4) 不触发模式回调（页面按长度给"请最少连接4个点"）
  */
 @Component
 export struct GesturePwdGrid {
   @Prop @Watch('onResetTokenChange') resetToken: number = 0;
+  /** 错误标记：来源页校验失败后 bump —— 圆点/连线转红，直到下次按下 */
+  @Prop @Watch('onErrorTokenChange') errorToken: number = 0;
   @Prop gridWidth: number = 336;
   @Prop allowInteract: boolean = true;
+  /** 九宫格阶数（源码 mCount：3=3x3 九点，4=4x4 十六点 CDJS） */
+  @Prop count: number = 3;
+  /** 非交互模式展示的图案（小九宫格预览 refreshPwdKeyboard） */
   @Prop displaySeq: number[] = [];
+  /** 笔画结束（源码 onSwipeFinish → e() 回调，每笔必回） */
+  onSwipeFinish: (seq: number[]) => void = (seq: number[]) => {};
+  /** 达到最小长度后的模式回调（reset/check 判定交页面） */
   onFinish: (seq: number[]) => void = (seq: number[]) => {};
   @State private seq: number[] = [];
+  @State private renderError: boolean = false;
   @State private dragging: boolean = false;
   @State private dragX: number = 0;
   @State private dragY: number = 0;
 
+  /** 源码 textStrs（mCount==4 时 16 点文字；3x3 时 (idx+1)） */
+  private static readonly COUNT4_TEXTS: string[] =
+    ['1', '2', '3', '技', '4', '5', '6', '师', '7', '8', '9', '学', '工', '贸', '职', '院'];
+
   private onResetTokenChange(): void {
     this.seq = [];
+    this.renderError = false;
     this.dragging = false;
     this.dragX = 0;
     this.dragY = 0;
   }
 
+  private onErrorTokenChange(): void {
+    // 源码 onCheck 错误分支：currentPaint=paint_error + 圆点 switchStatus(3)，保持到下次按下
+    this.renderError = true;
+  }
+
+  /** 源码 onMeasure pad 公式（整数除法 1:1） */
+  private pad(): number {
+    const gw: number = Math.floor(this.gridWidth);
+    return this.allowInteract ? Math.floor(Math.floor(gw / 47) * 3 / 2) : Math.floor(Math.floor(gw / 9) / 2);
+  }
+
   private cellSize(): number {
-    return this.gridWidth / 3;
+    return (this.gridWidth - this.pad() * 2) / this.count;
   }
 
   private centerX(idx: number): number {
-    return (idx % 3) * this.cellSize() + this.cellSize() / 2;
+    return this.pad() + (idx % this.count) * this.cellSize() + this.cellSize() / 2;
   }
 
   private centerY(idx: number): number {
-    return Math.floor(idx / 3) * this.cellSize() + this.cellSize() / 2;
+    return this.pad() + Math.floor(idx / this.count) * this.cellSize() + this.cellSize() / 2;
   }
 
-  private dotOuter(): number {
-    return this.gridWidth > 100 ? 40 : 16;
-  }
-
-  private dotInner(): number {
-    return this.gridWidth > 100 ? 12 : 6;
+  /** 源码 getCircleView 半径公式：interact (h/47*8)/2；非 interact h/9/2 */
+  private dotRadius(): number {
+    const gw: number = Math.floor(this.gridWidth);
+    return this.allowInteract ? Math.floor(Math.floor(gw / 47) * 8 / 2) : Math.floor(Math.floor(gw / 9) / 2);
   }
 
   private lineWidth(): number {
-    return this.gridWidth > 100 ? 4 : 2;
+    // 源码 paint.setStrokeWidth(y.a(3.0f)) = 3px = 1.5vp
+    return 1.5;
+  }
+
+  private dotText(idx: number): string {
+    if (this.count === 4) {
+      return GesturePwdGrid.COUNT4_TEXTS[idx];
+    }
+    return String(idx + 1);
   }
 
   private renderSeq(): number[] {
@@ -65,63 +105,79 @@ export struct GesturePwdGrid {
     return this.renderSeq().indexOf(idx) !== -1;
   }
 
-  private handleTouch(x: number, y: number): void {
-    const half: number = this.cellSize() / 2;
-    for (let i = 0; i < 9; i++) {
-      const dx: number = x - this.centerX(i);
-      const dy: number = y - this.centerY(i);
-      if (dx * dx + dy * dy <= half * half) {
-        if (this.seq.indexOf(i) === -1) {
-          const next: number[] = this.seq.slice();
-          next.push(i);
-          this.seq = next;
-        }
-        return;
+  /** 源码 ifClickOnView：圆点矩形四周收缩 20% 后 contains 点 */
+  private hitIndex(x: number, y: number): number {
+    const shrink: number = this.cellSize() * 0.2;
+    for (let i = 0; i < this.count * this.count; i++) {
+      const left: number = this.centerX(i) - this.cellSize() / 2 + shrink;
+      const top: number = this.centerY(i) - this.cellSize() / 2 + shrink;
+      const right: number = this.centerX(i) + this.cellSize() / 2 - shrink;
+      const bottom: number = this.centerY(i) + this.cellSize() / 2 - shrink;
+      if (x >= left && x <= right && y >= top && y <= bottom) {
+        return i;
       }
     }
+    return -1;
+  }
+
+  private addPwd(idx: number): void {
+    // 源码 addPwd：checkRepetition 去重
+    if (idx >= 0 && this.seq.indexOf(idx) === -1) {
+      const next: number[] = this.seq.slice();
+      next.push(idx);
+      this.seq = next;
+    }
+  }
+
+  private handleMove(x: number, y: number): void {
+    const idx: number = this.hitIndex(x, y);
+    if (idx >= 0 && this.seq.length > 0 && this.seq[this.seq.length - 1] !== idx) {
+      this.addPwd(idx);
+    }
+    this.dragX = x;
+    this.dragY = y;
   }
 
   build() {
     Stack() {
+      // 连线（源码 dispatchDraw：仅 ifAllowInteract 时画 lockPath）
       ForEach(this.pairs(), (pair: GestureGridPair) => {
         Line()
           .startPoint([this.centerX(pair.fromIdx), this.centerY(pair.fromIdx)])
           .endPoint([this.centerX(pair.toIdx), this.centerY(pair.toIdx)])
           .strokeWidth(this.lineWidth())
-          .stroke($r('app.color.mobile_campus_primary_color'))
+          .stroke(this.renderError ? '#EB5757' : '#1B68B7')
           .width(this.gridWidth)
           .height(this.gridWidth)
       }, (pair: GestureGridPair) => `line_${pair.fromIdx}_${pair.toIdx}`)
 
+      // 拖动引导线（drawMovingPath）
       if (this.allowInteract && this.dragging && this.seq.length >= 1) {
         Line()
           .startPoint([this.centerX(this.seq[this.seq.length - 1]), this.centerY(this.seq[this.seq.length - 1])])
           .endPoint([this.dragX, this.dragY])
           .strokeWidth(this.lineWidth())
-          .stroke($r('app.color.mobile_campus_primary_color'))
+          .stroke(this.renderError ? '#EB5757' : '#1B68B7')
           .width(this.gridWidth)
           .height(this.gridWidth)
       }
 
-      ForEach([0, 1, 2, 3, 4, 5, 6, 7, 8], (i: number) => {
+      // 圆点（GesturePwdCircleView：实心圆；interact 格所有点显示数字，
+      // 文字色随状态：未选 #B9C0D0 / 选中·错误 #FFFFFF，textSize 80px=40fp 加粗）
+      ForEach(Array.from({ length: this.count * this.count }, (v: Object, i: number) => i), (i: number) => {
         Stack() {
-          if (this.isDotSelected(i)) {
-            Stack()
-              .width(this.dotInner())
-              .height(this.dotInner())
-              .borderRadius(this.dotInner() / 2)
-              .backgroundColor($r('app.color.white'))
-          }
+          Text(this.dotText(i))
+            .fontSize(40)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.isDotSelected(i) ? '#FFFFFF' : '#B9C0D0')
+            .visibility(this.allowInteract ? Visibility.Visible : Visibility.None)
         }
-        .width(this.dotOuter())
-        .height(this.dotOuter())
-        .borderRadius(this.dotOuter() / 2)
-        .border({
-          width: this.isDotSelected(i) ? 2 : 1,
-          color: this.isDotSelected(i) ? $r('app.color.mobile_campus_primary_color') : $r('app.color.common_color_33')
-        })
-        .backgroundColor(this.isDotSelected(i) ? $r('app.color.mobile_campus_primary_color') : $r('app.color.white'))
-        .position({ x: this.centerX(i) - this.dotOuter() / 2, y: this.centerY(i) - this.dotOuter() / 2 })
+        .width(this.dotRadius() * 2)
+        .height(this.dotRadius() * 2)
+        .borderRadius(this.dotRadius())
+        .backgroundColor(this.isDotSelected(i) ?
+          (this.renderError ? '#EB5757' : '#1B68B7') : '#F3F6FD')
+        .position({ x: this.centerX(i) - this.dotRadius(), y: this.centerY(i) - this.dotRadius() })
       }, (i: number) => `dot_${i}`)
     }
     .width(this.gridWidth)
@@ -131,31 +187,32 @@ export struct GesturePwdGrid {
         if (!this.allowInteract) {
           return;
         }
+        // 源码 ACTION_DOWN：lockPath.reset + resetPwd（新一笔从零开始）+ ifCheckOnErr 复位
         const finger: FingerInfo = event.fingerList[0];
-        this.handleTouch(finger.localX, finger.localY);
+        this.seq = [];
+        this.renderError = false;
         this.dragging = true;
         this.dragX = finger.localX;
         this.dragY = finger.localY;
+        this.addPwd(this.hitIndex(finger.localX, finger.localY));
       })
       .onActionUpdate((event: GestureEvent) => {
         if (!this.allowInteract) {
           return;
         }
         const finger: FingerInfo = event.fingerList[0];
-        this.handleTouch(finger.localX, finger.localY);
-        this.dragging = true;
-        this.dragX = finger.localX;
-        this.dragY = finger.localY;
+        this.handleMove(finger.localX, finger.localY);
       })
       .onActionEnd(() => {
         if (!this.allowInteract) {
           return;
         }
+        // 源码 ACTION_UP：resetAllCircleBtn + onSwipeFinish（e 回调）→ 长度校验 → 模式回调
         this.dragging = false;
+        this.onSwipeFinish(this.seq.slice());
         if (this.seq.length >= 4) {
           this.onFinish(this.seq.slice());
         }
       }))
   }
 }
-

@@ -1,172 +1,530 @@
 import { TitleBar } from '../components/TitleBar';
-
-interface DetailEntry {
-  id: string;
-  name: string;
-  content: string;
-}
+import { router } from '@kit.ArkUI';
+import { call } from '@kit.TelephonyKit';
+import { common, abilityAccessCtrl, Want } from '@kit.AbilityKit';
+import { contact } from '@kit.ContactsKit';
+import { ApiService } from '../network/ApiService';
+import { ApiResponse } from '../model/ResponseModel';
+import { LoginSession } from '../network/LoginSession';
+import { Constants } from '../data/Constants';
+import { ContactAddressBookUserInfo } from '../model/ContactModel';
+import { EmptyView } from '../components/EmptyView';
+import { LoadingView } from '../components/LoadingView';
 
 /**
- * 联系人详情页 — 1:1 复刻：
- * mobile_campus_contact_activity_personal_detail.xml：bg#F2F2F2 toolbar + ScrollView
- *   头部白卡 padT8：居中头像(blue_circle px_to_sp_60=30fp) 名17fp mt12
- *   操作行 mt25.5(px_to_dip_51) pad10：发短信/打电话/发邮件/私聊 各宽88(px_to_dip_176) #3A92ED 图标上 间距8
- *   layoutContainer 白底 mt12
- * mobile_campus_contact_view_personal_detail_item.xml：padL11.5 padV11(px_to_dip_22) 名/内容 16fp common_color_1 + 分隔线
- * mobile_campus_contact_view_child.xml：底部相关联系人行(图标36 名17fp 号14fp mr23)
+ * 联系人个人详情页 — 源码级翻译（ContactPersonalDetailActivity.java 逐行 → ArkTS，[W25 misc-b]）：
+ *
+ * 【布局】mobile_campus_contact_activity_personal_detail.xml：bg#fff2f2f2 toolbar_normal + MultiStateView(ScrollView)：
+ *   头部白卡 padT8(px_to_dip_16)：居中 imgLayout(img 60dip gone / icon blue_circle 30fp(px_to_sp_60) 白字，
+ *   TX 空时 post(setWidth(getHeight())) 方形) + tvName 17fp(px_to_sp_34) mt12；
+ *   操作行 mt25.5(px_to_dip_51) pad5(px_to_dip_10) gravity center|top：发短信/打电话/发邮件/私聊
+ *   各宽 88(px_to_dip_176) #3a92ed 图标上文本下 drawablePadding 8(px_to_dip_16)；
+ *   layoutContainer mt12(px_to_dip_24) 白底
+ * 【行】widget.a(ContactPersonalDetailView)：view_personal_detail_item padL11.5(px_to_dip_23) padV11
+ *   (px_to_dip_22)：tvName/tvContent 16fp(px_to_sp_32，本校非 GNYX 17→16) + 底分隔线；空值 "--"
+ * 【数据】y(Intent)：gh(v) + contactSearchType(B)；l3()：B 空 → ContactModel.f1 GET userInfo {gh}；
+ *   B 非空 → ContactModel.g1 GET userMessage/userInfo {gh,searchType}（Constants.KEY_USER_ID="userInfo"）
+ *   → AddressBookUserInfo{name,roleType,title,type,userInfo{28字段}}；null→EMPTY；异常→ERROR；
+ *   业务失败→toast(message)，-3010→ERROR_NETWORK（非 -3010 源码为 s2 loading 死态，HAP 折中空态同 W9 先例）
+ * 【渲染 r3】TX 空→icon 首字+XB 性别角标背景(gender_man #3A7BFF/女 #FF5F5F/未知 #F9C043)；TX 非空→网络图；
+ *   DZYJ 空→tvMail gone；ImConstant 默认 false→tvIm 恒 gone（仅 ContactPage IM 分组渲染时置 true，HAP 无 IM 组）；
+ *   行序：授课(教师+登录者非教师)/部门/学号或工号/手机(电话色 #3a92ed 可点)/电话/短号/邮箱(可点发邮件)/地址/
+ *   QQ号/微信号号(源码文案原样)/职位/职称/车牌 + 学生附加块(性别/籍贯/辅导员/辅导员电话/班级/专业)；
+ *   手机行值=BDSJH 空→SJHM 并回写 userInfo.SJHM（源码 613-614）；三号全空→tvMsg/tvPhone gone
+ * 【more 弹窗】ContactMoreDialog(mobile_campus_contact_view_more_dialog.xml)：56dip(px_to_dip_112) 18fp
+ *   (px_to_sp_36) #3a92ed 白底 mt1；登录者 userType=="1"→tvAddToNet gone；t(type)："0"添加到常用联系人/
+ *   "1"移除常用联系人；s(roleType)："0"gone/"1"手机号码对其可见/"2"手机号码对其不可见；取消 20fp bold mt8
+ * 【more 交互】h 类：tvAddToNet→"0"→addTopContact{scyhid:gh,type:"1"} data="1"→toast"已添加到常用联系人"
+ *   +t("1")；else delTopContact{gh} data="1"→t("0")（无 toast）；tvPermissions→"1"→openRole{gh}
+ *   （msg=="已对其开放手机号码查看权限"||"已开放权限"→s("2")；toast=msg）/"2"→hideRole{gh}
+ *   （data="1"→s("1")）；tvAddToLocal→收集 BGDH+SJDH+SJHM(覆写后) 非空→系统通讯录写入
+ *   （HAP ContactsKit.addContact 等价 l0 权限链，成功 toast"已保存到本地通讯录"）
+ * 【拨号链】q3(i)：号集 BGDH+SJDH+SJHM(覆写后)，BDSJH 非空→清空只用 BDSJH，去重；
+ *   t3：空→toast"暂无该联系人电话号码"；>1→ContactListDialog 选号弹窗；o3：i2==0→d0.c 短信
+ *   （HAP 无短信跳转 API，等价 makeCall 同 W9 先例）；i2==1：count<=1→s3 确认框"拨打电话"
+ *   （确认→d0.a 拨号+addTopContact{scyhid:GH,type:"0"}+setResult(-1)）；count>1→d0.a 直接拨号
+ *   +addTopContact+setResult(-1)（setResult 等价=刷新标记，上游 onPageShow 重拉）
+ * 【发邮件】C 类：DZYJ 空 return；ACTION_SEND message/rfc822 chooser（HAP 等价 mailto 隐式 want，
+ *   无应用响应→catch toast"请安装邮箱应用"）
  */
 @Entry
 @Component
 struct ContactPersonalDetailPage {
-  @State name: string = '张伟';
-  @State phone: string = '{{PHONE_wn6xzuct}}';
-  @State details: DetailEntry[] = [];
-  @State relatedName: string = '王芳';
-  @State relatedPhone: string = '{{PHONE_zji4wnxc}}';
+  @State isLoading: boolean = true;
+  @State showError: boolean = false;
+  @State showEmpty: boolean = false;
+  @State info: ContactAddressBookUserInfo = new ContactAddressBookUserInfo();
+  /** more 弹窗显隐 + ContactMoreDialog.i/y.t(type) 与 .j/y.s(roleType) 等价状态 */
+  @State showMore: boolean = false;
+  @State moreAddType: string = '0';
+  @State moreRoleType: string = '0';
+  private gh: string = '';
+  private contactSearchType: string = '';
+  /** 源码 l 类 setResult(-1) 等价：拨号/常用变化刷新标记，上游 onPageShow 消费 */
+  private refreshFlag: boolean = false;
 
-  aboutToAppear(): void {
-    this.details = [
-      { id: 'd1', name: '部门：', content: '教务处' },
-      { id: 'd2', name: '职务：', content: '教务科科长' },
-      { id: 'd3', name: '办公电话：', content: '{{PHONE_6nrwtlnx}}' },
-      { id: 'd4', name: '手机号码：', content: this.phone },
-      { id: 'd5', name: '电子邮件：', content: '{{EMAIL_yjsfdqmr}}' },
-      { id: 'd6', name: '办公地点：', content: '行政楼205室' }
-    ];
+  onPageShow(): void {
+    const params = router.getParams() as Record<string, string>;
+    if (params !== null && params !== undefined) {
+      const ghParam: string = params['gh'] !== undefined && params['gh'] !== null ? params['gh'] : '';
+      const typeParam: string = params['contactSearchType'] !== undefined &&
+        params['contactSearchType'] !== null ? params['contactSearchType'] : '';
+      // 源码仅 onCreate 读 intent；HAP onPageShow 只在首次带参时装载
+      if (this.gh === '' && ghParam !== '') {
+        this.gh = ghParam;
+        this.contactSearchType = typeParam;
+        this.loadData();
+      }
+      if (this.refreshFlag) {
+        this.refreshFlag = false;
+      }
+    }
   }
 
-  private toast(msg: string): void {
-    this.getUIContext().getPromptAction().showToast({ message: msg });
+  /** 源码 l3()：contactSearchType 空 → f1 userInfo {gh}；非空 → g1 userMessage/userInfo {gh,searchType} */
+  private loadData(): void {
+    this.isLoading = true;
+    this.showError = false;
+    this.showEmpty = false;
+    ApiService.getContactUserInfo(this.gh, this.contactSearchType)
+      .then((response: ApiResponse<ContactAddressBookUserInfo>) => {
+        if (response.code === 1000) {
+          this.isLoading = false;
+          return;
+        }
+        this.isLoading = false;
+        if (response.code !== 0) {
+          // 源码 f()：toast(message)；-3010 → ERROR_NETWORK；非 -3010 源码为 s2 loading 死态，HAP 折中空态
+          const msg: string = response.message === '' ? '服务器繁忙，请稍后再试' : response.message;
+          this.getUIContext().getPromptAction().showToast({ message: msg });
+          if (String(response.code) === '-3010') {
+            this.showError = true;
+          } else {
+            this.showEmpty = true;
+          }
+          return;
+        }
+        // 源码 g()：null → EMPTY；否则 CONTENT + r3 渲染
+        if (response.data.name === '' && response.data.userInfo.GH === '') {
+          this.showEmpty = true;
+          return;
+        }
+        // 源码 r3 613-614：手机行值 = BDSJH 空 → SJHM，并回写 userInfo.SJHM（后续 q3/tvAddToLocal 收集覆写后值）
+        const bean: ContactAddressBookUserInfo = response.data;
+        bean.userInfo.SJHM = bean.userInfo.BDSJH === '' ? bean.userInfo.SJHM : bean.userInfo.BDSJH;
+        this.info = bean;
+        this.moreAddType = response.data.type === '' ? '0' : response.data.type;
+        this.moreRoleType = response.data.roleType === '' ? '0' : response.data.roleType;
+      })
+      .catch(() => {
+        // 源码 e() → ERROR 态
+        ApiService.logError('ContactPersonalDetailPage load error');
+        this.isLoading = false;
+        this.showError = true;
+      });
+  }
+
+  /** 行值：label/value 空值处理（源码 j3：label 空→""、value 空→"--"） */
+  private rowValue(value: string): string {
+    return value === '' ? '--' : value;
+  }
+
+  /** 源码 p3/e 类：内容点击 → t3(单号拆分, 1, GH) 打电话链 */
+  private onPhoneTextTap(phone: string): void {
+    if (phone === '') {
+      return;
+    }
+    const numbers: string[] = phone.replace('/', ',').split(',');
+    this.showDialSheet(numbers, 1, this.info.userInfo.GH);
+  }
+
+  /** 源码 q3(i)：发短信(i=0)/打电话(i=1) 工具按钮 → 号集收集（BDSJH 非空清空集合） */
+  private onActionPhoneTap(tapType: number): void {
+    if (this.info.userInfo.GH === '' && this.info.userInfo.BDSJH === '' &&
+      this.info.userInfo.BGDH === '' && this.info.userInfo.SJDH === '' &&
+      this.info.userInfo.SJHM === '') {
+      return;
+    }
+    const list: string[] = [];
+    const collect = (raw: string): void => {
+      if (raw === '') {
+        return;
+      }
+      const parts: string[] = raw.replace('/', ',').split(',');
+      for (const p of parts) {
+        list.push(p);
+      }
+    };
+    collect(this.info.userInfo.BGDH);
+    collect(this.info.userInfo.SJDH);
+    collect(this.info.userInfo.SJHM);
+    if (this.info.userInfo.BDSJH !== '') {
+      list.length = 0;
+      collect(this.info.userInfo.BDSJH);
+    }
+    // 源码 new HashSet(arrayList) 去重
+    const unique: string[] = [];
+    for (const p of list) {
+      if (!unique.includes(p)) {
+        unique.push(p);
+      }
+    }
+    this.showDialSheet(unique, tapType, this.info.userInfo.GH);
+  }
+
+  /** 源码 t3：空→toast；>1→ContactListDialog 选号弹窗；≤1→o3 直处理 */
+  private showDialSheet(numbers: string[], tapType: number, gh: string): void {
+    if (numbers.length === 0) {
+      this.getUIContext().getPromptAction().showToast({ message: '暂无该联系人电话号码' });
+      return;
+    }
+    if (numbers.length <= 1) {
+      this.handleDialChoice(1, tapType, numbers[0], gh);
+      return;
+    }
+    const sheets: SheetInfo[] = [];
+    for (const num of numbers) {
+      const trimmed: string = num.trim();
+      sheets.push({
+        title: trimmed,
+        action: (): void => {
+          // 源码 k 类：弹窗点击 → o3(弹窗项数, z.p(), item, GH)（弹窗项数>1）
+          this.handleDialChoice(sheets.length, tapType, trimmed, gh);
+        }
+      });
+    }
+    this.getUIContext().showActionSheet({ title: '选择号码', message: '请选择要拨打的号码', sheets: sheets });
+  }
+
+  /** 源码 o3：i2==0→d0.c 短信（HAP 等价 makeCall，同 W9 先例）；i2==1：≤1→s3 确认框；>1→直接拨+addTopContact */
+  private handleDialChoice(count: number, tapType: number, phone: string, gh: string): void {
+    if (tapType === 0) {
+      this.makeCall(phone);
+      return;
+    }
+    if (tapType !== 1) {
+      return;
+    }
+    if (count <= 1) {
+      // 源码 s3 确认框（widget.a m 类回调）：确认 → d0.a + addTopContact{scyhid:GH,type:"0"} + setResult(-1)
+      AlertDialog.show({
+        title: '拨打电话',
+        message: phone,
+        autoCancel: true,
+        alignment: DialogAlignment.Center,
+        primaryButton: { value: '取消', action: () => {
+        } },
+        secondaryButton: { value: '确定', action: () => {
+          this.makeCall(phone);
+          ApiService.addTopContact(gh, '0');
+          this.refreshFlag = true;
+        } }
+      });
+      return;
+    }
+    // 源码 count>1：埋点+ d0.a 直接拨号 + addTopContact + setResult(-1)
+    this.makeCall(phone);
+    ApiService.addTopContact(gh, '0');
+    this.refreshFlag = true;
+  }
+
+  /** 源码 d0.a：权限回调后 ACTION_CALL 拨号 */
+  private makeCall(phone: string): void {
+    try {
+      call.makeCall(phone, () => {
+      });
+    } catch {
+      ApiService.logError('ContactPersonalDetailPage makeCall fail');
+    }
+  }
+
+  /** 源码 C 类：发邮件 → mailto 隐式 want（无应用响应 → catch toast"请安装邮箱应用"） */
+  private onMailTap(): void {
+    const email: string = this.info.userInfo.DZYJ;
+    if (email === '') {
+      return;
+    }
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    const first: string = email.replace('/', ',').split(',')[0].trim();
+    try {
+      ctx.startAbility({
+        action: 'mailto:' + first,
+        entities: ['entity.system.default'],
+        parameters: { 'email': email.replace('/', ',').split(',') }
+      } as Want).catch(() => {
+        this.getUIContext().getPromptAction().showToast({ message: '请安装邮箱应用' });
+      });
+    } catch {
+      this.getUIContext().getPromptAction().showToast({ message: '请安装邮箱应用' });
+    }
+  }
+
+  /** 源码 h 类 tvAddToLocal：BGDH+SJDH+SJHM(覆写后) 非空 → WRITE_CONTACTS 权限 → ContactsKit 写入 */
+  private saveToLocal(): void {
+    const list: string[] = [];
+    if (this.info.userInfo.BGDH !== '') {
+      list.push(this.info.userInfo.BGDH.replace('/', ',').split(',')[0].trim());
+    }
+    if (this.info.userInfo.SJDH !== '') {
+      list.push(this.info.userInfo.SJDH.replace('/', ',').split(',')[0].trim());
+    }
+    if (this.info.userInfo.SJHM !== '') {
+      list.push(this.info.userInfo.SJHM.replace('/', ',').split(',')[0].trim());
+    }
+    if (list.length === 0) {
+      // 源码 arrayList.isEmpty() → return（无反馈）
+      return;
+    }
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    abilityAccessCtrl.createAtManager()
+      .requestPermissionsFromUser(ctx, ['ohos.permission.WRITE_CONTACTS'])
+      .then((result) => {
+        let granted: boolean = false;
+        for (const r of result.authResults) {
+          if (r === 0) {
+            granted = true;
+          }
+        }
+        if (!granted) {
+          return;
+        }
+        const phones: contact.PhoneNumber[] = [];
+        for (const p of list) {
+          const phone: contact.PhoneNumber = new contact.PhoneNumber();
+          phone.phoneNumber = p;
+          phones.push(phone);
+        }
+        const c: contact.Contact = new contact.Contact();
+        // [W23 协作解堵] 本 SDK contact.Name 必填 fullName（displayName 可选）——姓名入 fullName
+        c.name = { fullName: this.info.name } as contact.Name;
+        c.phoneNumbers = phones;
+        contact.addContact(ctx, c)
+          .then(() => {
+            this.getUIContext().getPromptAction().showToast({ message: '已保存到本地通讯录' });
+          })
+          .catch(() => {
+            ApiService.logError('ContactPersonalDetailPage addContact fail');
+          });
+      })
+      .catch(() => {
+        ApiService.logError('ContactPersonalDetailPage request perm fail');
+      });
+  }
+
+  /** 源码 h 类 tvAddToNet："0"→h3 addTopContact{scyhid:gh,type:"1"}；else k3 delTopContact{gh} */
+  private onAddToNetTap(): void {
+    if (this.moreAddType === '0') {
+      ApiService.addToTopContact(this.gh, '1')
+        .then((response: ApiResponse<string>) => {
+          if (response.code !== 0) {
+            return;
+          }
+          if (response.data === '1') {
+            this.getUIContext().getPromptAction().showToast({ message: '已添加到常用联系人' });
+            this.moreAddType = '1';
+            this.refreshFlag = true;
+          }
+        });
+      return;
+    }
+    if (this.info.userInfo.GH === '') {
+      return;
+    }
+    ApiService.removeTopContact(this.info.userInfo.GH)
+      .then((response: ApiResponse<string>) => {
+        if (response.code !== 0) {
+          return;
+        }
+        if (response.data === '1') {
+          this.moreAddType = '0';
+          this.refreshFlag = true;
+        }
+      });
+  }
+
+  /** 源码 h 类 tvPermissions："1"→n3 openRole；"2"→m3 hideRole */
+  private onPermissionsTap(): void {
+    if (this.moreRoleType === '1') {
+      ApiService.openRole(this.gh)
+        .then((response: ApiResponse<string>) => {
+          if (response.code !== 0) {
+            return;
+          }
+          if (response.message === '已对其开放手机号码查看权限' || response.message === '已开放权限') {
+            this.moreRoleType = '2';
+          }
+          this.getUIContext().getPromptAction().showToast({ message: response.message });
+        });
+      return;
+    }
+    if (this.moreRoleType === '2') {
+      ApiService.hideRole(this.gh)
+        .then((response: ApiResponse<string>) => {
+          if (response.code !== 0) {
+            return;
+          }
+          if (response.data === '1') {
+            this.moreRoleType = '1';
+          }
+        });
+    }
+  }
+
+  /** 源码 r3：头像区。TX 空 → icon 首字+性别角标；TX 非空 → 网络图(netconstant.d.c()+TX) */
+  private avatarUrl(): string {
+    if (this.info.userInfo.TX === '') {
+      return '';
+    }
+    return Constants.SOCKET_HOST + this.info.userInfo.TX;
+  }
+
+  /** 源码 r3：icon 背景 = XB 性别角标（男 gender_man/女 gender_woman/其他 gender_unknown） */
+  private genderColor(): string {
+    const xb: string = this.info.userInfo.XB;
+    if (xb === '女') {
+      return '#FF5F5F';
+    }
+    if (xb === '男') {
+      return '#3A7BFF';
+    }
+    return '#F9C043';
+  }
+
+  /** 源码 r3：三号全空 → tvMsg/tvPhone gone */
+  private phoneActionsVisible(): boolean {
+    const u = this.info.userInfo;
+    return !(u.SJHM === '' && u.BGDH === '' && u.SJDH === '');
+  }
+
+  /** 源码 r3：登录者非教师(userInfo.userType=="2" && 登录者!="2") → 授课行 */
+  private teacherCourseVisible(): boolean {
+    return this.info.userInfo.userType === '2' && LoginSession.userType !== '2';
+  }
+
+  /** 源码 more g()：登录者 userType=="1" → tvAddToNet gone */
+  private addToNetVisible(): boolean {
+    return LoginSession.userType !== '1';
+  }
+
+  /** 源码 s(roleType)："0"gone/"1"手机号码对其可见/"2"手机号码对其不可见 */
+  private permissionsText(): string {
+    if (this.moreRoleType === '1') {
+      return '手机号码对其可见';
+    }
+    if (this.moreRoleType === '2') {
+      return '手机号码对其不可见';
+    }
+    return '手机号码对其可见';
+  }
+
+  /** 源码 t(type)："0"添加到常用联系人/"1"移除常用联系人 */
+  private addToNetText(): string {
+    return this.moreAddType === '1' ? '移除常用联系人' : '添加到常用联系人';
   }
 
   build() {
     Column() {
-      TitleBar({ title: '联系人详情', showBack: true })
+      TitleBar({ title: '', showBack: true, rightIcon: $r('app.media.mobile_campus_contact_more') })
+      // 源码 T1：more 图标 padding 8dip（TitleBar 组件默认边距等价）
 
-      Scroll() {
+      if (this.isLoading) {
+        LoadingView()
+      } else if (this.showError) {
         Column() {
-          // 头部白卡
-          Column() {
-            Column() {
-              Text(this.name.substring(0, 1))
-                .fontSize(30)
-                .fontColor($r('app.color.ybg_white'))
-                .width(60)
-                .height(60)
-                .textAlign(TextAlign.Center)
-                .backgroundColor($r('app.color.blue_default'))
-                .borderRadius(30)
-
-              Text(this.name)
-                .fontSize(17)
-                .fontColor($r('app.color.common_color_1'))
-                .margin({ top: 12 })
-            }
-            .width('100%')
-            .alignItems(HorizontalAlign.Center)
-
-            // 操作行 mt px_to_dip_51=25.5 pad px_to_dip_10=5
-            Row() {
-              this.actionItem('发短信', $r('app.media.mobile_campus_contact_msn_b'), () => {
-                this.toast('发短信: ' + this.name);
-              })
-              this.actionItem('打电话', $r('app.media.mobile_campus_contact_call_b'), () => {
-                this.toast('呼叫: ' + this.phone);
-              })
-              this.actionItem('发邮件', $r('app.media.mobile_campus_contact_email_b'), () => {
-                this.toast('发邮件: ' + this.name);
-              })
-              this.actionItem('私聊', $r('app.media.mobile_campus_contact_im_b'), () => {
-                this.toast('私聊: ' + this.name);
-              })
-            }
-            .width('100%')
-            .justifyContent(FlexAlign.Center)
-            .padding(5)
-            .margin({ top: 25.5 })
-          }
-          .width('100%')
-          .padding({ top: 8 })
-          .backgroundColor($r('app.color.white'))
-
-          // layoutContainer mt px_to_dip_24=12
-          Column() {
-            ForEach(this.details, (detail: DetailEntry) => {
-              this.detailItemRow(detail)
-            }, (detail: DetailEntry) => detail.id)
-          }
-          .width('100%')
-          .margin({ top: 12 })
-          .backgroundColor($r('app.color.white'))
-
-          // 相关联系人(contact_view_child)
-          Column() {
-            Row() {
-              Text(this.relatedName.substring(0, 1))
-                .fontSize(18.5)
-                .fontColor($r('app.color.ybg_white'))
-                .width(36)
-                .height(36)
-                .textAlign(TextAlign.Center)
-                .backgroundColor($r('app.color.ybg_blue'))
-                .borderRadius(18)
-
-              Column() {
-                Text(this.relatedName)
-                  .fontSize(17)
-                  .fontColor($r('app.color.common_color_1'))
-                  .maxLines(1)
-                Text(this.relatedPhone)
-                  .fontSize(14)
-                  .fontColor($r('app.color.ybg_grey'))
-                  .margin({ top: 8 })
-                  .maxLines(1)
-              }
-              .alignItems(HorizontalAlign.Start)
-              .margin({ left: 12 })
-              .layoutWeight(1)
-
-              Row() {
-                Image($r('app.media.mobile_campus_contact_call'))
-                  .width(18)
-                  .height(18)
-                  .onClick(() => {
-                    this.toast('呼叫: ' + this.relatedPhone);
-                  })
-                Image($r('app.media.mobile_campus_contact_msn'))
-                  .width(18)
-                  .height(18)
-                  .margin({ left: 15 })
-              }
-              .margin({ right: 23 })
-            }
-            .width('100%')
-            .padding({ left: 12, top: 8, bottom: 8 })
-            .alignItems(VerticalAlign.Center)
-            .backgroundColor($r('app.color.white'))
-
-            Divider()
-              .color($r('app.color.common_color_5'))
-              .strokeWidth(0.5)
-              .width('100%')
-          }
-          .width('100%')
-          .margin({ top: 12 })
-          .backgroundColor($r('app.color.white'))
+          EmptyView({ tipText: '加载失败，请检查网络后重试' })
         }
         .width('100%')
+        .layoutWeight(1)
+      } else if (this.showEmpty) {
+        Column() {
+          EmptyView({ tipText: '暂无数据' })
+        }
+        .width('100%')
+        .layoutWeight(1)
+      } else {
+        Scroll() {
+          Column() {
+            // 头部白卡 padT8
+            Column() {
+              Column() {
+                if (this.avatarUrl() !== '') {
+                  Image(this.avatarUrl())
+                    .width(60)
+                    .height(60)
+                    .borderRadius(30)
+                } else {
+                  // icon：blue_circle 30fp 白字，post(setWidth(height)) 方形等价 40×40
+                  Text(this.info.name === '' ? '' : this.info.name.substring(0, 1))
+                    .fontSize(30)
+                    .fontColor($r('app.color.ybg_white'))
+                    .width(40)
+                    .height(40)
+                    .textAlign(TextAlign.Center)
+                    .backgroundColor(this.genderColor())
+                    .borderRadius(20)
+                }
+                Text(this.info.name)
+                  .fontSize(17)
+                  .fontColor($r('app.color.common_color_1'))
+                  .margin({ top: 12 })
+              }
+              .width('100%')
+              .alignItems(HorizontalAlign.Center)
+
+              // 操作行 mt25.5 pad5：四按钮 88dip #3a92ed
+              Row() {
+                this.actionItem('发短信', $r('app.media.mobile_campus_contact_msn_b'), () => {
+                  // 源码 i 类：q3(0) 短信链
+                  this.onActionPhoneTap(0);
+                })
+                this.actionItem('打电话', $r('app.media.mobile_campus_contact_call_b'), () => {
+                  // 源码 j 类：q3(1) 电话链
+                  this.onActionPhoneTap(1);
+                })
+                // [W23 协作解堵] @Builder 返回 void 不能链 .visibility（原 487:20）→ if 包裹等价
+                if (this.info.userInfo.DZYJ !== '') {
+                  this.actionItem('发邮件', $r('app.media.mobile_campus_contact_email_b'), () => {
+                    this.onMailTap();
+                  })
+                }
+                // tvIm：ImConstant 默认 false → 恒 gone（源码 r3 589-593）——不渲染等价 Visibility.None
+              }
+              .width('100%')
+              .justifyContent(FlexAlign.Center)
+              .padding(5)
+              .margin({ top: 25.5 })
+            }
+            .width('100%')
+            .padding({ top: 8 })
+            .backgroundColor($r('app.color.white'))
+
+            // layoutContainer mt12 白底
+            Column() {
+              this.detailRows()
+            }
+            .width('100%')
+            .margin({ top: 12 })
+            .backgroundColor($r('app.color.white'))
+          }
+          .width('100%')
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .scrollBar(BarState.Off)
+        .align(Alignment.Top)
       }
-      .width('100%')
-      .layoutWeight(1)
-      .scrollBar(BarState.Off)
-      .align(Alignment.Top)
     }
     .width('100%')
     .height('100%')
-    .backgroundColor($r('app.color.mobile_campus_bg_color'))
+    .backgroundColor('#F2F2F2')
+    .bindSheet(this.showMore, this.moreSheetBuilder(), {
+      height: 320,
+      showClose: false,
+      backgroundColor: '#F2F2F2'
+    })
   }
 
-  // 发短信/打电话/发邮件/私聊：宽88 #3A92ED 图标上间距8
+  /** 头部操作按钮：宽 88 #3a92ed 图标上文本下 */
   @Builder
   actionItem(label: string, icon: Resource, onTap: () => void) {
     Column() {
@@ -185,21 +543,25 @@ struct ContactPersonalDetailPage {
     })
   }
 
-  // mobile_campus_contact_view_personal_detail_item.xml
+  /** 详情行：view_personal_detail_item padL11.5 padV11 16fp + 分隔线；contentTap 仅内容区可点 */
   @Builder
-  detailItemRow(detail: DetailEntry) {
+  detailRow(label: string, content: string, contentColor: string, contentTap: () => void) {
     Column() {
       Row() {
-        Text(detail.name)
+        Text(label)
           .fontSize(16)
           .fontColor($r('app.color.common_color_1'))
           .maxLines(1)
-        Text(detail.content)
+          .textAlign(TextAlign.Center)
+        Text(this.rowValue(content))
           .fontSize(16)
-          .fontColor($r('app.color.common_color_1'))
+          .fontColor(contentColor)
           .layoutWeight(1)
           .textAlign(TextAlign.Start)
           .maxLines(1)
+          .onClick(() => {
+            contentTap();
+          })
       }
       .width('100%')
       .padding({ top: 11, bottom: 11 })
@@ -213,5 +575,138 @@ struct ContactPersonalDetailPage {
     .width('100%')
     .padding({ left: 11.5 })
     .backgroundColor($r('app.color.white'))
+  }
+
+  /** 源码 r3 行序（逐行 1:1） */
+  @Builder
+  detailRows() {
+    // 授课：教师且登录者非教师（r3 596-600）
+    if (this.teacherCourseVisible()) {
+      this.detailRow('授课：', this.info.userInfo.course, '#333333', () => {
+      })
+    }
+    this.detailRow('部门：', this.info.userInfo.BMMC, '#333333', () => {
+    })
+    // userType=="1" 学生 → 学号；否则工号
+    if (this.info.userInfo.userType === '1') {
+      this.detailRow('学号：', this.info.userInfo.XH, '#333333', () => {
+      })
+    } else {
+      this.detailRow('工号：', this.info.userInfo.GH, '#333333', () => {
+      })
+    }
+    // 手机：BDSJH 空 → SJHM（覆写 userInfo.SJHM）；#3a92ed 可点
+    this.detailRow('手机：', this.info.userInfo.SJHM, '#3A92ED', () => {
+      this.onPhoneTextTap(this.info.userInfo.SJHM);
+    })
+    this.detailRow('电话：', this.info.userInfo.BGDH, '#3A92ED', () => {
+      this.onPhoneTextTap(this.info.userInfo.BGDH);
+    })
+    this.detailRow('短号：', this.info.userInfo.SJDH, '#3A92ED', () => {
+      this.onPhoneTextTap(this.info.userInfo.SJDH);
+    })
+    this.detailRow('邮箱：', this.info.userInfo.DZYJ, '#3A92ED', () => {
+      this.onMailTap();
+    })
+    this.detailRow('地址：', this.info.userInfo.BGDZ, '#333333', () => {
+    })
+    if (this.info.userInfo.RZBD_QQ !== '') {
+      this.detailRow('QQ号：', this.info.userInfo.RZBD_QQ, '#333333', () => {
+      })
+    }
+    // 源码文案"微信号号："原样保真
+    if (this.info.userInfo.RZBD_WX !== '') {
+      this.detailRow('微信号号：', this.info.userInfo.RZBD_WX, '#333333', () => {
+      })
+    }
+    if (this.info.userInfo.ZW !== '') {
+      this.detailRow('职位：', this.info.userInfo.ZW, '#333333', () => {
+      })
+    }
+    if (this.info.userInfo.GW !== '') {
+      this.detailRow('职称：', this.info.userInfo.GW, '#333333', () => {
+      })
+    }
+    if (this.info.userInfo.CARDNO !== '') {
+      this.detailRow('车牌：', this.info.userInfo.CARDNO, '#333333', () => {
+      })
+    }
+    // 学生附加块 i3()（userType=="1"）
+    if (this.info.userInfo.userType === '1') {
+      this.detailRow('性别：', this.info.userInfo.studentSex, '#333333', () => {
+      })
+      this.detailRow('籍贯：', this.info.userInfo.nativePlace, '#333333', () => {
+      })
+      this.detailRow('辅导员：', this.info.userInfo.teacherName, '#333333', () => {
+      })
+      this.detailRow('辅导员电话：', this.info.userInfo.teacherPhone, '#333333', () => {
+        this.onPhoneTextTap(this.info.userInfo.teacherPhone);
+      })
+      this.detailRow('班级：', this.info.userInfo.className, '#333333', () => {
+      })
+      this.detailRow('专业：', this.info.userInfo.professionName, '#333333', () => {
+      })
+    }
+  }
+
+  /** ContactMoreDialog 底部弹窗（bindSheet 等价 ExpressionPopupAnim） */
+  @Builder
+  moreSheetBuilder() {
+    Column() {
+      if (this.addToNetVisible()) {
+        Text(this.addToNetText())
+          .fontSize(18)
+          .fontColor('#3A92ED')
+          .width('100%')
+          .height(56)
+          .textAlign(TextAlign.Center)
+          .backgroundColor($r('app.color.white'))
+          .onClick(() => {
+            this.showMore = false;
+            this.onAddToNetTap();
+          })
+      }
+      // tvAddToLocal：收集三号 → 系统通讯录写入
+      Text('保存到通讯录')
+        .fontSize(18)
+        .fontColor('#3A92ED')
+        .width('100%')
+        .height(56)
+        .margin({ top: 1 })
+        .textAlign(TextAlign.Center)
+        .backgroundColor($r('app.color.white'))
+        .onClick(() => {
+          this.showMore = false;
+          this.saveToLocal();
+        })
+      if (this.moreRoleType !== '0') {
+        Text(this.permissionsText())
+          .fontSize(18)
+          .fontColor('#3A92ED')
+          .width('100%')
+          .height(56)
+          .margin({ top: 1 })
+          .textAlign(TextAlign.Center)
+          .backgroundColor($r('app.color.white'))
+          .onClick(() => {
+            this.showMore = false;
+            this.onPermissionsTap();
+          })
+      }
+      Text('取消')
+        .fontSize(20)
+        .fontWeight(FontWeight.Bold)
+        .fontColor('#3A92ED')
+        .width('100%')
+        .height(56)
+        .margin({ top: 8 })
+        .textAlign(TextAlign.Center)
+        .backgroundColor($r('app.color.white'))
+        .onClick(() => {
+          this.showMore = false;
+        })
+    }
+    .width('100%')
+    .padding({ top: 1 })
   }
 }

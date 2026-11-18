@@ -132,7 +132,7 @@ struct AttendancePage {
     ApiService.getAttendanceIsBoss()
       .then((response: ApiResponse<AttendanceIsBoss>) => {
         if (response.code === 1000) {
-          this.handleNotLogin();
+          // 登录失效统一处理已在网络层触发（HttpClient.bizRequest 拦截：清会话+toast+跳登录）
           return;
         }
         if (response.code === 0 && response.data.isBoss === '1') {
@@ -152,7 +152,7 @@ struct AttendancePage {
       .then((response: ApiResponse<AttendanceIndex>) => {
         this.personalLoading = false;
         if (response.code === 1000) {
-          this.handleNotLogin();
+          // 登录失效统一处理已在网络层触发（HttpClient.bizRequest 拦截：清会话+toast+跳登录）
           return;
         }
         if (response.code === 0) {
@@ -204,7 +204,7 @@ struct AttendancePage {
       .then((response: ApiResponse<AttendanceBossIndex>) => {
         this.leaderLoading = false;
         if (response.code === 1000) {
-          this.handleNotLogin();
+          // 登录失效统一处理已在网络层触发（HttpClient.bizRequest 拦截：清会话+toast+跳登录）
           return;
         }
         if (response.code === 0) {
@@ -219,11 +219,8 @@ struct AttendancePage {
       });
   }
 
-  /** 会话失效统一处理（PersonalDetailPage 样板：toast + 重登） */
-  private handleNotLogin(): void {
-    this.getUIContext().getPromptAction().showToast({ message: '登录已失效，请重新登录' });
-    router.replaceUrl({ url: 'pages/LoginPage' });
-  }
+  // 登录失效统一处理已下沉网络层（HttpClient.bizRequest code=1000 拦截：清会话+toast+跳登录），
+  // 本地 handleNotLogin 实现已删除，页面 1000 分支只负责 return
 
   /** 当前月（SimpleDateFormat yyyyMM） */
   private currentPersonalMonth(): string {

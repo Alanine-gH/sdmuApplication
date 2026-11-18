@@ -13,8 +13,23 @@ export struct TitleBar {
   @Prop showBack: boolean = true;
   /** 右侧文字按钮（源码 toolbar_normal 的 toolBar_text_but，如反馈页"反馈记录"，黑色） */
   @Prop rightText: string = '';
+  /** 右侧图标资源（源码 toolbar toolBar_image_but，如校圈主页 SocialMainActivity.T1 social_more） */
+  rightIcon: Resource | null = null;
   /** 右侧按钮点击回调（普通属性，TitleBar({ onRightClick: () => {} }) 传入） */
   onRightClick: (() => void) | null = null;
+  /** [W4 sms-login] 自定义返回回调（验证码页返回手机号输入阶段；null 保持 router.back 默认行为） */
+  onBack: (() => void) | null = null;
+  /**
+   * [W15 score-series] 右侧按钮启用 selector_post 双态 pill（ScoreCommentPostActivity.T1 /
+   * HandleExamCourseActivity.T1：selector_post 蓝态 shape_blue #88d9ff、灰态 shape_white
+   * 白底 0.5dip #cecece 描边；selector_post_color 灰态字 #999999；98x56dip=49x28vp 圆角 2；
+   * toolBar_text_but px_to_dip_32=16fp）。false 保持既有纯文字形态。
+   */
+  rightButtonStyle: boolean = false;
+  /** selector_post 双态开关（源码 setEnabled：false 时按钮不可点、走灰态配色） */
+  @Prop rightEnabled: boolean = true;
+  /** [W20 social] 右侧文字自定义色（PostDetailActivity.T1 "更多" ybg_blue；null 保持黑色） */
+  rightTextColor: string | null = null;
 
   build() {
     Column() {
@@ -28,7 +43,11 @@ export struct TitleBar {
             .textAlign(TextAlign.Center)
             .margin({ left: 15 })
             .onClick(() => {
-              router.back();
+              if (this.onBack !== null) {
+                this.onBack();
+              } else {
+                router.back();
+              }
             })
         }
         Text(this.title)
@@ -38,16 +57,49 @@ export struct TitleBar {
           .textAlign(TextAlign.Center)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
-        if (this.rightText !== '') {
-          Text(this.rightText)
-            .fontSize(16)
-            .fontColor($r('app.color.black'))
+        if (this.rightIcon !== null) {
+          Image(this.rightIcon)
+            .width(35)
+            .height(35)
+            .objectFit(ImageFit.Contain)
             .margin({ right: 12 })
             .onClick(() => {
               if (this.onRightClick !== null) {
                 this.onRightClick();
               }
             })
+        } else if (this.rightText !== '') {
+          if (this.rightButtonStyle) {
+            // selector_post 双态 pill：enabled 蓝底白字 / disabled 白底描边灰字且不可点
+            Text(this.rightText)
+              .fontSize(16)
+              .fontColor(this.rightEnabled ? Color.White : $r('app.color.common_color_3'))
+              .textAlign(TextAlign.Center)
+              .width(49)
+              .height(28)
+              .borderRadius(2)
+              .backgroundColor(this.rightEnabled ? $r('app.color.common_color_12') : Color.White)
+              .border({
+                width: this.rightEnabled ? 0 : 0.5,
+                color: $r('app.color.common_color_4')
+              })
+              .margin({ right: 15 })
+              .onClick(() => {
+                if (this.rightEnabled && this.onRightClick !== null) {
+                  this.onRightClick();
+                }
+              })
+          } else {
+            Text(this.rightText)
+              .fontSize(16)
+              .fontColor(this.rightTextColor === null ? $r('app.color.black') : this.rightTextColor)
+              .margin({ right: 12 })
+              .onClick(() => {
+                if (this.onRightClick !== null) {
+                  this.onRightClick();
+                }
+              })
+          }
         } else if (this.showBack) {
           Blank()
             .width(40)

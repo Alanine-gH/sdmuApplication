@@ -1,6 +1,8 @@
 import { router } from '@kit.ArkUI';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { TitleBar } from '../components/TitleBar';
+import { EmptyView } from '../components/EmptyView';
+import { LoadingView } from '../components/LoadingView';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { ScoreStatEntry, ScoreDetailEntry, ScoreRankEntry, ScoreCommentEntry,
@@ -157,56 +159,10 @@ struct ScoreCommentRow {
 @Entry
 @Component
 struct StudentScoreDetailPage {
-  @State detailList: ScoreDetailItem[] = [
-    {
-      courseName: '高等数学（下）',
-      totalScore: '92',
-      avgScore: '76.5',
-      maxScore: '98',
-      failRate: '3.2%',
-      personalScore: '第5名',
-      statCells: [
-        { label: '学分', statValue: '5.0' },
-        { label: '绩点', statValue: '4.0' },
-        { label: '平时成绩', statValue: '90' },
-        { label: '期末成绩', statValue: '93' }
-      ]
-    },
-    {
-      courseName: '大学英语（四）',
-      totalScore: '85',
-      avgScore: '79.8',
-      maxScore: '96',
-      failRate: '1.5%',
-      personalScore: '第12名',
-      statCells: [
-        { label: '学分', statValue: '3.0' },
-        { label: '绩点', statValue: '3.5' },
-        { label: '平时成绩', statValue: '88' },
-        { label: '期末成绩', statValue: '83' }
-      ]
-    }
-  ];
-  @State rankList: ScoreRankItem[] = [
-    { rankNo: '1', rankName: '李思远', anonymous: false, rankPoint: '绩点 4.0 / 98分', likeNum: '32' },
-    { rankNo: '2', rankName: '匿名同学', anonymous: true, rankPoint: '绩点 3.9 / 96分', likeNum: '18' },
-    { rankNo: '5', rankName: '我', anonymous: false, rankPoint: '绩点 4.0 / 92分', likeNum: '6' },
-    { rankNo: '8', rankName: '王晓明', anonymous: false, rankPoint: '绩点 3.7 / 90分', likeNum: '4' }
-  ];
-  @State commentList: ScoreCommentItem[] = [
-    {
-      avatarText: '张',
-      commentName: '张同学',
-      commentTime: '2026-06-28',
-      commentContent: '老师讲课很细致，例题覆盖全面，考前把错题过了一遍基本就稳了。'
-    },
-    {
-      avatarText: '匿',
-      commentName: '匿名同学',
-      commentTime: '2026-06-30',
-      commentContent: '平时作业量适中，期末难度比往年低一些，认真复习拿高分不难。'
-    }
-  ];
+  @State detailList: ScoreDetailItem[] = [];
+  @State rankList: ScoreRankItem[] = [];
+  @State commentList: ScoreCommentItem[] = [];
+  @State isLoading: boolean = true;
 
   aboutToAppear(): void {
     ApiService.getScoreDetail()
@@ -215,56 +171,57 @@ struct StudentScoreDetailPage {
           console.info('StudentScoreDetailPage degrade: code=' + response.code + ' msg=' + response.message);
         }
         const data: ScoreDetailData = response.data;
-        if (data.detailList.length > 0) {
-          this.detailList = data.detailList.map((entry: ScoreDetailEntry): ScoreDetailItem => {
-            const cells: ScoreStatCell[] = entry.statCells.map((cell: ScoreStatEntry): ScoreStatCell => {
-              const cellItem: ScoreStatCell = { label: cell.label, statValue: cell.statValue };
-              return cellItem;
-            });
-            const item: ScoreDetailItem = {
-              courseName: entry.courseName,
-              totalScore: entry.totalScore,
-              avgScore: entry.avgScore,
-              maxScore: entry.maxScore,
-              failRate: entry.failRate,
-              personalScore: entry.personalScore,
-              statCells: cells
-            };
-            return item;
+        this.detailList = data.detailList.map((entry: ScoreDetailEntry): ScoreDetailItem => {
+          const cells: ScoreStatCell[] = entry.statCells.map((cell: ScoreStatEntry): ScoreStatCell => {
+            const cellItem: ScoreStatCell = { label: cell.label, statValue: cell.statValue };
+            return cellItem;
           });
-        }
-        if (data.rankList.length > 0) {
-          this.rankList = data.rankList.map((entry: ScoreRankEntry): ScoreRankItem => {
-            const rankItem: ScoreRankItem = {
-              rankNo: entry.rankNo,
-              rankName: entry.rankName,
-              anonymous: entry.anonymous,
-              rankPoint: entry.rankPoint,
-              likeNum: entry.likeNum
-            };
-            return rankItem;
-          });
-        }
-        if (data.commentList.length > 0) {
-          this.commentList = data.commentList.map((entry: ScoreCommentEntry): ScoreCommentItem => {
-            const commentItem: ScoreCommentItem = {
-              avatarText: entry.avatarText,
-              commentName: entry.commentName,
-              commentTime: entry.commentTime,
-              commentContent: entry.commentContent
-            };
-            return commentItem;
-          });
-        }
+          const item: ScoreDetailItem = {
+            courseName: entry.courseName,
+            totalScore: entry.totalScore,
+            avgScore: entry.avgScore,
+            maxScore: entry.maxScore,
+            failRate: entry.failRate,
+            personalScore: entry.personalScore,
+            statCells: cells
+          };
+          return item;
+        });
+        this.rankList = data.rankList.map((entry: ScoreRankEntry): ScoreRankItem => {
+          const rankItem: ScoreRankItem = {
+            rankNo: entry.rankNo,
+            rankName: entry.rankName,
+            anonymous: entry.anonymous,
+            rankPoint: entry.rankPoint,
+            likeNum: entry.likeNum
+          };
+          return rankItem;
+        });
+        this.commentList = data.commentList.map((entry: ScoreCommentEntry): ScoreCommentItem => {
+          const commentItem: ScoreCommentItem = {
+            avatarText: entry.avatarText,
+            commentName: entry.commentName,
+            commentTime: entry.commentTime,
+            commentContent: entry.commentContent
+          };
+          return commentItem;
+        });
+        this.isLoading = false;
       })
       .catch((error: BusinessError) => {
         console.info('StudentScoreDetailPage load fail: ' + error.message);
+        this.isLoading = false;
       });
   }
 
   build() {
     Column() {
       TitleBar({ title: '成绩单详情', showBack: true })
+      if (this.isLoading) {
+        LoadingView()
+      } else if (this.detailList.length === 0) {
+        EmptyView()
+      } else {
       Scroll() {
         Column() {
           ForEach(this.detailList, (item: ScoreDetailItem) => {
@@ -471,6 +428,7 @@ struct StudentScoreDetailPage {
       }
       .layoutWeight(1)
       .backgroundColor($r('app.color.common_color_6'))
+      }
     }
     .width('100%')
     .height('100%')

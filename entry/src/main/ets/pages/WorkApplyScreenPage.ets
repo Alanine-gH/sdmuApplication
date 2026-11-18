@@ -1,204 +1,204 @@
-import { TitleBar } from '../components/TitleBar';
-
-interface ScreenOption {
-  id: string;
-  label: string;
-}
-
-interface ScreenGroup {
-  id: string;
-  title: string;
-  options: ScreenOption[];
-}
+import { router } from '@kit.ArkUI';
+import { ApiService } from '../network/ApiService';
+import { ApiResponse } from '../model/ResponseModel';
+import { WorkApplyEntry, OaWorkApplyRow, OaWorkApplyList } from '../model/OaTodoModel';
+import { BusinessError } from '@kit.BasicServicesKit';
+import { LoadingView } from '../components/LoadingView';
 
 /**
- * 审批大屏（筛选）页 — 1:1 复刻 mobile_campus_oa_activity_workapply_screen.xml：
- * toolbar + ExpandableListView(bg common_color_6)
- * mobile_campus_oa_activity_workapply_item_title.xml：
- *   顶线0.5 #DFE4EA 标题14fp common_color_1 padV15 ml12 右侧arrow_up mr12
- * mobile_campus_oa_activity_workapply_item_content.xml：
- *   内容区 m7.5 + 底部分隔线0.5 common_color_6
+ * 筛选页 — 1:1 翻译原 APK WorkApplyScreenActivity.java(180行)：
+ *
+ * 【布局】mobile_campus_oa_activity_workapply_screen.xml：toolbar_normal("筛选") +
+ *   MultiStateView[PullToRefreshLayout(setPullUpToLoadEnable(false)+setEnabled(false) 禁刷新)
+ *   [ExpandableListView exListView bg common_color_6]]。
+ *
+ * 【数据流源码还原】
+ *   1. y(Intent)：q = intent.getSerializableExtra("list")（WorkApplyActivity.i 传入宫格全集）
+ *      → r.addAll(K2())：K2 按 folderName HashMap 分组 → ScreenGroup{folderName, data}。
+ *      （folderName 已由主列表页 processList 回调归一为非空，此处原样分组）
+ *   2. ScreenExpandAdapter（adapter/a.java）：组头 groupitem_screen（folderName 14fp
+ *      common_color_3 padV10 px12 bg common_color_6，getGroupView 内 expandGroup(i) 全展开）；
+ *      子项 childitem_screen（processName 17fp common_color_1 padV10 px12 白底 selector 按压
+ *      schedule_color18 + 底线 schedule_color18）。
+ *   3. 子项点击 b.a(workApply) → L2(processName, processId)：
+ *      ApplyModel.X0 → GET screen {pageSize:AgooConstants.ACK_REMOVE_PACKAGE="10", pageNum:"1",
+ *      processid} → MyApplyList。
+ *   4. 成功 a.g：setResult(-1){keyword=processName, processid, applyList} → l.postDelayed
+ *      1000ms finish；失败 a.f → toast"筛选数据失败"；e → MultiStateView 内容态。
+ *
+ * 【HAP 等价】入参 AppStorage 'workapply_screen_list'；出参 AppStorage 'workapply_screen_result'
+ *   {keyword,processid,rows,total}（WorkApplyPage.onPageShow 消费）+ 延迟 1s router.back。
  */
+
+interface ScreenGroupItem {
+  folderName: string;
+  data: WorkApplyEntry[];
+}
+
+interface ScreenPickResult {
+  keyword: string;
+  processid: string;
+  rows: OaWorkApplyRow[];
+  total: string;
+}
+
 @Entry
 @Component
 struct WorkApplyScreenPage {
-  @State groups: ScreenGroup[] = [];
-  @State checkedIds: string[] = [];
-  @State expandedId: string = '';
+  @State groups: ScreenGroupItem[] = [];
+  @State searching: boolean = false;
 
   aboutToAppear(): void {
-    const g1: ScreenGroup = {
-      id: 'sc1', title: '申请类型',
-      options: [
-        { id: 'sc1-o1', label: '呈批件' },
-        { id: 'sc1-o2', label: '发文' },
-        { id: 'sc1-o3', label: '签报' },
-        { id: 'sc1-o4', label: '请假申请' }
-      ]
-    };
-    const g2: ScreenGroup = {
-      id: 'sc2', title: '审批状态',
-      options: [
-        { id: 'sc2-o1', label: '审批中' },
-        { id: 'sc2-o2', label: '已通过' },
-        { id: 'sc2-o3', label: '已退回' }
-      ]
-    };
-    const g3: ScreenGroup = {
-      id: 'sc3', title: '紧急程度',
-      options: [
-        { id: 'sc3-o1', label: '普通' },
-        { id: 'sc3-o2', label: '紧急' },
-        { id: 'sc3-o3', label: '特提' }
-      ]
-    };
-    this.groups = [g1, g2, g3];
-    if (this.groups.length > 0) {
-      this.expandedId = this.groups[0].id;
+    const raw: string | undefined = AppStorage.get<string>('workapply_screen_list');
+    if (raw !== undefined && raw !== '') {
+      this.buildGroups(raw);
     }
   }
 
-  private toggle(id: string): void {
-    if (this.expandedId === id) {
-      this.expandedId = '';
-    } else {
-      this.expandedId = id;
-    }
-  }
-
-  private isChecked(id: string): boolean {
-    for (const item of this.checkedIds) {
-      if (item === id) {
-        return true;
+  /** 源码 y(Intent)+K2()：宫格全集按 folderName HashMap 分组（保序） */
+  private buildGroups(raw: string): void {
+    try {
+      const list: WorkApplyEntry[] = JSON.parse(raw) as WorkApplyEntry[];
+      const map: Map<string, WorkApplyEntry[]> = new Map();
+      for (const one of list) {
+        let bucket: WorkApplyEntry[] | undefined = map.get(one.folderName);
+        if (bucket === undefined) {
+          bucket = [];
+          map.set(one.folderName, bucket);
+        }
+        bucket.push(one);
       }
+      const result: ScreenGroupItem[] = [];
+      map.forEach((value: WorkApplyEntry[], key: string) => {
+        const group: ScreenGroupItem = { folderName: key, data: value };
+        result.push(group);
+      });
+      this.groups = result;
+    } catch (error) {
+      const err = error as BusinessError;
+      ApiService.logError('WorkApplyScreen parse list fail: ' + err.message);
     }
-    return false;
   }
 
-  private toggleCheck(id: string): void {
-    const rest: string[] = [];
-    let found: boolean = false;
-    for (const item of this.checkedIds) {
-      if (item === id) {
-        found = true;
-      } else {
-        rest.push(item);
-      }
+  /** 源码 L2(processName, processId)：GET screen {pageSize:"10", pageNum:"1", processid} */
+  private pick(item: WorkApplyEntry): void {
+    if (this.searching) {
+      return;
     }
-    if (!found) {
-      rest.push(id);
-    }
-    this.checkedIds = rest;
+    this.searching = true;
+    ApiService.screenMyApplyList('1', item.processId)
+      .then((response: ApiResponse<OaWorkApplyList>) => {
+        this.finishPick(response, item);
+      })
+      .catch((error: BusinessError) => {
+        ApiService.logError('WorkApplyScreen screen fail: ' + error.message);
+        this.searching = false;
+        // 源码 netutil 失败回调 a.f 同样覆盖网络异常分支 → m("筛选数据失败")
+        this.getUIContext().getPromptAction().showToast({ message: '筛选数据失败' });
+      });
   }
 
-  private toast(msg: string): void {
-    this.getUIContext().getPromptAction().showToast({ message: msg });
+  /** 源码 a.g：setResult{keyword,processid,applyList} + 延迟 1s finish */
+  private finishPick(response: ApiResponse<OaWorkApplyList>, item: WorkApplyEntry): void {
+    this.searching = false;
+    if (response.code !== 0) {
+      // 源码 a.f：m("筛选数据失败")
+      this.getUIContext().getPromptAction().showToast({ message: '筛选数据失败' });
+      return;
+    }
+    const result: ScreenPickResult = {
+      keyword: item.processName,
+      processid: item.processId,
+      rows: response.data.rows,
+      total: response.data.total
+    };
+    AppStorage.setOrCreate<string>('workapply_screen_result', JSON.stringify(result));
+    setTimeout(() => {
+      router.back();
+    }, 1000);
   }
 
   build() {
     Column() {
-      TitleBar({ title: '筛选', showBack: true })
-
-      List() {
-        ForEach(this.groups, (group: ScreenGroup) => {
-          // mobile_campus_oa_activity_workapply_item_title.xml
-          ListItem() {
-            Stack({ alignContent: Alignment.Top }) {
-              Row() {
-                Text(group.title)
-                  .fontSize(14)
-                  .fontColor($r('app.color.common_color_1'))
-                  .maxLines(1)
-                Blank()
-                Image($r('app.media.arrow_up'))
-                  .width(14)
-                  .height(14)
-                  .margin({ right: 12 })
-                  .rotate({ angle: this.expandedId === group.id ? 0 : 180 })
-              }
-              .width('100%')
-              .padding({ top: 15, bottom: 15, left: 12 })
-              .alignItems(VerticalAlign.Center)
-              .backgroundColor($r('app.color.white'))
-
-              Divider()
-                .color($r('app.color.menu_divider'))
-                .strokeWidth(0.5)
-                .width('100%')
-            }
-            .width('100%')
-          }
-          .onClick(() => {
-            this.toggle(group.id);
-          })
-
-          if (this.expandedId === group.id) {
-            // mobile_campus_oa_activity_workapply_item_content.xml
-            ListItem() {
-              Column() {
-                Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Start }) {
-                  ForEach(group.options, (option: ScreenOption) => {
-                    Text(option.label)
-                      .fontSize(14)
-                      .fontColor(this.isChecked(option.id) ? $r('app.color.mobile_campus_primary_color_default') : $r('app.color.common_color_1'))
-                      .padding({ left: 12, right: 12, top: 6, bottom: 6 })
-                      .margin(4)
-                      .borderRadius(2)
-                      .border({ width: 1, color: this.isChecked(option.id) ? $r('app.color.mobile_campus_primary_color_default') : $r('app.color.common_color_3') })
-                      .onClick(() => {
-                        this.toggleCheck(option.id);
-                      })
-                  }, (option: ScreenOption) => option.id)
-                }
-                .width('100%')
-                .padding({ left: 7.5, right: 7.5, top: 7.5, bottom: 7.5 })
-                .backgroundColor($r('app.color.white'))
-
-                Divider()
-                  .color($r('app.color.common_color_6'))
-                  .strokeWidth(0.5)
-                  .width('100%')
-              }
-              .width('100%')
-            }
-          }
-        }, (group: ScreenGroup) => group.id)
-      }
-      .width('100%')
-      .layoutWeight(1)
-      .scrollBar(BarState.Off)
-      .backgroundColor($r('app.color.common_color_6'))
-
-      // 筛选确认
+      // toolbar_normal（T1：gVar.n("筛选")）
       Row() {
-        Text('重置')
-          .fontSize(16)
+        Text('＜')
+          .fontSize(17)
+          .fontColor($r('app.color.common_color_1'))
+          .width(40)
+          .height('100%')
+          .textAlign(TextAlign.Center)
+          .margin({ left: 15 })
+          .onClick(() => {
+            router.back();
+          })
+        Text('筛选')
+          .fontSize(17)
           .fontColor($r('app.color.common_color_1'))
           .layoutWeight(1)
-          .height('100%')
           .textAlign(TextAlign.Center)
-          .backgroundColor($r('app.color.white'))
-          .onClick(() => {
-            this.checkedIds = [];
-            this.toast('已重置筛选条件');
-          })
-        Text('确定')
-          .fontSize(17)
-          .fontColor($r('app.color.white'))
-          .backgroundColor($r('app.color.mobile_campus_primary_color_default'))
-          .layoutWeight(1)
-          .height('100%')
-          .textAlign(TextAlign.Center)
-          .onClick(() => {
-            this.toast('已筛选: ' + this.checkedIds.length + '项');
-          })
+          .maxLines(1)
+        Blank().width(40)
       }
       .width('100%')
-      .height(49)
+      .height(44)
       .alignItems(VerticalAlign.Center)
+      .backgroundColor($r('app.color.main_bg'))
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
+      Divider().color($r('app.color.common_color_5')).strokeWidth(0.5).width('100%')
+
+      if (this.searching) {
+        LoadingView()
+      } else {
+        // ExpandableListView：组头全展开 + 子项列表
+        List() {
+          ForEach(this.groups, (group: ScreenGroupItem) => {
+            ListItem() {
+              Column() {
+                // mobile_campus_oa_groupitem_screen.xml
+                Text(group.folderName)
+                  .fontSize(14)
+                  .fontColor($r('app.color.common_color_3'))
+                  .width('100%')
+                  .padding({ top: 10, bottom: 10 })
+                  .backgroundColor($r('app.color.common_color_6'))
+                ForEach(group.data, (item: WorkApplyEntry) => {
+                  this.childRow(item)
+                }, (item: WorkApplyEntry) => item.processId)
+              }
+              .width('100%')
+            }
+          }, (group: ScreenGroupItem) => group.folderName)
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .scrollBar(BarState.Off)
+        .backgroundColor($r('app.color.common_color_6'))
+      }
     }
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.common_color_6'))
+  }
+
+  /** mobile_campus_oa_childitem_screen.xml：白底 selector + 子名 17fp + 底线 schedule_color18 */
+  @Builder
+  childRow(item: WorkApplyEntry) {
+    Column() {
+      Text(item.processName)
+        .fontSize(17)
+        .fontColor($r('app.color.common_color_1'))
+        .width('100%')
+        .padding({ top: 10, bottom: 10, left: 12, right: 12 })
+      Divider()
+        .color($r('app.color.mobile_campus_schedule_color18'))
+        .strokeWidth(0.5)
+        .width('100%')
+    }
+    .width('100%')
+    .backgroundColor($r('app.color.white'))
+    .onClick(() => {
+      this.pick(item);
+    })
   }
 }

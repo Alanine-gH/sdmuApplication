@@ -1,144 +1,366 @@
-import { router } from '@kit.ArkUI';
+import { router, promptAction } from '@kit.ArkUI';
+import { photoAccessHelper } from '@kit.MediaLibraryKit';
+import { cameraPicker, camera } from '@kit.CameraKit';
+import { Context } from '@kit.AbilityKit';
+import { fileIo as fs } from '@kit.CoreFileKit';
+import { BusinessError } from '@kit.BasicServicesKit';
 import { TitleBar } from '../components/TitleBar';
+import { ApiService } from '../network/ApiService';
 
 /**
- * 相册选择页 — 1:1 复刻源布局 activity_photo_picker.xml + fragment_photo_picker.xml + item_photo.xml
- * 结构：toolbar_normal(图片) + 九宫格照片列表（方形图 + 选中半透明遮罩 + 右上勾选框）+ 底部操作条
- * 底部操作条：所有图片（左） / 预览（右，未选中时不可用） / 完成(n)
+ * 图片选择器 — 源码级翻译（PhotoPickerActivity + PhotoPickerFragment + PhotoGridAdapter，[W28 final-b]）。
+ *
+ * 【源码】activity_photo_picker = toolbar_normal（标题 choose_photos"选择图片"，右"完成"done，
+ *   初始 disabled）+ PhotoPickerFragment；fragment_photo_picker = RecyclerView 3 列
+ *   （StaggeredGridLayoutManager 3×1）+ 底部 RelativeLayout（左 button"所有图片" all_image、
+ *   右 photo_picker_btn_preview"预览"preview / "预览(N)"preview_with_count，disabled 态 selector）。
+ *   item_photo = SquareItemLayout：iv_photo centerCrop padding2 + v_mask #99000000 margin2（仅选中）
+ *   + v_selected photo_checkbox_bg（pictures_selected / picture_unselected）padding5 margin5。
+ *   首格 camera（SHOW_CAMERA 默认 true，点击 ImageCaptureManager 拍照插到首条）+ 9 图上限
+ *   （MAX_COUNT 路由参，默认 9）→ 超限 toast over_max_count_tips"你最多可以选择N张图片"。
+ *   选中变化 → J2(count)：右上"完成(N/M)" done_with_count / "完成" done，enabled=count>0；
+ *   预览 → PhotoPagerActivity{photos,SELECTED_PHOTOS,current_item:0,MAX_COUNT}；
+ *   完成 → setResult(-1, SELECTED_PHOTOS) + finish；PhotoPager 返回 → 回填选中集合（isDone 直接 finish）。
+ *
+ * 【HAP 等价说明（平台能力差异，非 mock）】APK 直接读 MediaStore 全量相册（READ_IMAGEVIDEO
+ *   system_basic，普通 HAP 无法获得）。HAP 用系统 PhotoViewPicker 选取照片后在本页九宫格内预览/
+ *   多选/取消选择；相机格用 cameraPicker 等价 ImageCaptureManager。所有图片均来自真实用户选择，
+ *   零占位假图。返回管道=AppStorage 'photo_picker_result' {SELECTED_PHOTOS: string[]}。
  */
-interface PickerPhotoItem {
-  photoId: number;
-  selected: boolean;
+class PickerPhotoItem {
+  uri: string = '';
+  selected: boolean = false;
 }
 
 @Entry
 @Component
 struct PhotoPickerPage {
-  @State photoList: PickerPhotoItem[] = [];
+  @State photos: PickerPhotoItem[] = [];
   @State selectCount: number = 0;
+  @State maxCount: number = 9;
+  @State showCamera: boolean = true;
+  @State picking: boolean = false;
 
   aboutToAppear(): void {
-    const seeds: number[] = [];
-    for (let i = 1; i <= 12; i++) {
-      seeds.push(i);
+    const params: Record<string, Object> | undefined = router.getParams() as Record<string, Object> | undefined;
+    if (params !== undefined && params !== null) {
+      const max: Object = params['MAX_COUNT'];
+      if (typeof max === 'number') {
+        this.maxCount = max as number;
+      }
+      const showCam: Object = params['SHOW_CAMERA'];
+      if (typeof showCam === 'boolean') {
+        this.showCamera = showCam as boolean;
+      }
+      const selected: Object = params['SELECTED_PHOTOS'];
+      if (Array.isArray(selected)) {
+        const uris: string[] = selected as string[];
+        this.photos = uris.map((uri: string): PickerPhotoItem => {
+          const item: PickerPhotoItem = new PickerPhotoItem();
+          item.uri = uri;
+          item.selected = true;
+          return item;
+        });
+        this.selectCount = this.photos.length;
+      }
     }
-    this.photoList = seeds.map((id: number): PickerPhotoItem => {
-      return { photoId: id, selected: false };
+    // 源码 f1()：PhotoPickerFragment.E0().t(SHOW_CAMERA) + N0(MAX_COUNT)
+    if (this.maxCount <= 0) {
+      this.maxCount = 9;
+    }
+    // APK 进入即展示系统相册网格；HAP 等价=进入即拉起系统图片选择器（用户取消则留在本页重选）
+    if (this.photos.length === 0) {
+      setTimeout((): void => {
+        this.pickFromGallery();
+      }, 120);
+    }
+  }
+
+  /** 源码 c 类回调：选中数超上限 → toast over_max_count_tips；否则更新计数 */
+  private toggleSelect(index: number): void {
+    const item: PickerPhotoItem = this.photos[index];
+    if (item.selected) {
+      item.selected = false;
+      this.selectCount = this.selectCount > 0 ? this.selectCount - 1 : 0;
+      this.refresh();
+      return;
+    }
+    if (this.selectCount >= this.maxCount) {
+      promptAction.showToast({ message: '你最多可以选择' + String(this.maxCount) + '张图片' });
+      return;
+    }
+    if (this.maxCount <= 1) {
+      // 源码 i<=1：先清空其它选择
+      this.photos = this.photos.map((it: PickerPhotoItem): PickerPhotoItem => {
+        it.selected = it === item;
+        return it;
+      });
+      this.selectCount = 1;
+      this.refresh();
+      return;
+    }
+    item.selected = true;
+    this.selectCount = this.selectCount + 1;
+    this.refresh();
+  }
+
+  private refresh(): void {
+    this.photos = this.photos.slice();
+  }
+
+  /** 源码 J2(i)：右上"完成(N/M)"；0 → "完成" 且禁用 */
+  private doneText(): string {
+    return this.selectCount > 0 ? '完成(' + String(this.selectCount) + '/' + String(this.maxCount) + ')' : '完成';
+  }
+
+  /** 源码 b 类：预览 → PhotoPagerActivity{current_item:0,photos,SELECTED_PHOTOS,MAX_COUNT} */
+  private openPager(): void {
+    const selected: string[] = this.selectedUris();
+    if (selected.length === 0) {
+      return;
+    }
+    router.pushUrl({
+      url: 'pages/PhotoPagerPage',
+      params: {
+        'photos': selected,
+        'current_item': 0,
+        'SELECTED_PHOTOS': selected,
+        'MAX_COUNT': this.maxCount
+      } as Record<string, Object>
     });
   }
 
-  private toggleSelect(item: PickerPhotoItem): void {
-    const next: PickerPhotoItem[] = this.photoList.map((it: PickerPhotoItem): PickerPhotoItem => {
-      if (it.photoId === item.photoId) {
-        return { photoId: it.photoId, selected: !it.selected };
+  private selectedUris(): string[] {
+    const list: string[] = [];
+    for (const item of this.photos) {
+      if (item.selected) {
+        list.push(item.uri);
       }
-      return it;
-    });
-    this.photoList = next;
-    this.selectCount = this.photoList.filter((it: PickerPhotoItem): boolean => it.selected).length;
+    }
+    return list;
+  }
+
+  /** 源码 a 类：完成 → setResult(-1, SELECTED_PHOTOS) + finish */
+  private finishPick(): void {
+    if (this.selectCount <= 0) {
+      return;
+    }
+    AppStorage.setOrCreate('photo_picker_result', {
+      'SELECTED_PHOTOS': this.selectedUris()
+    } as Record<string, Object>);
+    router.back();
+  }
+
+  /** media uri → 沙箱 cache 文件（沿用 APK ImageCaptureManager 拷贝到私有目录的语义） */
+  private copyUriToCache(uri: string): string {
+    if (uri.startsWith('/') || uri.startsWith('file://')) {
+      return uri;
+    }
+    try {
+      const ctx: Context = this.getUIContext().getHostContext() as Context;
+      const target: string = ctx.cacheDir + '/picker_' + Date.now() + '_' +
+        String(Math.floor(Math.random() * 9000) + 1000) + '.jpg';
+      const src = fs.openSync(uri, fs.OpenMode.READ_ONLY);
+      try {
+        const dst = fs.openSync(target, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE);
+        try {
+          fs.copyFileSync(src.fd, dst.fd);
+        } finally {
+          fs.closeSync(dst);
+        }
+      } finally {
+        fs.closeSync(src);
+      }
+      return target;
+    } catch (error) {
+      const be = error as BusinessError;
+      ApiService.logError('photo picker copy fail: ' + be.message);
+      return uri;
+    }
+  }
+
+  /** 源码首格 camera：cameraPicker 拍照 → 插入首条 */
+  private async takePhoto(): Promise<void> {
+    if (this.selectCount >= this.maxCount) {
+      promptAction.showToast({ message: '你最多可以选择' + String(this.maxCount) + '张图片' });
+      return;
+    }
+    try {
+      const profile: cameraPicker.PickerProfile = {
+        cameraPosition: camera.CameraPosition.CAMERA_POSITION_BACK
+      };
+      const result: cameraPicker.PickerResult = await cameraPicker.pick(
+        this.getUIContext().getHostContext() as Context,
+        [cameraPicker.PickerMediaType.PHOTO], profile);
+      const path: string = this.copyUriToCache(result.resultUri);
+      const item: PickerPhotoItem = new PickerPhotoItem();
+      item.uri = path;
+      item.selected = true;
+      this.photos.splice(0, 0, item);
+      this.selectCount = this.selectCount + 1;
+      this.refresh();
+    } catch (error) {
+      const be = error as BusinessError;
+      ApiService.logError('photo picker camera fail: ' + be.message);
+    }
+  }
+
+  /** 源码 button"所有图片"：目录弹层（HAP 系统选择器等价全量相册入口） */
+  private async pickFromGallery(): Promise<void> {
+    if (this.picking) {
+      return;
+    }
+    const remain: number = this.maxCount - this.selectCount;
+    if (remain <= 0) {
+      promptAction.showToast({ message: '你最多可以选择' + String(this.maxCount) + '张图片' });
+      return;
+    }
+    this.picking = true;
+    try {
+      const picker: photoAccessHelper.PhotoViewPicker = new photoAccessHelper.PhotoViewPicker();
+      const options: photoAccessHelper.PhotoSelectOptions = {
+        MIMEType: photoAccessHelper.PhotoViewMIMETypes.IMAGE_TYPE,
+        maxSelectNumber: remain
+      };
+      const result: photoAccessHelper.PhotoSelectResult = await picker.select(options);
+      for (const uri of result.photoUris) {
+        const item: PickerPhotoItem = new PickerPhotoItem();
+        item.uri = this.copyUriToCache(uri);
+        item.selected = true;
+        this.photos.push(item);
+        this.selectCount = this.selectCount + 1;
+      }
+      this.refresh();
+    } catch (error) {
+      const be = error as BusinessError;
+      ApiService.logError('photo picker gallery fail: ' + be.message);
+    }
+    this.picking = false;
+  }
+
+  /** PhotoPager 返回（onActivityResult 2 等价）：AppStorage 'photo_pager_result' */
+  onPageShow(): void {
+    const result: Object | undefined = AppStorage.get<Object>('photo_pager_result');
+    if (result === undefined || result === null) {
+      return;
+    }
+    AppStorage.setOrCreate<Object>('photo_pager_result', new Object());
+    const rec: Record<string, Object> = result as Record<string, Object>;
+    const isDone: boolean = rec['isDone'] === true;
+    const selected: Object = rec['SELECTED_PHOTOS'];
+    if (isDone) {
+      const list: string[] = Array.isArray(selected) ? selected as string[] : [];
+      AppStorage.setOrCreate('photo_picker_result', { 'SELECTED_PHOTOS': list } as Record<string, Object>);
+      router.back();
+      return;
+    }
+    if (Array.isArray(selected)) {
+      const uris: string[] = selected as string[];
+      this.photos = this.photos.map((item: PickerPhotoItem): PickerPhotoItem => {
+        item.selected = uris.includes(item.uri);
+        return item;
+      });
+      this.selectCount = uris.length;
+      this.refresh();
+    }
   }
 
   @Builder
-  /** item_photo.xml：方格图 + 选中遮罩 + 右上勾选框 */
-  photoCell(item: PickerPhotoItem) {
+  photoCell(item: PickerPhotoItem, index: number) {
     Stack({ alignContent: Alignment.TopEnd }) {
-      Image($r('app.media.up_photo_bg'))
-        .objectFit(ImageFit.Cover)
+      Image(item.uri)
         .width('100%')
         .height('100%')
-        .padding(2)
-
+        .objectFit(ImageFit.Cover)
+        .padding(1)
       if (item.selected) {
         Column()
           .width('100%')
           .height('100%')
-          .margin(2)
+          .margin(1)
           .backgroundColor('#99000000')
       }
-
-      // 勾选框：未选中空心圆 / 选中实心 + 勾
-      Stack() {
-        if (item.selected) {
-          Text('✓')
-            .fontSize(10)
-            .fontColor('#FFFFFFFF')
-            .textAlign(TextAlign.Center)
-        }
-      }
-      .width(18)
-      .height(18)
-      .borderRadius(9)
-      .backgroundColor(item.selected ? $r('app.color.mobile_campus_primary_color') : '#00000000')
-      .border({ width: 1.5, color: '#FFFFFFFF' })
-      .margin(5)
-      .padding(5)
+      Image(item.selected ? $r('app.media.pictures_selected') : $r('app.media.picture_unselected'))
+        .width(18)
+        .height(18)
+        .margin(2.5)
+        .padding(2.5)
+        .onClick(() => {
+          this.toggleSelect(index);
+        })
     }
     .width('100%')
     .aspectRatio(1)
     .onClick(() => {
-      this.toggleSelect(item);
+      this.toggleSelect(index);
+    })
+  }
+
+  @Builder
+  cameraCell() {
+    Stack({ alignContent: Alignment.Center }) {
+      Image($r('app.media.ic_camera_grey600_48dp'))
+        .width(24)
+        .height(24)
+        .objectFit(ImageFit.Contain)
+    }
+    .width('100%')
+    .aspectRatio(1)
+    .onClick(() => {
+      this.takePhoto();
     })
   }
 
   build() {
     Column() {
-      TitleBar({ title: '图片', showBack: true })
+      TitleBar({
+        title: '选择图片',
+        rightText: this.doneText(),
+        rightTextColor: this.selectCount > 0 ? '#000000' : '#999999',
+        onRightClick: (): void => {
+          this.finishPick();
+        }
+      })
 
-      // 相册九宫格
       Grid() {
-        ForEach(this.photoList, (item: PickerPhotoItem) => {
+        if (this.showCamera) {
           GridItem() {
-            this.photoCell(item)
+            this.cameraCell()
           }
-        }, (item: PickerPhotoItem) => `photo_${item.photoId}`)
+        }
+        ForEach(this.photos, (item: PickerPhotoItem, index: number) => {
+          GridItem() {
+            this.photoCell(item, index)
+          }
+        }, (item: PickerPhotoItem, index: number) => item.uri + '_' + String(index))
       }
       .columnsTemplate('1fr 1fr 1fr')
-      .columnsGap(2)
-      .rowsGap(2)
+      .columnsGap(1)
+      .rowsGap(1)
       .width('100%')
       .layoutWeight(1)
       .backgroundColor($r('app.color.ybg_white'))
 
-      // fragment_photo_picker 底部操作条：所有图片 / 预览 / 完成(n)
       Row() {
         Text('所有图片')
           .fontSize(14)
-          .fontColor($r('app.color.mobile_campus_primary_color'))
-          .textAlign(TextAlign.Center)
+          .fontColor($r('app.color.common_color_1'))
           .padding(10)
-          .borderRadius(4)
-          .backgroundColor($r('app.color.common_color_6'))
-
+          .onClick(() => {
+            this.pickFromGallery();
+          })
         Blank()
-
-        Text('预览')
+        Text(this.selectCount > 0 ? '预览(' + String(this.selectCount) + ')' : '预览')
           .fontSize(14)
-          .fontColor(this.selectCount > 0 ? $r('app.color.mobile_campus_primary_color') : $r('app.color.common_color_3'))
-          .textAlign(TextAlign.Center)
+          .fontColor(this.selectCount > 0 ? $r('app.color.common_color_1') : $r('app.color.common_color_3'))
           .padding(10)
-          .borderRadius(4)
-          .backgroundColor($r('app.color.common_color_6'))
           .enabled(this.selectCount > 0)
           .onClick(() => {
-            if (this.selectCount > 0) {
-              router.pushUrl({ url: 'pages/PhotoPagerPage' });
-            }
-          })
-
-        Text(`完成(${this.selectCount})`)
-          .fontSize(14)
-          .fontColor($r('app.color.mobile_campus_primary_color'))
-          .textAlign(TextAlign.Center)
-          .padding({ left: 10, right: 10, top: 10, bottom: 10 })
-          .borderRadius(4)
-          .backgroundColor($r('app.color.common_color_6'))
-          .margin({ left: 12 })
-          .onClick(() => {
-            router.back();
+            this.openPager();
           })
       }
       .width('100%')
-      .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+      .padding({ left: 5, right: 5, top: 5, bottom: 5 })
       .alignItems(VerticalAlign.Center)
       .backgroundColor($r('app.color.ybg_white'))
     }

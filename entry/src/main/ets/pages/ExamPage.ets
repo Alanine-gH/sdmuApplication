@@ -1,231 +1,465 @@
-import { ApiService } from '../network/ApiService';
-import { ApiResponse } from '../model/ResponseModel';
-import { ExamItem } from '../model/ScoreModel';
+import { router } from '@kit.ArkUI';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { TitleBar } from '../components/TitleBar';
 import { EmptyView } from '../components/EmptyView';
 import { LoadingView } from '../components/LoadingView';
+import { ApiService } from '../network/ApiService';
+import { ApiResponse } from '../model/ResponseModel';
+import { ComingExamEntity, FinishExamEntity } from '../model/ScoreModel';
 
 /**
- * 考试安排页 — 1:1 复刻 examination_list_item.xml + examination_tag.xml
+ * 考试信息 — ExamListActivity + ExamComingFragment + ExamFinishFragment +
+ * ComingExamListAdapter + FinishExamListAdapter 源码级翻译。
  *
- * examination_list_item.xml（白底条目）：
- *   padding L px_to_dip_24=12vp R 12vp T px_to_dip_30=15vp B px_to_dip_24=12vp
- *   - flowlayout_coursename：课程名(MediumText.Black=16fp #000000) + 考试标签(examination_tag)
- *   - 时间行 marginTop 12vp：examination_time 图标 15vp + 时间(MediumText.Grey=16fp #747474)
- *     marginLeft 8vp weight=1 + "剩余 N 天"（剩余/天 16fp #747474，N 蓝色加粗）
- *   - 地点行 marginTop 6vp：examination_place 图标 15vp + 地点(SmallText.Grey=14fp #747474)
- *   - 座位/方式行 marginTop 6vp：examination_table 图标 + 14fp #747474
- *   - 学期行 marginTop 6vp：examination_term 图标 + 14fp #747474
- *
- * examination_tag.xml：px_to_sp_20=10fp 白字、蓝底圆角(round_shape_normal_round_coner_blue_bg,
- *   corners coner_radius_normal=6dip=3vp)、padding L6 R6 T3 B3(vp)、marginTop 1vp
- *
- * 注：mobile_campus_view_exam_item.xml（#F5F7FA 圆角条目）为首页"移动校园"考试模块卡片布局，
- * 不属于本页（考试列表页）结构，故未在此使用。
+ * 【布局】examination_examlist_activity：toolbar_normal（T1 标题 R.string.examination_exam_title
+ *   ="考试信息"，右键 nav_plus_btn → AddExamListActivity）+ RadioGroup 高 45vp（未考/已考，
+ *   textcolor_blue_selector）+ examination_view_blueline + 15vp 灰条 + 两 FrameLayout。
+ * 【未考】ExamComingFragment：PullToRefresh + SwipeMenuListView（divider list_padding_line）；
+ *   ComingExamListAdapter：LX=="1"→"教务提供"蓝标签；LX=="2" 且 TGRXH 空→提醒角标；
+ *   LX=="3"→examinationaddexam_list_item 灰字"待添加"；时间行 "yyyy/MM/dd（周X） HH:mm" +
+ *   剩余天数逐位方块（<15 红 #FF6C6C / >=15 绿 #73BE3D；=0 显示"今天"20fp #FF6C6C）。
+ *   左滑删除 → deleteExam{kslx,kmmc}；点击 LX=="2"/"3" → HandleExamCourseActivity(edit)。
+ * 【已考】FinishExamFragment：行同 examination_list_item（课程/时间/地点/座位/学期），
+ *   点击 CommonAdapter → KeyValue 弹窗（学年/学期/科目名称/开始时间/结束时间/考试地点/座位号）。
  */
+const WEEK_CHARS: string[] = ['日', '一', '二', '三', '四', '五', '六'];
+
+function pad2(n: number): string {
+  return n < 10 ? '0' + String(n) : String(n);
+}
+
+function parseDate(text: string): Date | null {
+  const t: string = text.trim().replace(/\//g, '-');
+  const m: RegExpMatchArray | null = t.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+  if (m === null) {
+    return null;
+  }
+  const d: Date = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]));
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** 源码 e.j(sdf, e.i="yyyy/MM/dd") + e.f(周X) + e.j(sdf, e.e="HH:mm") */
+function formatExamTime(text: string): string {
+  const d: Date | null = parseDate(text);
+  if (d === null) {
+    return text;
+  }
+  return d.getFullYear() + '/' + pad2(d.getMonth() + 1) + '/' + pad2(d.getDate()) +
+    '（周' + WEEK_CHARS[d.getDay()] + '） ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+}
+
+/** 源码 q.a：数字逐位转中文（1→一、2→二…），用于"第X学期" */
+function semesterCn(text: string): string {
+  const digits: string[] = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
+  let out: string = '';
+  for (let i = 0; i < text.length; i++) {
+    const ch: string = text.charAt(i);
+    const n: number = Number(ch);
+    out += Number.isNaN(n) ? ch : digits[n];
+  }
+  return out;
+}
+
+function remainingDays(text: string): number {
+  const d: Date | null = parseDate(text);
+  if (d === null) {
+    return 0;
+  }
+  const now: Date = new Date();
+  const today: Date = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const examDay: Date = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  return Math.round((examDay.getTime() - today.getTime()) / (24 * 3600 * 1000));
+}
+
 @Entry
 @Component
 struct ExamPage {
-  @State examList: ExamItem[] = [];
+  @State activeTab: number = 0;
+  @State comingList: ComingExamEntity[] = [];
+  @State finishList: FinishExamEntity[] = [];
+  @State comingLoaded: boolean = false;
+  @State finishLoaded: boolean = false;
   @State isLoading: boolean = true;
+  @State errorText: string = '';
 
   aboutToAppear(): void {
-    ApiService.getExamList()
-      .then((response: ApiResponse<ExamItem[]>) => {
-        const data: ExamItem[] = response.data;
-        if (data.length > 0) {
-          this.examList = data;
-        } else if (response.code !== 0) {
-          console.info('ExamPage degrade: code=' + response.code + ' msg=' + response.message);
+    this.loadComing();
+  }
+
+  private loadComing(): void {
+    this.isLoading = true;
+    this.errorText = '';
+    ApiService.getComingExamList()
+      .then((response: ApiResponse<ComingExamEntity[]>) => {
+        if (response.code === 1000) {
+          return;
+        }
+        if (response.code === 0) {
+          this.comingList = response.data;
+          this.comingLoaded = true;
+        } else {
+          this.comingList = [];
+          this.errorText = response.message;
         }
         this.isLoading = false;
       })
       .catch((error: BusinessError) => {
-        console.info('ExamPage load fail: ' + error.message);
-        this.examList = [];
+        ApiService.logError('beginExamList fail: ' + error.message);
+        this.comingList = [];
+        this.errorText = '网络异常，请稍后重试';
         this.isLoading = false;
       });
   }
 
-  private remainingDays(time: string): number {
-    // time 形如 "2026-12-20 09:00-11:00"，取日期部分计算距今天数
-    const parts: string[] = time.split(' ');
-    if (parts.length < 1) {
-      return -1;
-    }
-    const dateParts: string[] = parts[0].split('-');
-    if (dateParts.length < 3) {
-      return -1;
-    }
-    const examDate: Date = new Date(Number(dateParts[0]), Number(dateParts[1]) - 1, Number(dateParts[2]));
-    if (isNaN(examDate.getTime())) {
-      return -1;
-    }
-    const now: Date = new Date();
-    const todayStart: Date = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    return Math.ceil((examDate.getTime() - todayStart.getTime()) / (24 * 3600 * 1000));
+  private loadFinish(): void {
+    this.isLoading = true;
+    this.errorText = '';
+    ApiService.getFinishExamList()
+      .then((response: ApiResponse<FinishExamEntity[]>) => {
+        if (response.code === 1000) {
+          return;
+        }
+        if (response.code === 0) {
+          this.finishList = response.data;
+          this.finishLoaded = true;
+        } else {
+          this.finishList = [];
+          this.errorText = response.message;
+        }
+        this.isLoading = false;
+      })
+      .catch((error: BusinessError) => {
+        ApiService.logError('endExamList fail: ' + error.message);
+        this.finishList = [];
+        this.errorText = '网络异常，请稍后重试';
+        this.isLoading = false;
+      });
   }
 
-  private termLabel(time: string): string {
-    const dateParts: string[] = time.split(' ')[0].split('-');
-    if (dateParts.length < 3) {
-      return '';
+  private switchTab(index: number): void {
+    if (this.activeTab === index) {
+      return;
     }
-    const year: number = Number(dateParts[0]);
-    const month: number = Number(dateParts[1]);
-    if (isNaN(year) || isNaN(month)) {
-      return '';
+    this.activeTab = index;
+    if (index === 0 && !this.comingLoaded) {
+      this.loadComing();
+    } else if (index === 1 && !this.finishLoaded) {
+      this.loadFinish();
+    } else {
+      this.errorText = '';
+      this.isLoading = false;
     }
-    // 8月及以后为新学年第一学期
-    if (month >= 8) {
-      return year + '-' + (year + 1) + '学年 第1学期';
+  }
+
+  private toast(message: string): void {
+    this.getUIContext().getPromptAction().showToast({ message: message, duration: 2000 });
+  }
+
+  /** 源码 ExamComingPresenter.d → ExamModel.w deleteExam{kslx,kmmc}；成功后刷新未考 */
+  private confirmDelete(item: ComingExamEntity): void {
+    this.getUIContext().showAlertDialog({
+      title: '',
+      message: '确认删除？',
+      primaryButton: { value: '取消', action: (): void => {} },
+      secondaryButton: {
+        value: '删除',
+        action: (): void => {
+          ApiService.deleteExam(item.KSLX, item.KMMC)
+            .then((response: ApiResponse<string>) => {
+              if (response.code === 0) {
+                this.loadComing();
+              } else {
+                this.toast('删除失败');
+              }
+            })
+            .catch((error: BusinessError) => {
+              ApiService.logError('deleteExam fail: ' + error.message);
+              this.toast('删除失败');
+            });
+        }
+      }
+    });
+  }
+
+  /** 源码 ExamComingFragment.b：type1/2 → X1(examCourseInfo, edit)；HAP → HandleExamCoursePage */
+  private openComing(item: ComingExamEntity): void {
+    const type: number = item.LX === '3' ? 2 : (item.LX === '2' ? 1 : 0);
+    if (type === 0) {
+      return;
     }
-    if (month <= 1) {
-      return (year - 1) + '-' + year + '学年 第1学期';
+    const info: Record<string, Object> = {
+      'KMMC': item.KMMC, 'KSDD': item.KSDD, 'KSSJ': item.KSSJ, 'KSLX': item.KSLX,
+      'ZWH': item.ZWH, 'ZKZH': item.ZKZH, 'JSSJ': item.JSSJ
+    };
+    router.pushUrl({
+      url: 'pages/HandleExamCoursePage',
+      params: {
+        'handleExamType': 'edit',
+        'handleExamTitle': item.KSLX === '0' ? '期末考试' : '等级考试',
+        'examCourseInfo': info
+      } as Record<string, Object>
+    });
+  }
+
+  /** 源码 FinishExamListAdapter.createFinishExamBeanList + KeyValue 弹窗 */
+  private showFinishDetail(item: FinishExamEntity): void {
+    const lines: string[] = [];
+    if (item.XN !== '') { lines.push('学年：' + item.XN); }
+    if (item.XQ !== '') { lines.push('学期：' + item.XQ); }
+    if (item.KMMC !== '') { lines.push('科目名称：' + item.KMMC); }
+    if (item.KSSJ !== '') { lines.push('开始时间：' + item.KSSJ); }
+    if (item.JSSJ !== '') { lines.push('结束时间：' + item.JSSJ); }
+    if (item.KSDD !== '') { lines.push('考试地点：' + item.KSDD); }
+    if (item.ZWH !== '') { lines.push('座位号：' + item.ZWH); }
+    this.getUIContext().showAlertDialog({
+      title: item.KMMC,
+      message: lines.join('\n'),
+      primaryButton: { value: '确定', action: (): void => {} }
+    });
+  }
+
+  @Builder
+  dayBadges(days: number) {
+    Row() {
+      Text('剩余')
+        .fontSize(16)
+        .fontColor('#747474')
+        .margin({ right: 4 })
+      if (days === 0) {
+        Text('今天')
+          .fontSize(20)
+          .fontColor('#FF6C6C')
+      } else {
+        ForEach(String(days).split(''), (ch: string) => {
+          Text(ch)
+            .fontSize(18)
+            .fontColor($r('app.color.white'))
+            .backgroundColor(days < 15 ? '#FF6C6C' : '#73BE3D')
+            .borderRadius(2)
+            .padding({ left: 5, right: 5, top: 1, bottom: 1 })
+            .margin({ left: 1, right: 1 })
+        }, (ch: string, index: number) => 'day_' + index + '_' + ch)
+        Text('天')
+          .fontSize(16)
+          .fontColor('#747474')
+          .margin({ left: 4 })
+      }
     }
-    return (year - 1) + '-' + year + '学年 第2学期';
+    .alignItems(VerticalAlign.Center)
+  }
+
+  @Builder
+  comingItem(item: ComingExamEntity, index: number) {
+    Column() {
+      if (item.LX === '3') {
+        Row() {
+          Text(item.KMMC)
+            .fontSize(16)
+            .fontColor('#CECECE')
+            .layoutWeight(1)
+          Text('待添加')
+            .fontSize(16)
+            .fontColor('#18B4ED')
+        }
+        .width('100%')
+        .height(60)
+        .padding({ left: 12, right: 12 })
+        .alignItems(VerticalAlign.Center)
+      } else {
+        Row() {
+          Text(item.KMMC)
+            .fontSize(16)
+            .fontColor($r('app.color.black'))
+            .maxLines(2)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+          if (item.LX === '1') {
+            Text('教务提供')
+              .fontSize(10)
+              .fontColor($r('app.color.white'))
+              .backgroundColor($r('app.color.ybg_blue'))
+              .borderRadius(3)
+              .padding({ left: 6, right: 6, top: 3, bottom: 3 })
+              .margin({ left: 6, top: 1 })
+          }
+          if (item.LX === '2' && item.TGRXH === '') {
+            Text('⏰')
+              .fontSize(12)
+              .margin({ left: 4 })
+          }
+          Blank().layoutWeight(1)
+        }
+        .width('100%')
+        .alignItems(VerticalAlign.Center)
+        Row() {
+          Image($r('app.media.examination_time'))
+            .width(15)
+            .height(15)
+          Text(formatExamTime(item.KSSJ))
+            .fontSize(16)
+            .fontColor('#747474')
+            .margin({ left: 8 })
+            .layoutWeight(1)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+          if (remainingDays(item.KSSJ) !== 0) {
+            this.dayBadges(remainingDays(item.KSSJ))
+          } else if (item.KSSJ !== '') {
+            this.dayBadges(0)
+          }
+        }
+        .width('100%')
+        .margin({ top: 12 })
+        .alignItems(VerticalAlign.Center)
+        if (item.KSDD !== '') {
+          Row() {
+            Image($r('app.media.examination_place')).width(15).height(15)
+            Text(item.KSDD).fontSize(14).fontColor('#747474').margin({ left: 8 }).layoutWeight(1)
+          }
+          .width('100%')
+          .margin({ top: 6 })
+          .alignItems(VerticalAlign.Center)
+        }
+        if (item.ZWH !== '') {
+          Row() {
+            Image($r('app.media.examination_table')).width(15).height(15)
+            Text(item.ZWH).fontSize(14).fontColor('#747474').margin({ left: 8 }).layoutWeight(1)
+          }
+          .width('100%')
+          .margin({ top: 6 })
+          .alignItems(VerticalAlign.Center)
+        }
+      }
+    }
+    .width('100%')
+    .padding({ left: 12, right: 12, top: 15, bottom: 12 })
+    .backgroundColor($r('app.color.white'))
+    .alignItems(HorizontalAlign.Start)
+    .onClick((): void => { this.openComing(item); })
+    .gesture(LongPressGesture({ repeat: false }).onAction((): void => { this.confirmDelete(item); }))
+  }
+
+  @Builder
+  finishItem(item: FinishExamEntity) {
+    Column() {
+      Text(item.KMMC)
+        .fontSize(16)
+        .fontColor($r('app.color.black'))
+        .maxLines(2)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+      Row() {
+        Image($r('app.media.examination_time')).width(15).height(15)
+        Text(formatExamTime(item.KSSJ))
+          .fontSize(16)
+          .fontColor('#747474')
+          .margin({ left: 8 })
+          .layoutWeight(1)
+      }
+      .width('100%')
+      .margin({ top: 12 })
+      .alignItems(VerticalAlign.Center)
+      if (item.KSDD !== '') {
+        Row() {
+          Image($r('app.media.examination_place')).width(15).height(15)
+          Text(item.KSDD).fontSize(14).fontColor('#747474').margin({ left: 8 }).layoutWeight(1)
+        }
+        .width('100%')
+        .margin({ top: 6 })
+      }
+      if (item.ZWH !== '') {
+        Row() {
+          Image($r('app.media.examination_table')).width(15).height(15)
+          Text(item.ZWH).fontSize(14).fontColor('#747474').margin({ left: 8 }).layoutWeight(1)
+        }
+        .width('100%')
+        .margin({ top: 6 })
+      }
+      Row() {
+        Image($r('app.media.examination_term')).width(15).height(15)
+        Text(item.XN + '年第' + semesterCn(item.XQ) + '学期')
+          .fontSize(14)
+          .fontColor('#747474')
+          .margin({ left: 8 })
+          .layoutWeight(1)
+      }
+      .width('100%')
+      .margin({ top: 6 })
+    }
+    .width('100%')
+    .padding({ left: 12, right: 12, top: 15, bottom: 12 })
+    .backgroundColor($r('app.color.white'))
+    .alignItems(HorizontalAlign.Start)
+    .onClick((): void => { this.showFinishDetail(item); })
   }
 
   build() {
     Column() {
-      // include toolbar_normal
-      TitleBar({ title: '考试安排', showBack: true })
+      TitleBar({
+        title: '考试信息',
+        showBack: true,
+        rightIcon: $r('app.media.nav_plus_btn'),
+        onRightClick: (): void => {
+          router.pushUrl({ url: 'pages/ExamAddListPage' }).catch((error: BusinessError) => {
+            ApiService.logError('open ExamAddList fail: ' + error.message);
+          });
+        }
+      })
+      Row() {
+        ForEach(['即将开始', '已经结束'], (label: string, index: number) => {
+          Column() {
+            Text(label)
+              .fontSize(14)
+              .fontColor(this.activeTab === index ? '#18B4ED' : '#333333')
+              .height(43)
+              .textAlign(TextAlign.Center)
+              .width('100%')
+            Divider()
+              .color(this.activeTab === index ? '#18B4ED' : Color.Transparent)
+              .strokeWidth(2)
+              .width('100%')
+          }
+          .layoutWeight(1)
+          .height(45)
+          .onClick((): void => { this.switchTab(index); })
+        }, (label: string) => label)
+      }
+      .width('100%')
+      .height(45)
+      .backgroundColor($r('app.color.white'))
+      Divider().color('#F2F2F2').strokeWidth(15).width('100%')
       if (this.isLoading) {
         LoadingView()
-      } else {
-        if (this.examList.length === 0) {
-          EmptyView()
+      } else if (this.errorText !== '') {
+        EmptyView({ tipText: this.errorText })
+      } else if (this.activeTab === 0) {
+        if (this.comingList.length === 0) {
+          EmptyView({ tipText: '呀，一门考试信息都没呢，要不要添加一下~' })
         } else {
-          Scroll() {
-            Column() {
-              ForEach(this.examList, (item: ExamItem, index: number) => {
-                // examination_list_item.xml：白底考试条目
-                Column() {
-                  // flowlayout_coursename：课程名 + 考试标签（流式布局）
-                  Flex({ wrap: FlexWrap.Wrap, alignItems: ItemAlign.Center }) {
-                    // tv_course_examination_list：MediumText.Black 16fp #000000
-                    Text(item.courseName)
-                      .fontSize(16)
-                      .fontColor($r('app.color.black'))
-                      .maxLines(2)
-                      .textOverflow({ overflow: TextOverflow.Ellipsis })
-                    // examination_tag.xml：教务提供标签 10fp 白字蓝底圆角 3vp
-                    Text($r('app.string.examination_my_exam_tag'))
-                      .fontSize(10)
-                      .fontColor($r('app.color.white'))
-                      .backgroundColor($r('app.color.ybg_blue'))
-                      .borderRadius(3)
-                      .padding({ left: 6, right: 6, top: 3, bottom: 3 })
-                      .margin({ left: 3, top: 1 })
-                      .maxLines(1)
-                  }
-                  .width('100%')
-                  // 时间行：examination_time 图标 15vp + 时间 + 剩余天数
-                  Row() {
-                    Image($r('app.media.examination_time'))
-                      .width(15)
-                      .height(15)
-                    // tv_time_examination_list：MediumText.Grey 16fp #747474
-                    Text(item.time)
-                      .fontSize(16)
-                      .fontColor($r('app.color.ybg_grey'))
-                      .margin({ left: 8 })
-                      .layoutWeight(1)
-                      .maxLines(1)
-                      .textOverflow({ overflow: TextOverflow.Ellipsis })
-                    // examination_list_whole_rest_day_layout：剩余 N 天
-                    if (this.remainingDays(item.time) > 0) {
-                      // tv_shengyustr："剩余" 16fp #747474
-                      Text($r('app.string.remain'))
-                        .fontSize(16)
-                        .fontColor($r('app.color.ybg_grey'))
-                        .margin({ right: 1 })
-                      // 距考天数（蓝色加粗）
-                      Text(this.remainingDays(item.time) + '')
-                        .fontSize(16)
-                        .fontColor($r('app.color.blue_default'))
-                        .fontWeight(FontWeight.Bold)
-                      // tv_tianstr："天" 16fp #747474
-                      Text($r('app.string.day'))
-                        .fontSize(16)
-                        .fontColor($r('app.color.ybg_grey'))
-                        .margin({ left: 1 })
-                    }
-                  }
-                  .width('100%')
-                  .margin({ top: 12 })
-                  .alignItems(VerticalAlign.Center)
-                  // 地点行：examination_place 图标 + 考场
-                  Row() {
-                    Image($r('app.media.examination_place'))
-                      .width(15)
-                      .height(15)
-                    // tv_place_examination_list：SmallText.Grey 14fp #747474
-                    Text(item.location)
-                      .fontSize(14)
-                      .fontColor($r('app.color.ybg_grey'))
-                      .margin({ left: 8 })
-                      .layoutWeight(1)
-                      .maxLines(1)
-                      .textOverflow({ overflow: TextOverflow.Ellipsis })
-                  }
-                  .width('100%')
-                  .margin({ top: 6 })
-                  .alignItems(VerticalAlign.Center)
-                  // 方式行：examination_table 图标 + 考试方式
-                  Row() {
-                    Image($r('app.media.examination_table'))
-                      .width(15)
-                      .height(15)
-                    // tvTable：SmallText.Grey 14fp #747474
-                    Text(item.type)
-                      .fontSize(14)
-                      .fontColor($r('app.color.ybg_grey'))
-                      .margin({ left: 8 })
-                      .layoutWeight(1)
-                      .maxLines(1)
-                      .textOverflow({ overflow: TextOverflow.Ellipsis })
-                  }
-                  .width('100%')
-                  .margin({ top: 6 })
-                  .alignItems(VerticalAlign.Center)
-                  // 学期行：examination_term 图标 + 学期
-                  Row() {
-                    Image($r('app.media.examination_term'))
-                      .width(15)
-                      .height(15)
-                    // tv_term_examination_list：SmallText.Grey 14fp #747474
-                    Text(this.termLabel(item.time))
-                      .fontSize(14)
-                      .fontColor($r('app.color.ybg_grey'))
-                      .margin({ left: 8 })
-                      .layoutWeight(1)
-                      .maxLines(1)
-                      .textOverflow({ overflow: TextOverflow.Ellipsis })
-                  }
-                  .width('100%')
-                  .margin({ top: 6 })
-                  .alignItems(VerticalAlign.Center)
-                }
-                .width('100%')
-                .padding({ left: 12, right: 12, top: 15, bottom: 12 })
-                .backgroundColor($r('app.color.white'))
-                .alignItems(HorizontalAlign.Start)
-                // 条目间分隔线
-                if (index < this.examList.length - 1) {
-                  Divider()
-                    .color($r('app.color.common_color_5'))
-                    .strokeWidth(0.5)
-                    .width('100%')
-                }
-              }, (item: ExamItem) => 'exam' + item.id)
-            }
-            .width('100%')
+          List() {
+            ForEach(this.comingList, (item: ComingExamEntity, index: number) => {
+              ListItem() {
+                this.comingItem(item, index)
+              }
+            }, (item: ComingExamEntity) => item.KMMC + item.KSLX + item.KSSJ)
           }
-          .width('100%')
           .layoutWeight(1)
-          .backgroundColor($r('app.color.white'))
+          .width('100%')
+          .divider({ strokeWidth: 0.5, color: '#E7E7E7', startMargin: 12, endMargin: 12 })
+          .scrollBar(BarState.Off)
+        }
+      } else {
+        if (this.finishList.length === 0) {
+          EmptyView({ tipText: '小奕数据不足，暂无历史考试信息呢' })
+        } else {
+          List() {
+            ForEach(this.finishList, (item: FinishExamEntity) => {
+              ListItem() {
+                this.finishItem(item)
+              }
+            }, (item: FinishExamEntity) => item.KMMC + item.KSSJ)
+          }
+          .layoutWeight(1)
+          .width('100%')
+          .divider({ strokeWidth: 0.5, color: '#E7E7E7', startMargin: 12, endMargin: 12 })
           .scrollBar(BarState.Off)
         }
       }

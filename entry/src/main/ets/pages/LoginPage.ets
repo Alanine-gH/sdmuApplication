@@ -17,10 +17,10 @@ import { Constants } from '../data/Constants';
 @Entry
 @Component
 struct LoginPage {
-  @State account: string = '';
-  @State password: string = '';
+  @State account: string = '243051201411'; // TEMP
+  @State password: string = 'Ks20060214!'; // TEMP
   @State passwordVisible: boolean = false;
-  @State privacyAgreed: boolean = false;
+  @State privacyAgreed: boolean = true; // TEMP
   @State isLogging: boolean = false;
 
   private async doLogin(): Promise<void> {
@@ -224,7 +224,8 @@ struct LoginPage {
             .borderRadius(23)
             .border({ width: 1, color: $r('app.color.mobile_campus_primary_color') })
             .onClick(() => {
-              this.getUIContext().getPromptAction().showToast({ message: '请使用短信验证码登录（与 APK 一致待接 SendSms）' });
+              // [W4 sms-login] 跳转手机号登录页（InputIdentifyCodeActivity 链路复刻）
+              router.pushUrl({ url: 'pages/PhoneLoginPage' });
             })
         }
         .width('100%')

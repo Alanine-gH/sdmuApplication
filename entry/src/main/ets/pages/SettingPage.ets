@@ -2,6 +2,10 @@ import { router } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import fs from '@ohos.file.fs';
 import { TitleBar } from '../components/TitleBar';
+import { ApiService } from '../network/ApiService';
+import { LoginSession } from '../network/LoginSession';
+import { ApiResponse } from '../model/ResponseModel';
+import { GestureManager, GesturePwdBean } from '../model/GestureManager';
 
 /**
  * 设置页 — 1:1 复刻 mobile_campus_activity_setting.xml
@@ -58,6 +62,125 @@ struct SettingPage {
   }
   @State pushEnabled: boolean = true;
   @State showUpdateDialog: boolean = false;
+  /** [W22 launch-chain] SettingActivity h() 手势密码链：校验密码弹窗态 + 输入值 */
+  @State showGesturePwdDialog: boolean = false;
+  @State checkPassword: string = '';
+
+  /** 源码 h.onClick（llGesturePwdLayout）：GestureManager.b(userId) 有已存手势 →
+   *  g2(e.a.k=/my/GesturePwdVerifyActivity){jsonStr}；无 → "校验密码"弹窗。 */
+  private async onGestureRow(): Promise<void> {
+    const bean: GesturePwdBean | null = await GestureManager.find(LoginSession.userId);
+    if (bean === null) {
+      this.showGesturePwdDialog = true;
+      return;
+    }
+    // 源码：bundle jsonStr = Gson(bean)
+    router.pushUrl({ url: 'pages/GesturePwdVerifyPage',
+      params: { 'jsonStr': JSON.stringify(bean) } as Record<string, string> });
+  }
+
+  /** 源码 h$a.a(bVar, str)：密码非空 → VerificationModel.U0 POST checkPass；
+   *  g → dismiss + g2(e.a.j=/my/GesturePwdSettingActivity)；f → toast(message)。 */
+  private async submitCheckPassword(): Promise<void> {
+    // 源码 a$a.a：TextUtils.isEmpty(str) → return（弹窗停留）
+    if (this.checkPassword === '') {
+      return;
+    }
+    try {
+      const resp: ApiResponse<Object> = await ApiService.checkGesturePassword(this.checkPassword);
+      if (resp.code !== 0) {
+        // 源码 C0406a.f：m(str2)
+        this.getUIContext().getPromptAction().showToast({ message: resp.message });
+        return;
+      }
+      // 源码 C0406a.g：dismiss + g2(e.a.j)
+      this.showGesturePwdDialog = false;
+      this.checkPassword = '';
+      router.pushUrl({ url: 'pages/GesturePwdSettingPage' });
+    } catch (error) {
+      ApiService.logError('checkPass fail: ' + error.message);
+    }
+  }
+
+  /** 源码 h$a.b(bVar, str)：取消 → dismiss */
+  private cancelCheckPassword(): void {
+    this.showGesturePwdDialog = false;
+    this.checkPassword = '';
+  }
+
+  /** 源码 com.lysoft.android.lyyd.report.baseapp.b.b 弹窗复刻
+   *  （title"校验密码" + message"请输入登录密码验证身份..." + 密码输入 + 确定/取消）
+   *  [W22-review 修复] 原实现为常驻 .overlay(gesturePwdDialog())：showGesturePwdDialog=false
+   *  时 Builder 输出空，但 overlay 空层实测拦截整页输入（模拟器实测：设置页所有行点击与
+   *  TitleBar 返回全部失效，hilog "Click try accept Row" 不出现；移除 overlay 后 Row 命中
+   *  恢复）。改为条件挂载的全屏遮罩层：仅弹窗态渲染，遮罩不透传点击，等价 setCancelable(false)。 */
+  @Builder
+  gesturePwdDialog() {
+    if (this.showGesturePwdDialog) {
+      Column() {
+        Column() {
+        Text('校验密码')
+          .fontSize(16)
+          .fontColor($r('app.color.common_color_1'))
+          .textAlign(TextAlign.Center)
+          .width('100%')
+          .padding({ top: 20 })
+        Text('请输入登录密码验证身份...')
+          .fontSize(14)
+          .fontColor($r('app.color.common_color_2'))
+          .textAlign(TextAlign.Center)
+          .width('100%')
+          .padding({ left: 24, right: 24, top: 12 })
+        TextInput({ placeholder: '登录密码', text: this.checkPassword })
+          .type(InputType.Password)
+          .fontSize(15)
+          .height(42)
+          .margin({ left: 24, right: 24, top: 12 })
+          .onChange((value: string) => {
+            this.checkPassword = value;
+          })
+        Divider()
+          .color($r('app.color.common_color_6'))
+          .strokeWidth(0.5)
+          .margin({ top: 16 })
+        Row() {
+          Text('取消')
+            .fontSize(15)
+            .fontColor($r('app.color.common_color_1'))
+            .textAlign(TextAlign.Center)
+            .layoutWeight(1)
+            .padding({ top: 12, bottom: 12 })
+            .onClick(() => {
+              this.cancelCheckPassword();
+            })
+          Divider()
+            .vertical(true)
+            .color($r('app.color.common_color_6'))
+            .strokeWidth(0.5)
+            .height(40)
+          Text('确定')
+            .fontSize(15)
+            .fontColor($r('app.color.mobile_campus_primary_color'))
+            .textAlign(TextAlign.Center)
+            .layoutWeight(1)
+            .padding({ top: 12, bottom: 12 })
+            .onClick(() => {
+              this.submitCheckPassword();
+            })
+        }
+        .alignItems(VerticalAlign.Center)
+        }
+        .width(280)
+        .backgroundColor($r('app.color.ybg_white'))
+        .borderRadius(6)
+      }
+      .width('100%')
+      .height('100%')
+      .justifyContent(FlexAlign.Center)
+      .alignItems(HorizontalAlign.Center)
+      .backgroundColor('rgba(0,0,0,0.35)')
+    }
+  }
 
   private clearCache(): void {
     this.getUIContext().getPromptAction().showToast({ message: '清除成功' });
@@ -92,7 +215,8 @@ struct SettingPage {
   }
 
   build() {
-    Column() {
+    Stack() {
+      Column() {
       TitleBar({ title: '设置', showBack: true })
 
       Scroll() {
@@ -181,6 +305,26 @@ struct SettingPage {
           .alignItems(VerticalAlign.Center)
           .backgroundColor($r('app.color.white'))
 
+          this.settingDivider()
+
+          // [W22 launch-chain] 手势密码行（源码 llGesturePwdLayout，SettingActivity L452
+          // setVisibility(0) 恒可见 + L416 setOnClickListener(new h())）
+          Row() {
+            Text('手势密码')
+              .fontSize(16)
+              .fontColor($r('app.color.common_color_1'))
+              .layoutWeight(1)
+            this.arrowIcon()
+          }
+          .width('100%')
+          .height(48)
+          .padding({ left: 12, right: 12 })
+          .alignItems(VerticalAlign.Center)
+          .backgroundColor($r('app.color.white'))
+          .onClick(() => {
+            this.onGestureRow();
+          })
+
           // 组间空隙 12vp
           Row()
             .height(12)
@@ -260,5 +404,11 @@ struct SettingPage {
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.common_color_6'))
+
+    // [W22-review 修复] 弹窗层条件挂载（替代常驻 .overlay，见 gesturePwdDialog 注释）
+    if (this.showGesturePwdDialog) {
+      this.gesturePwdDialog()
+    }
+    }
   }
 }

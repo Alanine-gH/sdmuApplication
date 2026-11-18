@@ -145,8 +145,8 @@ struct MessageListPage {
     ApiService.getMessageList(String(this.tabs[idx].type), pageNum)
       .then((response: ApiResponse<MainNotificationV2[]>) => {
         if (response.code === 1000) {
+          // 登录失效统一处理已在网络层触发（HttpClient.bizRequest 拦截：清会话+toast+跳登录）
           this.patchState(idx, this.idleState(idx));
-          this.onSessionExpired();
           return;
         }
         if (response.code === 0) {
@@ -324,7 +324,7 @@ struct MessageListPage {
     ApiService.updateMessageState(item.XLH, item.BATCHID, item.isEmc)
       .then((response: ApiResponse<Object>) => {
         if (response.code === 1000) {
-          this.onSessionExpired();
+          // 登录失效统一处理已在网络层触发（HttpClient.bizRequest 拦截：清会话+toast+跳登录）
           return;
         }
         if (response.code !== 0) {
@@ -449,7 +449,7 @@ struct MessageListPage {
     ApiService.deleteMessage(item.XLH, item.isEmc)
       .then((response: ApiResponse<Object>) => {
         if (response.code === 1000) {
-          this.onSessionExpired();
+          // 登录失效统一处理已在网络层触发（HttpClient.bizRequest 拦截：清会话+toast+跳登录）
           return;
         }
         if (response.code !== 0) {
@@ -547,7 +547,7 @@ struct MessageListPage {
     ApiService.allDeleteMessages(String(stateCode))
       .then((response: ApiResponse<Object>) => {
         if (response.code === 1000) {
-          this.onSessionExpired();
+          // 登录失效统一处理已在网络层触发（HttpClient.bizRequest 拦截：清会话+toast+跳登录）
           return;
         }
         if (response.code !== 0) {
@@ -604,7 +604,7 @@ struct MessageListPage {
     ApiService.allUpdateMessageState()
       .then((response: ApiResponse<Object>) => {
         if (response.code === 1000) {
-          this.onSessionExpired();
+          // 登录失效统一处理已在网络层触发（HttpClient.bizRequest 拦截：清会话+toast+跳登录）
           return;
         }
         if (response.code !== 0) {
@@ -679,7 +679,7 @@ struct MessageListPage {
     ApiService.batchDeleteMessages(ids)
       .then((response: ApiResponse<Object>) => {
         if (response.code === 1000) {
-          this.onSessionExpired();
+          // 登录失效统一处理已在网络层触发（HttpClient.bizRequest 拦截：清会话+toast+跳登录）
           return;
         }
         if (response.code !== 0) {
@@ -725,10 +725,8 @@ struct MessageListPage {
     this.getUIContext().getPromptAction().showToast({ message: message });
   }
 
-  private onSessionExpired(): void {
-    this.getUIContext().getPromptAction().showToast({ message: '登录已失效，请重新登录' });
-    router.replaceUrl({ url: 'pages/LoginPage' });
-  }
+  // 登录失效统一处理已下沉网络层（HttpClient.bizRequest code=1000 拦截：清会话+toast+跳登录），
+  // 页面 1000 分支只负责 return，不再持有本地 onSessionExpired 实现
 
   build() {
     Stack() {

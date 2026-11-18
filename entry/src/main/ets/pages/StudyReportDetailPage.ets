@@ -1,206 +1,189 @@
-﻿import { TitleBar } from '../components/TitleBar';
+import { router } from '@kit.ArkUI';
+import { webview } from '@kit.ArkWeb';
+import { BusinessError } from '@kit.BasicServicesKit';
+import { TitleBar } from '../components/TitleBar';
+import { EmptyView } from '../components/EmptyView';
+import { ApiService } from '../network/ApiService';
+import { CryptoUtil } from '../network/CryptoUtil';
+import { HttpClient } from '../network/HttpClient';
+import { LoginSession } from '../network/LoginSession';
+import { ApiResponse } from '../model/ResponseModel';
+import { StudyTermInfo } from '../model/ContactModel';
+import { Api } from '../network/Api';
+import { Constants } from '../data/Constants';
 
 /**
- * 学业报告详情 — 复刻 student_report_layout_main.xml（studyReport/DetailActivity）
- * 原生为 WebView 壳，按 H5 报表结构原生复刻：
- *   学年学期选择 + 概况卡（加权平均分 / 平均绩点 / 班级排名）
- *   + 学期课程成绩列表（课程名 / 学分 / 成绩 / 绩点）
+ * 学业报告详情页 — 源码级翻译（studyReport/view/DetailActivity.java 逐行 → ArkTS，
+ * [W26 partial-finish]；原占位空态版替换为真实数据链）：
+ *
+ * 【入口】StudyReportActivity ybginterface.JumpToDetail → Intent(l, DetailActivity){appInfo}(1872)。
+ * 【布局】student_report_layout_main.xml：toolbar（标题=AppInfo.YYMC，无 extra → "学期学习报告"）
+ *   + MultiStateView(apppage_light_app_state) + report_web。
+ * 【数据链】f1()：h=new g.c.a(this)（MainActivityPresenter）→ h.b() → StudyReportModel.d：
+ *   e.b(StudyReportFactory.g("gradeReport/getRecentTermInfo")) GET 加密通道 → TermInfo{XN,XQ}。
+ *   z(TermInfo)：null → MultiStateView EMPTY_SCORE（R.string.student_report_empty_score_report
+ *   ="成绩还没出完呢，再等等"）；网络不可用 → NETWORK_ERROR；
+ *   有值 → m={xn: XN==null?"":XN, xq: XQ!=null?XQ:""} → k.a(g("gradeReport/index"), o, m)：
+ *   WebView loadUrl(url, {Access-Token:c.i(4字段AT,aesKey), Unique-Code:d.a.d(), AppType:"ydxy",
+ *   data:c.i(k.m(m), aesKey)})。
+ * 【2026-11-18 探针实测】getRecentTermInfo code=0 真实 TermInfo{XN:"2025-2026", XQ:"1"}。
+ * 【无 JS 桥】DetailActivity 未调 SetJavascriptInterface（仅 StudyReportActivity 有）。
+ * 【无关闭按钮】OPENAPPLICATION 仅 AppInfo extra 携带，JumpToDetail 入口 AppInfo=null。
  */
-interface StudyCourseRow {
-  courseName: string;
-  credit: string;
-  score: number;
-  gpa: string;
-}
-
-interface StudySummary {
-  avgScore: string;
-  avgGpa: string;
-  classRank: string;
-  totalStudents: string;
+interface HttpHeader {
+  headerKey: string;
+  headerValue: string;
 }
 
 @Entry
 @Component
 struct StudyReportDetailPage {
-  @State currentTerm: string = '2025-2026 第1学期';
-  @State terms: string[] = ['2025-2026 第1学期', '2024-2025 第2学期', '2024-2025 第1学期'];
-  @State summary: StudySummary = new StudySummaryItem('86.5', '3.42', '8', '42');
-  @State courseRows: StudyCourseRow[] = [
-    new StudyCourseRowItem('高等数学(下)', '5.0', 92, '4.5'),
-    new StudyCourseRowItem('大学英语(四)', '3.0', 85, '3.7'),
-    new StudyCourseRowItem('数据结构', '4.0', 88, '4.0'),
-    new StudyCourseRowItem('Java程序设计', '4.5', 90, '4.2'),
-    new StudyCourseRowItem('大学物理', '3.5', 79, '3.0'),
-    new StudyCourseRowItem('体育(四)', '1.0', 86, '3.6')
-  ] as StudyCourseRow[];
+  private webController: webview.WebviewController = new webview.WebviewController();
+  @State pageTitle: string = '学期学习报告';
+  @State loadProgress: number = 0;
+  /** null=加载中 / true=WebView / false=EMPTY_SCORE 空态（源码 z(null)） */
+  @State loadState: number = 0;
+  @State emptyTip: string = '';
+  private targetUrl: string = '';
+  private headers: HttpHeader[] = [];
+
+  aboutToAppear(): void {
+    const params = router.getParams() as Record<string, string> | undefined;
+    if (params !== undefined && params !== null) {
+      const t: string | undefined = params['title'];
+      if (t !== undefined && t !== '') {
+        this.pageTitle = t;
+      }
+    }
+    this.targetUrl = Constants.SOCKET_HOST + Api.GRADE_REPORT_INDEX;
+    this.loadTermInfo();
+  }
+
+  /** 源码 MainActivityPresenter.b() → StudyReportModel.d(c<TermInfo>)：GET getRecentTermInfo */
+  private loadTermInfo(): void {
+    ApiService.getStudyReportTermInfo()
+      .then((response: ApiResponse<StudyTermInfo>) => {
+        if (response.code === 1000) {
+          return;
+        }
+        if (response.code !== 0) {
+          // 源码 h() 失败回调 f(...) → z(null) → EMPTY_SCORE 固定文案（不透传服务器 message）
+          this.loadState = 2;
+          this.emptyTip = '成绩还没出完呢，再等等';
+          return;
+        }
+        // 源码 z(TermInfo)：null → EMPTY_SCORE；有值 → m={xn,xq} → k.a(...)
+        this.applyTermInfo(response.data);
+      })
+      .catch(() => {
+        ApiService.logError('StudyReportDetailPage termInfo error');
+        this.loadState = 2;
+        this.emptyTip = '成绩还没出完呢，再等等';
+      });
+  }
+
+  /** 源码 z(TermInfo)：xn=XN==null?"":XN；xq=XQ!=null?XQ:"" → loadUrl */
+  private applyTermInfo(term: StudyTermInfo): void {
+    if (term === null) {
+      this.loadState = 2;
+      this.emptyTip = '成绩还没出完呢，再等等';
+      return;
+    }
+    const xn: string = term.XN;
+    const xq: string = term.XQ;
+    const dataPayload: Record<string, string> = { 'xn': xn, 'xq': xq };
+    let dataHeader: string = '';
+    let at: string = '';
+    try {
+      dataHeader = CryptoUtil.encryptAES(JSON.stringify(dataPayload), LoginSession.aesKey);
+      at = HttpClient.buildWebEncryptedAccessToken();
+    } catch (error) {
+      const be = error as BusinessError;
+      ApiService.logError('StudyReportDetailPage enc fail: ' + be.message);
+    }
+    if (at !== '') {
+      this.headers.push({ headerKey: 'Access-Token', headerValue: at });
+    }
+    this.headers.push({ headerKey: 'Unique-Code',
+      headerValue: LoginSession.onlyCode === '' ? Constants.UNIQUE_CODE : LoginSession.onlyCode });
+    this.headers.push({ headerKey: 'AppType', headerValue: 'ydxy' });
+    if (dataHeader !== '') {
+      this.headers.push({ headerKey: 'data', headerValue: dataHeader });
+    }
+    // 源码 a.a.a："".equals(strE) → return（AES key 缺失不发起 loadUrl）
+    if (at === '') {
+      this.targetUrl = '';
+    }
+    this.loadState = 1;
+  }
 
   build() {
     Column() {
-      TitleBar({ title: '学业报告', showBack: true })
+      TitleBar({ title: this.pageTitle, showBack: true })
 
-      Scroll() {
+      if (this.loadState === 2) {
+        // 源码 t(this.i, Page.EMPTY_SCORE.extra("成绩还没出完呢，再等等")) 空态
         Column() {
-          // 学年学期选择
-          Row() {
-            ForEach(this.terms, (term: string) => {
-              Text(term)
-                .fontSize(13)
-                .fontColor(term === this.currentTerm ?
-                  $r('app.color.white') : $r('app.color.common_color_2'))
-                .backgroundColor(term === this.currentTerm ?
-                  $r('app.color.mobile_campus_primary_color') : $r('app.color.white'))
-                .borderRadius(14)
-                .padding({ left: 12, right: 12, top: 6, bottom: 6 })
-                .maxLines(1)
-                .onClick(() => {
-                  this.currentTerm = term;
-                })
-            }, (term: string) => 'studycapsule' + term)
-          }
-          .width('100%')
-          .padding({ left: 15, right: 15, top: 12, bottom: 12 })
-          .alignItems(VerticalAlign.Center)
-
-          // 概况卡
-          Row() {
-            this.summaryCell('加权平均分', this.summary.avgScore)
-            this.summaryCell('平均绩点', this.summary.avgGpa)
-            this.summaryCell('班级排名', this.summary.classRank + '/' + this.summary.totalStudents)
-          }
-          .width('100%')
-          .padding({ top: 20, bottom: 20 })
-          .backgroundColor($r('app.color.white'))
-          .borderRadius(8)
-
-          // 课程成绩列表头
-          Row() {
-            Text('课程')
-              .fontSize(14)
-              .fontColor($r('app.color.common_color_3'))
-              .layoutWeight(4)
-            Text('学分')
-              .fontSize(14)
-              .fontColor($r('app.color.common_color_3'))
-              .layoutWeight(2)
-              .textAlign(TextAlign.Center)
-            Text('成绩')
-              .fontSize(14)
-              .fontColor($r('app.color.common_color_3'))
-              .layoutWeight(2)
-              .textAlign(TextAlign.Center)
-            Text('绩点')
-              .fontSize(14)
-              .fontColor($r('app.color.common_color_3'))
-              .layoutWeight(2)
-              .textAlign(TextAlign.Center)
-          }
-          .width('100%')
-          .height(40)
-          .padding({ left: 15, right: 15 })
-          .backgroundColor($r('app.color.white'))
-          .alignItems(VerticalAlign.Center)
-
-          Divider()
-            .color($r('app.color.common_color_5'))
-            .strokeWidth(0.5)
-            .width('100%')
-
-          // 课程成绩行
-          Column() {
-            ForEach(this.courseRows, (row: StudyCourseRow) => {
-              Row() {
-                Text(row.courseName)
-                  .fontSize(14)
-                  .fontColor($r('app.color.common_color_1'))
-                  .layoutWeight(4)
-                  .maxLines(1)
-                  .textOverflow({ overflow: TextOverflow.Ellipsis })
-                Text(row.credit)
-                  .fontSize(14)
-                  .fontColor($r('app.color.common_color_2'))
-                  .layoutWeight(2)
-                  .textAlign(TextAlign.Center)
-                Text(row.score + '')
-                  .fontSize(14)
-                  .fontColor(row.score >= 80 ? $r('app.color.mobile_campus_schedule_color8') :
-                    $r('app.color.ybg_orange'))
-                  .layoutWeight(2)
-                  .textAlign(TextAlign.Center)
-                Text(row.gpa)
-                  .fontSize(14)
-                  .fontColor($r('app.color.common_color_2'))
-                  .layoutWeight(2)
-                  .textAlign(TextAlign.Center)
-              }
-              .width('100%')
-              .height(48)
-              .padding({ left: 15, right: 15 })
-              .alignItems(VerticalAlign.Center)
-
-              Divider()
-                .color($r('app.color.common_color_5'))
-                .strokeWidth(0.5)
-                .width('100%')
-            }, (row: StudyCourseRow) => 'studycourse' + row.courseName)
-          }
-          .width('100%')
-          .backgroundColor($r('app.color.white'))
+          EmptyView({ tipText: this.emptyTip })
         }
         .width('100%')
+        .layoutWeight(1)
+        .backgroundColor($r('app.color.main_bg'))
+      } else {
+        Stack() {
+          Column() {
+            Progress({ value: this.loadProgress, total: 100, type: ProgressType.Linear })
+              .width('100%')
+              .height(3)
+              .color($r('app.color.sdmu_primary'))
+              .backgroundColor($r('app.color.common_color_5'))
+              .visibility(this.loadState === 1 ? Visibility.Visible : Visibility.None)
+
+            // 源码 report_web：MyWebViewSetting.b（JS/domStorage/zoom 开）
+            Web({ src: '', controller: this.webController })
+              .width('100%')
+              .layoutWeight(1)
+              .javaScriptAccess(true)
+              .domStorageAccess(true)
+              .zoomAccess(true)
+              .onControllerAttached(() => {
+                // 源码 k.a(...)：strE 空 → return 不加载
+                if (this.targetUrl !== '') {
+                  this.webController.loadUrl(this.targetUrl, this.headers);
+                }
+              })
+              .onProgressChange((event: OnProgressChangeEvent) => {
+                this.loadProgress = event.newProgress;
+              })
+              .onErrorReceive((event: OnErrorReceiveEvent) => {
+                ApiService.logError('StudyReportDetailPage web error code=' + event.error.getErrorCode());
+              })
+          }
+          .width('100%')
+          .height('100%')
+          .alignItems(HorizontalAlign.Start)
+          .visibility(this.loadState === 1 ? Visibility.Visible : Visibility.None)
+        }
+        .width('100%')
+        .layoutWeight(1)
       }
-      .width('100%')
-      .layoutWeight(1)
-      .backgroundColor($r('app.color.common_color_6'))
-      .scrollBar(BarState.Off)
     }
     .width('100%')
     .height('100%')
-    .backgroundColor($r('app.color.common_color_6'))
+    .backgroundColor($r('app.color.main_bg'))
   }
 
-  @Builder
-  summaryCell(labelText: string, valueText: string) {
-    Column() {
-      Text(valueText)
-        .fontSize(20)
-        .fontWeight(FontWeight.Bold)
-        .fontColor($r('app.color.mobile_campus_primary_color'))
-      Text(labelText)
-        .fontSize(12)
-        .fontColor($r('app.color.common_color_3'))
-        .margin({ top: 6 })
+  /** 源码 onBackPressed：canGoBack → goBack 优先 */
+  onBackPress(): boolean {
+    try {
+      if (this.webController.accessBackward()) {
+        this.webController.backward();
+        return true;
+      }
+    } catch (error) {
+      const be = error as BusinessError;
+      ApiService.logError('StudyReportDetailPage back fail: ' + be.message);
     }
-    .layoutWeight(1)
-    .alignItems(HorizontalAlign.Center)
+    return false;
   }
 }
-
-class StudySummaryItem implements StudySummary {
-  avgScore: string;
-  avgGpa: string;
-  classRank: string;
-  totalStudents: string;
-
-  constructor(avgScore: string, avgGpa: string, classRank: string, totalStudents: string) {
-    this.avgScore = avgScore;
-    this.avgGpa = avgGpa;
-    this.classRank = classRank;
-    this.totalStudents = totalStudents;
-  }
-}
-
-class StudyCourseRowItem implements StudyCourseRow {
-  courseName: string;
-  credit: string;
-  score: number;
-  gpa: string;
-
-  constructor(courseName: string, credit: string, score: number, gpa: string) {
-    this.courseName = courseName;
-    this.credit = credit;
-    this.score = score;
-    this.gpa = gpa;
-  }
-}
-

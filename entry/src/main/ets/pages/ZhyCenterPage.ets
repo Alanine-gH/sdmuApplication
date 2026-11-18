@@ -1,4 +1,4 @@
-﻿import { router } from '@kit.ArkUI';
+import { router } from '@kit.ArkUI';
 import { TitleBar } from '../components/TitleBar';
 
 class ZhyCenterEntryInfo {
@@ -25,7 +25,7 @@ class ZhyCenterEntryInfo {
  *     bl_corners_radius=15.0dip、bl_solid_color=#ff74acff
  *   - ivIcon：20.0dip=20vp 图标（icon_yellow_page_address）、marginR 8dip=8vp
  *   - tvContent：14.0sp=14fp、bold、white、maxLines=1
- * 内置示例数据（四入口）。
+ * 本地功能入口清单（四入口，非编造业务数据）。
  */
 @Entry
 @Component

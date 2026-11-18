@@ -21,7 +21,7 @@ class CampusAppEntryInfo {
  *   TextView 13.0sp=13fp(px_to_sp_26)、textColor=@color/common_color_3、gravity=center、
  *   background=@color/common_color_5、padding=px_to_dip_20=10vp、height=76.0dip=38vp、
  *   文案“点击右侧设置，可添加常用功能”
- * RecyclerView 数据态内置示例应用宫格（4 列，默认图标）。未设置常用应用时展示空态提示。
+ * RecyclerView 数据态本地应用宫格（4 列，默认图标，本地清单 fallback，非编造业务数据）。未设置常用应用时展示空态提示。
  */
 @Entry
 @Component

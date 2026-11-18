@@ -27,7 +27,12 @@ export default class EntryAbility extends UIAbility {
         hilog.error(DOMAIN, 'testTag', 'Preferences init failed: %{public}s', JSON.stringify(error));
       });
 
-    windowStage.loadContent('pages/Index', (err) => {
+    // [W22 launch-chain] APK 启动链：LAUNCHER=DispatchActivity（SchoolEntity 初始化 + 清缓存）
+    //   → CampusFirstActivity（登录态分流：已登录 → LoginedLaunchActivity；未登录 →
+    //   CommonLaunchActivity）→ LoginPage / MainActivity(Index)。
+    // HAP 等价：PreferencesUtil.init 承载 Dispatch 初始化，首页载入 CampusFirstPage
+    // （DispatchActivity→CampusFirstActivity 链首），分流与跳转链在启动链三页内完成。
+    windowStage.loadContent('pages/CampusFirstPage', (err) => {
       if (err.code) {
         hilog.error(DOMAIN, 'testTag', 'Failed to load the content. Cause: %{public}s', JSON.stringify(err));
         return;

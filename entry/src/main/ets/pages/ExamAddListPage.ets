@@ -1,184 +1,230 @@
 import { router } from '@kit.ArkUI';
+import { BusinessError } from '@kit.BasicServicesKit';
 import { TitleBar } from '../components/TitleBar';
+import { EmptyView } from '../components/EmptyView';
+import { LoadingView } from '../components/LoadingView';
+import { ApiService } from '../network/ApiService';
+import { ApiResponse } from '../model/ResponseModel';
+import { ComingExamEntity } from '../model/ScoreModel';
 
 /**
- * 考试分段页 — 1:1 复刻 exam_activity_addexamlist.xml
- * 结构：
- *   - toolbar_normal
- *   - RadioGroup 45dip 白底：「期末考试」/「等级考试」两个RadioButton（12fp small_text_size，
- *     选中色 textcolor_blue_selector=ybg_blue #18B4ED，layout_weight=1 居中）
- *   - blueline：2dip 白底横线，选中侧显示85dip蓝色（#18B4ED）指示条
- *   - 15dip 灰隔条（common_color_6）
- *   - ViewPager：两段考试列表（examination_comingfragment 结构：MultiStateView+下拉刷新列表）
- * 添加考试入口（examination_my_addexamination「添加考试」）在toolbar右侧。
+ * 考试添加/调整 — AddExamListActivity + AddExamListFragment + AddExamListAdapter 源码级翻译。
+ *
+ * 【入口】ExamListActivity.T1 右键 nav_plus_btn → AddExamListActivity（HAP ExamPage 同路由）。
+ * 【布局】exam_activity_addexamlist：toolbar_normal（标题"考试信息"）+ RadioGroup 高 45vp
+ *   （"期末考试"/"等级考试"，textcolor_blue_selector）+ examination_view_blueline + 15vp 灰条
+ *   + ViewPager（每 tab = AddExamListFragment）。
+ * 【列表】common_refresh_lv_rl_exam：ListView + footerView examinationaddexam_list_itemfooter
+ *   （"自定义添加" examnation_addcustomexam 图标）；行 examinationaddexam_list_item：
+ *   KMMC 16fp + 时间行；LX=="3" → 课程名 #333333、"待添加" #18B4ED+右箭头；其他 → 灰字
+ *   common_color_4、时间 "yyyy/MM/dd(周X) HH:mm"、"已添加"。
+ * 【数据】AddExamListFragmentModel.p0 → GET editExamList{kslx:"0"/"1"} → AddExamEntity[]
+ *   （2026-11-18 实测 kslx=0 真实 6 行软工综合设计等）。
+ * 【点击】LX=="3" 行 → HandleExamCourseActivity edit；footer"自定义添加" → HandleExamCourseActivity
+ *   custom add（handleExamData=当前列表+类型）。
  */
-class ExamEntry {
-  subject: string;
-  time: string;
-  place: string;
-  type: string;
-  status: string;
-
-  constructor(subject: string, time: string, place: string, type: string, status: string) {
-    this.subject = subject;
-    this.time = time;
-    this.place = place;
-    this.type = type;
-    this.status = status;
-  }
-}
-
 @Entry
 @Component
 struct ExamAddListPage {
-  @State segIndex: number = 0;
-  @State finalExams: ExamEntry[] = [
-    new ExamEntry('数据结构', '2026-12-28 09:00-11:00', '博学楼A201', '期末考试', '待考'),
-    new ExamEntry('软件建模与分析', '2026-12-30 14:00-16:00', '博学楼C304', '期末考试', '待考'),
-    new ExamEntry('操作系统原理', '2027-01-03 09:00-11:00', '明理楼B102', '期末考试', '待考')
-  ];
-  @State levelExams: ExamEntry[] = [
-    new ExamEntry('大学英语六级', '2026-12-13 09:00-11:25', '明理楼A区', '等级考试', '已考'),
-    new ExamEntry('全国计算机二级', '2026-09-26 09:00-11:00', '实训楼机房', '等级考试', '已考'),
-    new ExamEntry('普通话水平测试', '2026-11-08 14:00起', '文科楼三层', '等级考试', '已考')
-  ];
+  @State activeTab: number = 0;
+  @State list: ComingExamEntity[] = [];
+  @State isLoading: boolean = true;
+  @State errorText: string = '';
+  private loaded: boolean[] = [false, false];
+
+  aboutToAppear(): void {
+    this.loadList('0');
+  }
+
+  /** 源码 P1：AddExamListFragmentPresenter.b(f.getAddExamTypeType(), multiStateView) */
+  private loadList(kslx: string): void {
+    this.isLoading = true;
+    this.errorText = '';
+    ApiService.getAddExamList(kslx)
+      .then((response: ApiResponse<ComingExamEntity[]>) => {
+        if (response.code === 1000) {
+          return;
+        }
+        if (response.code === 0) {
+          this.list = response.data;
+          this.loaded[this.activeTab] = true;
+        } else {
+          this.list = [];
+          this.errorText = response.message;
+        }
+        this.isLoading = false;
+      })
+      .catch((error: BusinessError) => {
+        ApiService.logError('editExamList fail: ' + error.message);
+        this.list = [];
+        this.errorText = '网络异常，请稍后重试';
+        this.isLoading = false;
+      });
+  }
+
+  private switchTab(index: number): void {
+    if (this.activeTab === index) {
+      return;
+    }
+    this.activeTab = index;
+    if (this.loaded[index]) {
+      this.errorText = '';
+      this.isLoading = false;
+      this.loadList(index === 0 ? '0' : '1');
+    } else {
+      this.loadList(index === 0 ? '0' : '1');
+    }
+  }
+
+  /** 源码 AddExamListFragment.b：footer 自定义添加 → HandleExamCourseActivity(custom add) */
+  private openCustomAdd(): void {
+    const data: Object[] = this.list.map((item: ComingExamEntity): Object => {
+      const rec: Record<string, Object> = {
+        'KMMC': item.KMMC, 'KSSJ': item.KSSJ, 'KSLX': item.KSLX, 'LX': item.LX, 'ZWH': item.ZWH
+      };
+      return rec as Object;
+    });
+    router.pushUrl({
+      url: 'pages/HandleExamCoursePage',
+      params: {
+        'handleExamType': 'add',
+        'handleExamTitle': this.activeTab === 0 ? '期末考试' : '等级考试',
+        'handleExamData': data
+      } as Record<string, Object>
+    });
+  }
+
+  /** 源码 AddExamListFragment.a：LX=="3" 行 → edit */
+  private openEdit(item: ComingExamEntity): void {
+    if (item.LX !== '3') {
+      return;
+    }
+    router.pushUrl({
+      url: 'pages/HandleExamCoursePage',
+      params: {
+        'handleExamType': 'edit',
+        'handleExamTitle': this.activeTab === 0 ? '期末考试' : '等级考试',
+        'examCourseInfo': {
+          'KMMC': item.KMMC, 'KSSJ': item.KSSJ, 'KSLX': item.KSLX, 'LX': item.LX, 'ZWH': item.ZWH
+        } as Record<string, Object>
+      } as Record<string, Object>
+    });
+  }
+
+  private formatTime(text: string): string {
+    if (text === '') {
+      return '';
+    }
+    const t: string = text.replace(/\//g, '-');
+    const m: RegExpMatchArray | null = t.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+    if (m === null) {
+      return text;
+    }
+    const d: Date = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]));
+    const weeks: string[] = ['日', '一', '二', '三', '四', '五', '六'];
+    return d.getFullYear() + '/' + m[2] + '/' + m[3] + '(周' + weeks[d.getDay()] + ') ' + m[4] + ':' + m[5];
+  }
 
   @Builder
-  examRow(item: ExamEntry) {
-    Column() {
-      Row() {
-        Text(item.subject)
+  row(item: ComingExamEntity) {
+    Row() {
+      Column() {
+        Text(item.KMMC)
           .fontSize(16)
-          .fontColor($r('app.color.common_color_1'))
-          .layoutWeight(1)
-        Text(item.status)
-          .fontSize(13)
-          .fontColor(item.status === '待考' ? $r('app.color.ybg_blue') : $r('app.color.common_color_3'))
+          .fontColor(item.LX === '3' ? '#333333' : '#CECECE')
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        if (item.LX !== '3') {
+          Row() {
+            Image($r('app.media.examination_time')).width(15).height(15)
+            Text(this.formatTime(item.KSSJ))
+              .fontSize(16)
+              .fontColor('#CECECE')
+              .margin({ left: 8 })
+              .layoutWeight(1)
+          }
+          .width('100%')
+          .margin({ top: 8 })
+          .alignItems(VerticalAlign.Center)
+        }
       }
-      .width('100%')
-
-      Text(item.time)
-        .fontSize(13)
-        .fontColor($r('app.color.common_color_3'))
-        .margin({ top: 6 })
-
-      Text(item.place)
-        .fontSize(13)
-        .fontColor($r('app.color.common_color_3'))
-        .margin({ top: 4 })
+      .layoutWeight(1)
+      .alignItems(HorizontalAlign.Start)
+      Text(item.LX === '3' ? '待添加' : '已添加')
+        .fontSize(16)
+        .fontColor(item.LX === '3' ? '#18B4ED' : '#CECECE')
+        .margin({ left: 12 })
+      if (item.LX === '3') {
+        Image($r('app.media.arrow_right_blue_desk_widget')).width(12).height(12).margin({ left: 5 })
+      }
     }
-    .alignItems(HorizontalAlign.Start)
     .width('100%')
-    .padding({ left: 15, right: 15, top: 12, bottom: 12 })
+    .padding({ left: 12, right: 12, top: 15, bottom: 12 })
     .backgroundColor($r('app.color.white'))
+    .alignItems(VerticalAlign.Center)
+    .onClick((): void => { this.openEdit(item); })
   }
 
   build() {
     Column() {
-      // toolbar_normal：45dip白底，右侧「添加考试」入口
+      TitleBar({ title: '考试信息', showBack: true })
       Row() {
-        Text('＜')
-          .fontSize(16)
-          .fontColor($r('app.color.common_color_1'))
-          .width(40)
-          .height('100%')
-          .textAlign(TextAlign.Center)
-          .margin({ left: 15 })
-          .onClick(() => {
-            router.back();
-          })
-        Text('考试安排')
-          .fontSize(16)
-          .fontColor($r('app.color.common_color_1'))
+        ForEach(['期末考试', '等级考试'], (label: string, index: number) => {
+          Column() {
+            Text(label)
+              .fontSize(14)
+              .fontColor(this.activeTab === index ? '#18B4ED' : '#333333')
+              .height(43)
+              .textAlign(TextAlign.Center)
+              .width('100%')
+            Divider()
+              .color(this.activeTab === index ? '#18B4ED' : Color.Transparent)
+              .strokeWidth(2)
+              .width('100%')
+          }
           .layoutWeight(1)
-          .textAlign(TextAlign.Center)
-          .maxLines(1)
-        Text('添加考试')
-          .fontSize(13)
-          .fontColor($r('app.color.ybg_blue'))
-          .margin({ right: 15 })
-          .onClick(() => {
-            router.pushUrl({ url: 'pages/HandleExamCoursePage' });
-          })
-      }
-      .width('100%')
-      .height(44)
-      .alignItems(VerticalAlign.Center)
-      .backgroundColor($r('app.color.main_bg'))
-
-      Divider()
-        .color($r('app.color.common_color_5'))
-        .strokeWidth(0.5)
-        .width('100%')
-
-      // RadioGroup：45dip 白底，两段RadioButton（12fp，选中#18B4ED）
-      Row() {
-        Text('期末考试')
-          .fontSize(12)
-          .fontColor(this.segIndex === 0 ? $r('app.color.ybg_blue') : $r('app.color.common_color_3'))
           .height(45)
-          .textAlign(TextAlign.Center)
-          .layoutWeight(1)
-          .onClick(() => {
-            this.segIndex = 0;
-          })
-        Text('等级考试')
-          .fontSize(12)
-          .fontColor(this.segIndex === 1 ? $r('app.color.ybg_blue') : $r('app.color.common_color_3'))
-          .height(45)
-          .textAlign(TextAlign.Center)
-          .layoutWeight(1)
-          .onClick(() => {
-            this.segIndex = 1;
-          })
+          .onClick((): void => { this.switchTab(index); })
+        }, (label: string) => label)
       }
       .width('100%')
       .height(45)
       .backgroundColor($r('app.color.white'))
-
-      // blueline：2dip白线+选中侧85dip蓝条
-      Row() {
-        Row()
-          .width(85)
-          .height(2)
-          .backgroundColor(this.segIndex === 0 ? $r('app.color.ybg_blue') : Color.Transparent)
-          .layoutWeight(1)
-        Row()
-          .width(85)
-          .height(2)
-          .backgroundColor(this.segIndex === 1 ? $r('app.color.ybg_blue') : Color.Transparent)
-          .layoutWeight(1)
-      }
-      .width('100%')
-      .height(2)
-      .backgroundColor($r('app.color.white'))
-
-      // 15dip 灰隔条（common_color_6 px_to_dip_30/2）
-      Row()
+      Divider().color('#F2F2F2').strokeWidth(15).width('100%')
+      if (this.isLoading) {
+        LoadingView()
+      } else if (this.errorText !== '') {
+        EmptyView({ tipText: this.errorText })
+      } else if (this.list.length === 0) {
+        EmptyView({ tipText: '暂无考试' })
+      } else {
+        List() {
+          ForEach(this.list, (item: ComingExamEntity) => {
+            ListItem() {
+              this.row(item)
+            }
+          }, (item: ComingExamEntity) => item.KMMC + item.KSLX)
+        }
+        .layoutWeight(1)
         .width('100%')
-        .height(15)
-        .backgroundColor($r('app.color.common_color_6'))
-
-      // ViewPager：考试列表（SwipeMenuListView条目）
-      List() {
-        ForEach(this.segIndex === 0 ? this.finalExams : this.levelExams, (item: ExamEntry) => {
-          ListItem() {
-            this.examRow(item)
-          }
-        }, (item: ExamEntry) => item.subject)
+        .divider({ strokeWidth: 0.5, color: '#E7E7E7', startMargin: 12, endMargin: 12 })
+        .scrollBar(BarState.Off)
+      }
+      Row() {
+        Image($r('app.media.examnation_addcustomexam')).width(16).height(16)
+        Text('自定义添加')
+          .fontSize(16)
+          .fontColor('#747474')
+          .margin({ left: 8 })
       }
       .width('100%')
-      .layoutWeight(1)
-      .divider({
-        strokeWidth: 0.8,
-        color: $r('app.color.common_color_5'),
-        startMargin: 15,
-        endMargin: 15
-      })
+      .height(48)
+      .padding({ left: 12 })
       .backgroundColor($r('app.color.white'))
+      .onClick((): void => { this.openCustomAdd(); })
     }
     .width('100%')
     .height('100%')
-    .backgroundColor($r('app.color.common_color_6'))
+    .backgroundColor($r('app.color.white'))
   }
 }

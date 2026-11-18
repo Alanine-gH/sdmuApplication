@@ -120,7 +120,7 @@ struct MeetingPage {
     ApiService.getMeetingTab()
       .then((response: ApiResponse<MeetingTabEntity>) => {
         if (response.code === 1000) {
-          this.onSessionExpired();
+          // 登录失效统一处理已在网络层触发（HttpClient.bizRequest 拦截：清会话+toast+跳登录）
           this.meetTabLoading = false;
           return;
         }
@@ -172,7 +172,7 @@ struct MeetingPage {
     ApiService.getMeetingJoinList()
       .then((response: ApiResponse<JoinListEntity[]>) => {
         if (response.code === 1000) {
-          this.onSessionExpired();
+          // 登录失效统一处理已在网络层触发（HttpClient.bizRequest 拦截：清会话+toast+跳登录）
           this.myLoading = false;
           return;
         }
@@ -205,7 +205,7 @@ struct MeetingPage {
     ApiService.getMeetingPastList(String(this.myPage))
       .then((response: ApiResponse<JoinListItem[]>) => {
         if (response.code === 1000) {
-          this.onSessionExpired();
+          // 登录失效统一处理已在网络层触发（HttpClient.bizRequest 拦截：清会话+toast+跳登录）
           this.myLoadingMore = false;
           return;
         }
@@ -275,7 +275,9 @@ struct MeetingPage {
     };
     if (item.TASK_TYPE === 'weekPlan') {
       params['IS_JOIN'] = item.IS_JOIN;
-      this.pushRoute('pages/MeetingWeekDetailPage', params);
+      // [W18 meeting-remain] 周程详情实体 = MeetingWeekDetailActivity（/meeting/weekdetail）→
+      // pages/MeetingWeekPlanPage（原 'pages/MeetingWeekDetailPage' 未注册，坏路由已修正）
+      this.pushRoute('pages/MeetingWeekPlanPage', params);
     } else {
       this.pushRoute('pages/MeetingDetailPage', params);
     }
@@ -288,7 +290,8 @@ struct MeetingPage {
 
   /** 源码 d.onItemClick（周计划列表）：bundle xlh → a0 = mobile_campus_meeting_weekdetail */
   private openWeekPlanDetail(xlh: string): void {
-    this.pushRoute('pages/MeetingWeekDetailPage', { 'xlh': xlh, 'id': xlh });
+    // [W18 meeting-remain] 路由目标修正：MeetingWeekDetailActivity 实体 = pages/MeetingWeekPlanPage
+    this.pushRoute('pages/MeetingWeekPlanPage', { 'xlh': xlh, 'id': xlh });
   }
 
   /** 路由跳转（未注册页面仅记录日志，不阻断页面） */
@@ -308,7 +311,7 @@ struct MeetingPage {
     ApiService.getMeetingCurrentOrWeek()
       .then((response: ApiResponse<CurrentDayEntity>) => {
         if (response.code === 1000) {
-          this.onSessionExpired();
+          // 登录失效统一处理已在网络层触发（HttpClient.bizRequest 拦截：清会话+toast+跳登录）
           this.weekLoading = false;
           return;
         }
@@ -340,7 +343,7 @@ struct MeetingPage {
     ApiService.getMeetingTermInfoForTeacher()
       .then((response: ApiResponse<TermParamsEntity>) => {
         if (response.code === 1000) {
-          this.onSessionExpired();
+          // 登录失效统一处理已在网络层触发（HttpClient.bizRequest 拦截：清会话+toast+跳登录）
           this.weekLoading = false;
           return;
         }
@@ -372,7 +375,7 @@ struct MeetingPage {
     ApiService.getMeetingWeekPlan(week)
       .then((response: ApiResponse<WeekPlanEntity[]>) => {
         if (response.code === 1000) {
-          this.onSessionExpired();
+          // 登录失效统一处理已在网络层触发（HttpClient.bizRequest 拦截：清会话+toast+跳登录）
           this.weekLoading = false;
           return;
         }
@@ -609,9 +612,8 @@ struct MeetingPage {
     this.getUIContext().getPromptAction().showToast({ message: message });
   }
 
-  private onSessionExpired(): void {
-    this.getUIContext().getPromptAction().showToast({ message: '登录已失效，请重新登录' });
-  }
+  // 登录失效统一处理已下沉网络层（HttpClient.bizRequest code=1000 拦截：清会话+toast+跳登录），
+  // 本地 onSessionExpired（仅 toast 无跳转的残缺实现）已删除，页面 1000 分支只负责 return
 
   // ===== UI =====
 

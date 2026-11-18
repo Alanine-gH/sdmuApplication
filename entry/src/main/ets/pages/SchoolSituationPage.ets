@@ -1,155 +1,212 @@
-// 数据源：无服务器接口，页面数据为内置示例数据（离线演示用），未接 ApiService。
-import { promptAction } from '@kit.ArkUI';
+import { router } from '@kit.ArkUI';
 import { TitleBar } from '../components/TitleBar';
-
-/** 概况条目模型：icon / 名称 / 背景色 / 弹窗结构化文本 */
-class SituationEntry {
-  icon: Resource;
-  name: string;
-  bgColor: Resource;
-  content: string;
-
-  constructor(icon: Resource, name: string, bgColor: Resource, content: string) {
-    this.icon = icon;
-    this.name = name;
-    this.bgColor = bgColor;
-    this.content = content;
-  }
-}
-
-/** 学校概况内置结构化文本（山东管理学院） */
-function buildSituationEntries(): SituationEntry[] {
-  const entries: SituationEntry[] = [
-    new SituationEntry($r('app.media.mobile_campus_school_w'), '学校介绍',
-      $r('app.color.mobile_campus_school_introduction_background_color'),
-      '山东管理学院是山东省教育厅主管的全日制普通本科高校，坐落于泉城济南。学校坚持“以学生为中心”的办学理念，形成了以管理学为主体，经济学、工学、文学、艺术学等多学科协调发展的学科格局。\n\n学校现有明水主校区等多个校区，占地面积千余亩，馆藏图书百万余册，建有现代化图书馆、实验实训中心和体育运动场馆，为师生提供了良好的学习生活环境。'),
-    new SituationEntry($r('app.media.mobile_campus_school_song'), '校歌',
-      $r('app.color.mobile_campus_school_song_background_color'),
-      '《山东管理学院校歌》\n\n校歌由学校集体作词作曲，旋律昂扬向上，歌词体现了学校深厚的文化底蕴和师生奋发进取的精神风貌，常在学校重大活动和典礼中演唱。'),
-    new SituationEntry($r('app.media.mobile_campus_school_motto'), '校训',
-      $r('app.color.mobile_campus_school_motto_background_color'),
-      '校训：明德弘毅，博学笃行\n\n“明德”取自《大学》“大学之道，在明明德”，寓意立德修身；“弘毅”取自《论语》“士不可以不弘毅”，寓意志存高远、意志坚强；“博学笃行”语出《中庸》，寓意广博学习、躬身实践。'),
-    new SituationEntry($r('app.media.mobile_campus_school_college'), '院系介绍',
-      $r('app.color.mobile_campus_school_college_background_color'),
-      '学校设有工商管理学院、会计学院、人文学院、经贸学院、信息工程学院、艺术学院、劳动关系学院等多个二级学院，开设本科、专科专业数十个，在校生万余人，专任教师中高级职称比例逐年提升。'),
-    new SituationEntry($r('app.media.mobile_campus_school_logo'), '校徽',
-      $r('app.color.mobile_campus_school_logo_background_color'),
-      '校徽整体呈圆形，中心图案由学校标志性建筑与书本造型构成，外环上方为学校中文名称，下方为英文校名。校徽以蓝色为主色调，象征知识的深邃与育人使命的庄重。'),
-    new SituationEntry($r('app.media.mobile_campus_school_history'), '历史沿革',
-      $r('app.color.mobile_campus_school_history_background_color'),
-      '学校办学历史可追溯至二十世纪，历经干部培训、成人教育、高等职业教育等办学阶段，后经山东省人民政府批准设立为普通本科高校，定名山东管理学院。\n\n多年来，学校坚持应用型人才培养定位，不断深化教育教学改革，办学水平与社会声誉稳步提升。')
-  ];
-  return entries;
-}
+import { ApiService } from '../network/ApiService';
+import { ApiResponse } from '../model/ResponseModel';
+import { SchoolViewIndex, SchoolViewModuleBean } from '../model/ContactModel';
+import { Constants } from '../data/Constants';
 
 /**
- * 学校概况页 — 按源布局 1:1 复刻 mobile_campus_school_activity_situation.xml：
- *   LinearLayout vertical（fill_parent）
- *   - include toolbar_normal（标题“学校概况”）
- *   - school_image_view：height=px_to_dip_280=140vp、scaleType=fitXY
- *   - 行1（weight 0.5）：school_introdection（weight 1.2、bg=#537DE3）+ school_song（weight 0.7、bg=#C2C2C2）
- *     + school_motto（weight 0.8、bg=#DAC267）
- *   - 行2（weight 0.7）：school_college（weight 2.0、bg=#CFAF6B）+ school_logo（weight 0.8、bg=#7CA7D3）
- *   - 行3（weight 1.0）：school_history（bg=#B6B6B6、通栏）
- *   单元格：FrameLayout gravity=center → ImageView 18.0dip=18vp + TextView（font_size_2=px_to_sp_34=17fp、白字、
- *   marginLeft=px_to_dip_16=8vp）；单元格间 marginLeft=px_to_dip_16=8vp、marginTop=px_to_dip_16=8vp。
+ * 校园概况页 — 源码级翻译（SchoolSituationActivity.java 逐行 → ArkTS，[W25 misc-b]）：
+ *
+ * 【布局】mobile_campus_school_activity_situation.xml：toolbar("校园概况") + banner 140dip(px_to_dip_280)
+ *   fitXY + 三行色块宫格（weight 0.5/0.7/1.0）：
+ *   行1（weight 0.5）：学校介绍(weight1.2 #537DE3)/校歌(weight0.7 #C2C2C2) + 校训(weight0.8 #DAC267)
+ *   行2（weight 0.7）：院系介绍(weight2.0 #CFAF6B) + 校徽(weight0.8 #7CA7D3)
+ *   行3（weight 1.0）：历史沿革(#B6B6B6)；块内 18dip 图标 + 17fp(font_size_2=px_to_sp_34) 白字 ml8；
+ *   XML visibility=invisible，数据到位 O2() → visible
+ * 【数据】N2() → SchoolIntroModel.T0：GET open/schoolIntro/index（bVar.j=false 明文通道 plainBizGet；
+ *   SchoolIntroFactory a()="open" b()="schoolIntro"，[W25-review 修正] 原 campusView/index 为误引
+ *   SchoolFactory 的错误拼接）→ Index{banner, module[{ICON,NAME,URL}]}；banner/ICON → 网络图（netconstant 域+URL）
+ * 【跳转】b 类：块点击 → /app/web{navigationBarTitle:NAME, url:d.d()+URL}
+ *   （e.a.w=mobile_campus_router_web；HAP WebViewPage 接收 {url,title}，两键并传等价）
+ * 【图标】module[i] 顺序填充 6 块（s 列表序=学校介绍/校歌/校训/院系介绍/校徽/历史沿革）；ICON 空→图标 gone
  */
+interface SchoolBlock {
+  icon: Resource;
+  label: string;
+  color: string;
+}
+
 @Entry
 @Component
 struct SchoolSituationPage {
-  @State entryList: SituationEntry[] = buildSituationEntries();
+  @State bannerUrl: string = '';
+  @State modules: SchoolViewModuleBean[] = [];
+  @State isLoading: boolean = true;
+  /** 源码 s 列表序：学校介绍/校歌/校训/院系介绍/校徽/历史沿革（XML 固定布局/文案/色值） */
+  private readonly blocks: SchoolBlock[] = [
+    { icon: $r('app.media.mobile_campus_school_w'), label: '学校介绍', color: '#537DE3' },
+    { icon: $r('app.media.mobile_campus_school_song'), label: '校歌', color: '#C2C2C2' },
+    { icon: $r('app.media.mobile_campus_school_motto'), label: '校训', color: '#DAC267' },
+    { icon: $r('app.media.mobile_campus_school_college'), label: '院系介绍', color: '#CFAF6B' },
+    { icon: $r('app.media.mobile_campus_school_logo'), label: '校徽', color: '#7CA7D3' },
+    { icon: $r('app.media.mobile_campus_school_history'), label: '历史沿革', color: '#B6B6B6' }
+  ];
 
-  /** 单元格：FrameLayout(bgColor) gravity=center → 图标 18vp + 白字 17fp（marginLeft=px_to_dip_16=8vp） */
-  @Builder
-  situationCell(entry: SituationEntry) {
-    Row() {
-      Image(entry.icon)
-        .width(18) // 18.0dip=18vp
-        .height(18) // 18.0dip=18vp
-        .objectFit(ImageFit.Contain)
-      Text(entry.name)
-        .fontSize(17) // font_size_2=px_to_sp_34=17fp
-        .fontColor($r('app.color.white'))
-        .margin({ left: 8 }) // px_to_dip_16/2=8vp
-    }
-    .justifyContent(FlexAlign.Center)
-    .alignItems(VerticalAlign.Center)
-    .width('100%')
-    .height('100%')
-    .backgroundColor(entry.bgColor)
-    .onClick(() => {
-      promptAction.showDialog({
-        title: entry.name,
-        message: entry.content
+  aboutToAppear(): void {
+    this.loadData();
+  }
+
+  /** 源码 N2()：SchoolIntroModel.T0 GET open/schoolIntro/index（明文通道） */
+  private loadData(): void {
+    ApiService.getSchoolViewIndex()
+      .then((response: ApiResponse<SchoolViewIndex>) => {
+        this.isLoading = false;
+        if (response.code === 1000) {
+          return;
+        }
+        if (response.code !== 0) {
+          const msg: string = response.message === '' ? '服务器繁忙，请稍后再试' : response.message;
+          this.getUIContext().getPromptAction().showToast({ message: msg });
+          return;
+        }
+        // 源码 a 类 g()：banner 网络图 + u=module + O2()
+        //   [W25-review 修正] APK banner 走 CommonFactory.a(str)=d.d()+"/mobileapi_ydxy/open/image/"+str
+        this.bannerUrl = response.data.banner === '' ? ''
+          : Constants.SOCKET_HOST + '/mobileapi_ydxy/open/image/' + response.data.banner;
+        this.modules = response.data.module;
+      })
+      .catch(() => {
+        ApiService.logError('SchoolSituationPage load error');
+        this.isLoading = false;
       });
-    })
+  }
+
+  /** 源码 P2(i)：module[i]（越界 → 块保持 invisible） */
+  private moduleOf(idx: number): SchoolViewModuleBean | null {
+    if (idx < this.modules.length) {
+      return this.modules[idx];
+    }
+    return null;
+  }
+
+  private iconUrlOf(bean: SchoolViewModuleBean | null): string {
+    if (bean === null || bean.ICON === '') {
+      return '';
+    }
+    // 源码 P2：icon 走 CommonFactory.a(str)=d.d()+"/mobileapi_ydxy/open/image/"+str
+    return Constants.SOCKET_HOST + '/mobileapi_ydxy/open/image/' + bean.ICON;
+  }
+
+  /** 源码 b 类：块点击 → /app/web{navigationBarTitle, url:d.d()+URL} */
+  private openModule(bean: SchoolViewModuleBean): void {
+    router.pushUrl({ url: 'pages/WebViewPage',
+      params: {
+        'navigationBarTitle': bean.NAME,
+        'title': bean.NAME,
+        'url': Constants.SOCKET_HOST + bean.URL
+      } as Record<string, string> });
   }
 
   build() {
-    // mobile_campus_school_activity_situation.xml 根 LinearLayout vertical（fill_parent）
     Column() {
-      // include toolbar_normal
-      TitleBar({ title: '学校概况', showBack: true })
-      // school_image_view：height=px_to_dip_280=140vp、scaleType=fitXY
-      Image($r('app.media.mobile_campus_top'))
+      TitleBar({ title: '校园概况', showBack: true })
+
+      if (this.isLoading) {
+        LoadingPlaceholder()
+      } else {
+        Scroll() {
+          Column() {
+            // banner 140dip fitXY
+            if (this.bannerUrl !== '') {
+              Image(this.bannerUrl)
+                .width('100%')
+                .height(140)
+                .objectFit(ImageFit.Fill)
+            } else {
+              Column()
+                .width('100%')
+                .height(140)
+            }
+
+            // 行1：学校介绍(1.2) 校歌(0.7) + 校训(0.8)
+            Row() {
+              this.blockItem(0, 1.2, 16, true)
+              this.blockItem(1, 0.7, 8, true)
+              this.blockItem(2, 0.8, 16, true)
+            }
+            .width('100%')
+            .height(80)
+            .margin({ top: 0 })
+
+            // 行2：院系介绍(2.0) 校徽(0.8)
+            Row() {
+              this.blockItem(3, 2.0, 8, false)
+              this.blockItem(4, 0.8, 16, false)
+            }
+            .width('100%')
+            .height(112)
+            .margin({ top: 0 })
+
+            // 行3：历史沿革(整行)
+            this.blockItem(5, 1, 16, false)
+
+            Blank()
+              .height(16)
+          }
+          .width('100%')
+        }
         .width('100%')
-        .height(140) // px_to_dip_280/2=140vp
-        .objectFit(ImageFit.Fill)
-      // 行1（weight 0.5）：introdection(1.2) + song(0.7) + motto(0.8)
-      Row() {
-        Row() {
-          this.situationCell(this.entryList[0])
-        }
-        .layoutWeight(12) // layout_weight=1.2
-        .height('100%')
-        .margin({ left: 8 }) // px_to_dip_16/2=8vp
-
-        Row() {
-          this.situationCell(this.entryList[1])
-        }
-        .layoutWeight(7) // layout_weight=0.7
-        .height('100%')
-        .margin({ left: 8 }) // px_to_dip_16/2=8vp
-
-        Row() {
-          this.situationCell(this.entryList[2])
-        }
-        .layoutWeight(8) // layout_weight=0.8
-        .height('100%')
-        .margin({ left: 8, right: 8 }) // px_to_dip_16/2=8vp
+        .layoutWeight(1)
+        .scrollBar(BarState.Off)
+        .align(Alignment.Top)
+        .backgroundColor($r('app.color.white'))
       }
-      .width('100%')
-      .layoutWeight(5) // 行高 weight=0.5
-      .margin({ top: 8 }) // px_to_dip_16/2=8vp
-      // 行2（weight 0.7）：college(2.0) + logo(0.8)
-      Row() {
-        Row() {
-          this.situationCell(this.entryList[3])
-        }
-        .layoutWeight(20) // layout_weight=2.0
-        .height('100%')
-        .margin({ left: 8 }) // px_to_dip_16/2=8vp
-
-        Row() {
-          this.situationCell(this.entryList[4])
-        }
-        .layoutWeight(8) // layout_weight=0.8
-        .height('100%')
-        .margin({ left: 8, right: 8 }) // px_to_dip_16/2=8vp
-      }
-      .width('100%')
-      .layoutWeight(7) // 行高 weight=0.7
-      .margin({ top: 8 }) // px_to_dip_16/2=8vp
-      // 行3（weight 1.0）：history 通栏
-      Row() {
-        this.situationCell(this.entryList[5])
-      }
-      .width('100%')
-      .layoutWeight(10) // 行高 weight=1.0
-      .margin({ left: 8, right: 8, top: 8, bottom: 8 }) // px_to_dip_16/2=8vp
     }
     .width('100%')
     .height('100%')
-    .backgroundColor($r('app.color.main_bg'))
+    .backgroundColor($r('app.color.white'))
+  }
+
+  /** 色块：icon 18dip + 17fp 白字 ml8；module 越界 → invisible */
+  @Builder
+  blockItem(idx: number, weight: number, marginH: number, showMarginTop: boolean) {
+    Stack({ alignContent: Alignment.Center }) {
+      Row() {
+        Image(this.blocks[idx].icon)
+          .width(18)
+          .height(18)
+          .visibility(this.iconUrlOf(this.moduleOf(idx)) === '' && this.moduleOf(idx) !== null
+            ? Visibility.None : Visibility.Visible)
+        if (this.iconUrlOf(this.moduleOf(idx)) !== '') {
+          Image(this.iconUrlOf(this.moduleOf(idx)))
+            .width(18)
+            .height(18)
+            .margin({ left: 8 })
+        }
+        Text(this.blocks[idx].label)
+          .fontSize(17)
+          .fontColor($r('app.color.ybg_white'))
+          .margin({ left: 8 })
+      }
+      .alignItems(VerticalAlign.Center)
+    }
+    .layoutWeight(weight)
+    .height('100%')
+    .backgroundColor(this.blocks[idx].color)
+    .margin({
+      left: idx === 1 || idx === 4 ? 8 : marginH,
+      right: idx === 2 || idx === 4 ? 16 : 0,
+      top: showMarginTop ? 8 : 0,
+      bottom: idx === 5 ? 16 : 0
+    })
+    .visibility(this.moduleOf(idx) !== null ? Visibility.Visible : Visibility.Hidden)
+    .onClick(() => {
+      const bean: SchoolViewModuleBean | null = this.moduleOf(idx);
+      if (bean !== null) {
+        this.openModule(bean);
+      }
+    })
+  }
+}
+
+/** 加载占位（源码 banner/色块 XML invisible 态等价：数据前仅 toolbar） */
+@Component
+struct LoadingPlaceholder {
+  build() {
+    Column()
+      .width('100%')
+      .layoutWeight(1)
+      .backgroundColor($r('app.color.white'))
   }
 }

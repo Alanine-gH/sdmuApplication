@@ -1,4 +1,4 @@
-﻿import { BusinessError } from '@kit.BasicServicesKit';
+import { BusinessError } from '@kit.BasicServicesKit';
 import { cryptoFramework } from '@kit.CryptoArchitectureKit';
 import { util } from '@kit.ArkTS';
 import { hilog } from '@kit.PerformanceAnalysisKit';
@@ -46,6 +46,27 @@ export class CryptoUtil {
     return decoder.decodeToString(bytes);
   }
 
+  /** MD5 十六进制摘要（[W22 launch-chain] 聚合认证 secret 头：
+   *  PolymerizationModel.f1() 逐字节还原 —— hexTable 0-9A-F 大写，
+   *  源码 s = userId + secret + SimpleDateFormat("yyyyMMdd")；失败返回空串（调用方走真实错误态）。 */
+  static async md5HexUpper(text: string): Promise<string> {
+    try {
+      const md = cryptoFramework.createMd('MD5');
+      await md.update({ data: CryptoUtil.stringToBytes(text) });
+      const digest: cryptoFramework.DataBlob = await md.digest();
+      const chars: string[] = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'];
+      let out: string = '';
+      for (const b of digest.data) {
+        out = out + chars[(b >>> 4) & 15] + chars[b & 15];
+      }
+      return out;
+    } catch (error) {
+      const be = error as BusinessError;
+      CryptoUtil.log('md5HexUpper fail: ' + be.message);
+      return '';
+    }
+  }
+
   /** 创建AES cipher：PKCS5失败自动降级PKCS7 */
   private static createAesCipher(mode: cryptoFramework.CryptoMode, keyB64: string, step: string): cryptoFramework.Cipher {
     const symKeyGenerator: cryptoFramework.SymKeyGenerator = cryptoFramework.createSymKeyGenerator('AES128');
@@ -89,6 +110,31 @@ export class CryptoUtil {
     } catch (e) {
       const be = e as BusinessError;
       CryptoUtil.log('decryptAES fail code=' + be.code + ' msg=' + be.message);
+      throw e as Error;
+    }
+  }
+
+  /** [W26 partial-finish] AES/CBC/PKCS5 加密 → Base64（源码 module/d/a.java AESUtils.b 逐行还原：
+   *  paysec 扫码支付 userCode = a(userId)：Cipher("AES/CBC/PKCS5Padding")，
+   *  SecretKeySpec(key="1716bf8fca1f9273" 字节) + IvParameterSpec(iv="1230001000000000" 字节)——d/a.java L21/L25 源码字面硬编码保真。 */
+  static encryptAESCBC(plain: string, keyRaw: string, ivRaw: string): string {
+    try {
+      const symKeyGenerator: cryptoFramework.SymKeyGenerator = cryptoFramework.createSymKeyGenerator('AES128');
+      const keyBlob: cryptoFramework.DataBlob = { data: CryptoUtil.stringToBytes(keyRaw) };
+      const symKey: cryptoFramework.SymKey = symKeyGenerator.convertKeySync(keyBlob);
+      const cipher: cryptoFramework.Cipher = cryptoFramework.createCipher('AES128|CBC|PKCS5');
+      const gcmParams: cryptoFramework.IvParamsSpec = {
+        algName: 'IvParamsSpec',
+        // IvParamsSpec.iv 类型为 DataBlob（非 Uint8Array，2026-11-18 首轮构建 10505001 实证）
+        iv: { data: CryptoUtil.stringToBytes(ivRaw) }
+      };
+      cipher.initSync(cryptoFramework.CryptoMode.ENCRYPT_MODE, symKey, gcmParams);
+      const plainBlob: cryptoFramework.DataBlob = { data: CryptoUtil.stringToBytes(plain) };
+      const encrypted: cryptoFramework.DataBlob = cipher.doFinalSync(plainBlob);
+      return CryptoUtil.bytesToBase64(encrypted.data);
+    } catch (e) {
+      const be = e as BusinessError;
+      CryptoUtil.log('encryptAESCBC fail code=' + be.code + ' msg=' + be.message);
       throw e as Error;
     }
   }

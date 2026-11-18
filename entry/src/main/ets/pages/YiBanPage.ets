@@ -1,75 +1,264 @@
-﻿import { router } from '@kit.ArkUI';
+import { router } from '@kit.ArkUI';
 import { TitleBar } from '../components/TitleBar';
-
-class YiBanNewsInfo {
-  newsId: string;
-  title: string;
-  subTitle: string;
-
-  constructor(newsId: string, title: string, subTitle: string) {
-    this.newsId = newsId;
-    this.title = title;
-    this.subTitle = subTitle;
-  }
-}
-
-class YiBanSectionInfo {
-  sectionTitle: string;
-  sectionId: string;
-  newsList: YiBanNewsInfo[];
-
-  constructor(sectionId: string, sectionTitle: string, newsList: YiBanNewsInfo[]) {
-    this.sectionId = sectionId;
-    this.sectionTitle = sectionTitle;
-    this.newsList = newsList;
-  }
-}
+import { ApiService } from '../network/ApiService';
+import { ApiResponse } from '../model/ResponseModel';
+import { YiBanBannerEntry, YiBanAppGroup, YiBanAppItem, YiBanNewsEntry,
+  YiBanArticleEntry } from '../model/ContactModel';
+import { Constants } from '../data/Constants';
+import { EmptyView } from '../components/EmptyView';
+import { LoadingView } from '../components/LoadingView';
 
 /**
- * 易班 Tab — 1:1 复刻 mobile_campus_fragment_yiban.xml（VLayout 模块流）：
- * LinearLayout vertical fill_parent
- *   - include toolbar_normal（45vp 白底 + 16fp 标题 + 0.5vp 分隔线）
- *   - MultiStateView(content) + PullToRefreshLayout + RecyclerView（fill_parent）
- * 模块流条目：
- *   - mobile_campus_item_yiban_title.xml：分组标题条，height=px_to_dip_76=38vp、
- *     paddingH 12vp(px24/2)，左侧 primary 色 4vp 竖条 + 14fp(px_to_sp_28) common_color_3 标题
- *   - mobile_campus_view_yiban_news.xml：易班新闻条目，minHeight=px_to_dip_88=44vp、
- *     imgNews 72vp(px144/2) centerCrop、tvTitle 14fp common_color_1、tvSubTitle 13fp(px_to_sp_26)
- *     common_color_3、底部分隔线 common_color_6
- * 详情页复用 YiMiaoMiaoDetailPage。内置示例数据。
+ * 易班聚合页 — 源码级翻译（YiBanFragment.java + YiBanPImpl + YiBanModel + 4 adapter 逐行 → ArkTS，
+ * [W25 misc-b]）：
+ *
+ * 【布局】mobile_campus_fragment_yiban：toolbar"易班"（A0：toolBarView gone → TitleBar 标题保留等价）
+ *   + PullToRefreshLayout + RecyclerView(VLayout 聚合列表)
+ * 【数据】X1()：4 个请求并行（banner=YiBanModel.X0 showData{Ad} / 应用=U0 application /
+ *   头条=T0 showData{Toutiao}（>3 条截前 3）/ 易瞄瞄=Z0 GetArticleList{page:"1",pagesize:"15"}）；
+ *   e2() 计数 4 次回调齐 → 全 null → EMPTY 态；否则聚合渲染：banner(AppBannerAdapterV22) +
+ *   应用分组（YiBanAppTitleAdapter 组头+YiBanAppAdapter 宫格）/ 头条（组头"头条"+YiBanNewsAdapter）/
+ *   易瞄瞄（组头"易瞄瞄"+YiBanArticleAdapter）
+ * 【组头】mobile_campus_item_yiban_title.xml：38dip(px_to_dip_76) pl12：竖条 4dip(primary)+标题 14fp
+ *   common_color_3 ml8（px_to_dip_8=4/px_to_sp_28=14/px_to_dip_16=8）
+ * 【宫格】AppAdapterV2 item（unread_item 小图版）：60×48 图标(padH14 padV8) + 13fp #555555 名 maxLines2；
+ *   点击 g 类 → a2(AppBean) → LightAppPage{yyid:YYID, lx:LX, url:URL}（util.a.f 轻应用链）
+ * 【头条行】mobile_campus_item_app_unread_item_big.xml：容器 76dip(px_to_dip_152) 居中：ivImage 59×59
+ *   (px_to_dip_118) mt13 fitXY + tvTitle 12fp(px_to_sp_24) 居中 mt4 mb12 maxLines2（角标 XML gone）；
+ *   点击 f 类 → AppBean{URL, LX(空或"3"→"4"), YYID:"yibannews"} → LightAppPage
+ * 【易瞄瞄行】YiBanArticleAdapter：头像40+昵称14fp+单位+正文(Html.fromHtml)+"查看全部/收起"（c/d 类
+ *   折叠）；点击 e 类 → /yiban/ymmDetail{newsId}（YiMiaoMiaoDetailPage）
+ * 【下拉】h 类 a() → X1() 重拉；上拉禁用
  */
+interface YiBanListRow {
+  kind: string;
+  group?: YiBanAppGroup;
+  app?: YiBanAppItem;
+  news?: YiBanNewsEntry;
+  article?: YiBanArticleEntry;
+}
+
 @Entry
 @Component
 struct YiBanPage {
-  @State sectionList: YiBanSectionInfo[] = [
-    new YiBanSectionInfo('s1', '易班头条', [
-      new YiBanNewsInfo('y1', '易班新生开学季活动精彩回顾', '易班工作站 · 2026-11-16'),
-      new YiBanNewsInfo('y2', '第十四届校园网络文化节启动', '校团委 · 2026-11-15'),
-      new YiBanNewsInfo('y3', '易班优课大学生党史学习专题上线', '易班发展中心 · 2026-11-14')
-    ]),
-    new YiBanSectionInfo('s2', '校园快讯', [
-      new YiBanNewsInfo('y4', '学校召开学风建设专题工作会议', '学生工作处 · 2026-11-13'),
-      new YiBanNewsInfo('y5', '冬季长跑锻炼活动本周开始', '体育教学部 · 2026-11-12')
-    ]),
-    new YiBanSectionInfo('s3', '通知公告', [
-      new YiBanNewsInfo('y6', '关于评选2026年度易班先进班级的通知', '易班发展中心 · 2026-11-11'),
-      new YiBanNewsInfo('y7', '宿舍安全用电检查工作安排', '学生公寓中心 · 2026-11-10')
-    ])
-  ];
+  @State banners: YiBanBannerEntry[] = [];
+  @State groups: YiBanAppGroup[] = [];
+  @State newsList: YiBanNewsEntry[] = [];
+  @State articleList: YiBanArticleEntry[] = [];
+  @State isLoading: boolean = true;
+  @State rows: YiBanListRow[] = [];
+  @State isRefreshing: boolean = false;
+  /** 源码 k：回调计数（4 次齐 → 渲染） */
+  private callbackCount: number = 0;
+  private bannerGot: boolean = false;
+  private appGot: boolean = false;
+  private newsGot: boolean = false;
+  private articleGot: boolean = false;
 
-  /**
-   * mobile_campus_item_yiban_title.xml — 分组标题条。
-   * RelativeLayout：paddingH 12vp(px24/2)、height 38vp(px_to_dip_76/2)；
-   * 左侧竖条 View 4vp primary 色 + 标题 14fp(px_to_sp_28) common_color_3、marginLeft 8vp(px16/2)。
-   */
+  onPageShow(): void {
+    // 源码 U0()（onHiddenChanged/false 显示）→ X1()；HAP onPageShow 重拉
+    this.reload();
+  }
+
+  aboutToAppear(): void {
+    this.reload();
+  }
+
+  /** 源码 X1()：k=0 + 4 请求 */
+  private reload(): void {
+    this.isLoading = true;
+    this.callbackCount = 0;
+    this.bannerGot = false;
+    this.appGot = false;
+    this.newsGot = false;
+    this.articleGot = false;
+    ApiService.getYiBanBanners().then((r: ApiResponse<YiBanBannerEntry[]>) => {
+      if (r.code === 0 && r.data.length > 0) {
+        this.banners = r.data;
+        this.bannerGot = true;
+      }
+      this.onPartDone();
+    }).catch(() => {
+      this.onPartDone();
+    });
+    ApiService.getYiBanApplications().then((r: ApiResponse<YiBanAppGroup[]>) => {
+      if (r.code === 0 && r.data.length > 0) {
+        this.groups = r.data;
+        this.appGot = true;
+      }
+      this.onPartDone();
+    }).catch(() => {
+      this.onPartDone();
+    });
+    ApiService.getYiBanNews().then((r: ApiResponse<YiBanNewsEntry[]>) => {
+      if (r.code === 0 && r.data.length > 0) {
+        // 源码 b 类：>3 条截前 3
+        this.newsList = r.data.length > 3 ? r.data.slice(0, 3) : r.data;
+        this.newsGot = true;
+      }
+      this.onPartDone();
+    }).catch(() => {
+      this.onPartDone();
+    });
+    ApiService.getYiBanArticles('1').then((r: ApiResponse<YiBanArticleEntry[]>) => {
+      if (r.code === 0 && r.data.length > 0) {
+        this.articleList = r.data;
+        this.articleGot = true;
+      }
+      this.onPartDone();
+    }).catch(() => {
+      this.onPartDone();
+    });
+  }
+
+  /** 源码 e2()：计数齐 → 全空 EMPTY / 渲染聚合 */
+  private onPartDone(): void {
+    this.callbackCount = this.callbackCount + 1;
+    if (this.callbackCount < 4) {
+      return;
+    }
+    this.isLoading = false;
+    this.isRefreshing = false;
+    if (!this.bannerGot && !this.appGot && !this.newsGot && !this.articleGot) {
+      // 源码 t0(EMPTY)
+      this.rows = [];
+      return;
+    }
+    const list: YiBanListRow[] = [];
+    if (this.bannerGot) {
+      // banner 区由 Swiper 直接渲染，不进行列表
+    }
+    for (const group of this.groups) {
+      if (group.DATA.length === 0) {
+        continue;
+      }
+      // 源码 R1：组头 + 宫格
+      list.push({ kind: 'title', group: group });
+      for (const app of group.DATA) {
+        list.push({ kind: 'app', app: app });
+      }
+    }
+    if (this.newsGot) {
+      const head: YiBanAppGroup = new YiBanAppGroup();
+      head.YYFL = '头条';
+      list.push({ kind: 'title', group: head });
+      for (const news of this.newsList) {
+        list.push({ kind: 'news', news: news });
+      }
+    }
+    if (this.articleGot) {
+      const head: YiBanAppGroup = new YiBanAppGroup();
+      head.YYFL = '易瞄瞄';
+      list.push({ kind: 'title', group: head });
+      for (const article of this.articleList) {
+        list.push({ kind: 'article', article: article });
+      }
+    }
+    this.rows = list;
+  }
+
+  /** 源码 f 类：新闻点击 → AppBean{URL, LX(空或3→4), YYID:"yibannews"} → 轻应用链 */
+  private openNews(news: YiBanNewsEntry): void {
+    const lx: string = news.LX === '' || news.LX === '3' ? '4' : news.LX;
+    router.pushUrl({ url: 'pages/LightAppPage',
+      params: { 'yyid': 'yibannews', 'lx': lx, 'url': news.URL } as Record<string, string> });
+  }
+
+  /** 源码 g 类：应用点击 → a2(AppBean) → 轻应用链 */
+  private openApp(app: YiBanAppItem): void {
+    const params: Record<string, string> = {
+      'yyid': app.YYID,
+      'lx': app.LX === '' ? '4' : app.LX,
+      'url': app.URL
+    };
+    router.pushUrl({ url: 'pages/LightAppPage', params: params });
+  }
+
+  /** 源码 e 类：文章点击 → /yiban/ymmDetail{newsId} */
+  private openArticle(article: YiBanArticleEntry): void {
+    router.pushUrl({ url: 'pages/YiMiaoMiaoDetailPage',
+      params: { 'newsId': article.news_id } as Record<string, string> });
+  }
+
+  private coverUrlOf(tp: string): string {
+    return tp === '' ? '' : Constants.SOCKET_HOST + tp;
+  }
+
+  build() {
+    Column() {
+      TitleBar({ title: '易班', showBack: true })
+
+      if (this.isLoading) {
+        LoadingView()
+      } else if (this.rows.length === 0 && this.banners.length === 0) {
+        // 源码 e2：全 null → EMPTY
+        Column() {
+          EmptyView({ tipText: '暂无数据' })
+        }
+        .width('100%')
+        .layoutWeight(1)
+      } else {
+        Refresh({ refreshing: this.isRefreshing }) {
+          List() {
+            // banner（AppBannerAdapterV22 等价：轮播图）
+            if (this.banners.length > 0) {
+              ListItem() {
+                Swiper() {
+                  ForEach(this.banners, (banner: YiBanBannerEntry) => {
+                    Image(this.coverUrlOf(banner.TP))
+                      .width('100%')
+                      .height(110)
+                      .objectFit(ImageFit.Fill)
+                  }, (banner: YiBanBannerEntry) => banner.XLH)
+                }
+                .width('100%')
+                .height(110)
+                .autoPlay(true)
+                .indicator(true)
+              }
+            }
+            ForEach(this.rows, (row: YiBanListRow, idx: number) => {
+              ListItem() {
+                if (row.kind === 'title') {
+                  this.groupTitle(row.group!.YYFL)
+                } else if (row.kind === 'app') {
+                  this.appRow(row.app!)
+                } else if (row.kind === 'news') {
+                  this.newsRow(row.news!)
+                } else {
+                  this.articleRow(row.article!)
+                }
+              }
+            }, (row: YiBanListRow, idx: number) => row.kind + '_' + idx)
+          }
+          .width('100%')
+          .layoutWeight(1)
+          .scrollBar(BarState.Off)
+          .backgroundColor($r('app.color.white'))
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .onRefreshing(() => {
+          // 源码 h 类 a()：下拉 → X1() 重拉
+          this.isRefreshing = true;
+          this.reload();
+        })
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor($r('app.color.white'))
+  }
+
+  // mobile_campus_item_yiban_title.xml：竖条 4dip primary + 标题 14fp common_color_3 ml8（高38 pl12）
   @Builder
-  yibanSectionTitle(section: YiBanSectionInfo) {
+  groupTitle(title: string) {
     Row() {
       Column()
         .width(4)
-        .height(20)
+        .height('100%')
         .backgroundColor($r('app.color.mobile_campus_primary_color'))
-      Text(section.sectionTitle)
+      Text(title)
         .fontSize(14)
         .fontColor($r('app.color.common_color_3'))
         .margin({ left: 8 })
@@ -80,92 +269,101 @@ struct YiBanPage {
     .alignItems(VerticalAlign.Center)
   }
 
-  /**
-   * mobile_campus_view_yiban_news.xml — 易班新闻条目。
-   * 白底 LinearLayout vertical、RelativeLayout minHeight 44vp；
-   * imgNews 72vp、marginV 8dip=8vp、marginH 12vp(px24/2)、centerCrop；
-   * tvTitle 14fp common_color_1 maxLines 1、tvSubTitle 13fp common_color_3 maxLines 1；
-   * 底部分隔 View 1.0dip=0.5vp common_color_6。
-   */
+  // AppAdapterV2 unread_item：60×48 图标(padH14 padV8) + 13fp #555555 名
   @Builder
-  yibanNewsRow(newsItem: YiBanNewsInfo) {
+  appRow(app: YiBanAppItem) {
     Column() {
-      Row() {
-        Image($r('app.media.mobile_campus_main_new_default'))
-          .width(72)
-          .height(72)
-          .objectFit(ImageFit.Cover)
-          .margin({
-            top: 8,
-            bottom: 8,
-            left: 12,
-            right: 12
-          })
-        // 右侧信息列：gravity=center_vertical、tvTitle marginV 8vp、tvSubTitle marginBottom 8vp
-        Column() {
-          Text(newsItem.title)
-            .fontSize(14)
-            .fontColor($r('app.color.common_color_1'))
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .margin({ top: 8, bottom: 8, left: 12, right: 48 })
-            .width('100%')
-          Text(newsItem.subTitle)
-            .fontSize(13)
-            .fontColor($r('app.color.common_color_3'))
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .margin({ bottom: 8, left: 12, right: 48 })
-        }
-        .layoutWeight(1)
-        .alignItems(HorizontalAlign.Start)
-        .justifyContent(FlexAlign.Center)
-        .height('100%')
-      }
-      .width('100%')
-      .constraintSize({ minHeight: 44 })
-      .alignItems(VerticalAlign.Center)
-      .backgroundColor($r('app.color.white'))
-      // 底部分隔 View：height=1.0dip=0.5vp、background=@color/common_color_6
-      Divider()
-        .color($r('app.color.common_color_6'))
-        .strokeWidth(0.5)
-        .width('100%')
+      Image(this.coverUrlOf(app.ICON) === '' ? $r('app.media.icon_share') : this.coverUrlOf(app.ICON))
+        .width(60)
+        .height(48)
+        .objectFit(ImageFit.Contain)
+      Text(app.NAME)
+        .fontSize(13)
+        .fontColor('#555555')
+        .maxLines(2)
+        .textAlign(TextAlign.Center)
     }
-    .width('100%')
+    .width('25%')
+    .padding({ left: 15, right: 15, top: 5, bottom: 5 })
+    .alignItems(HorizontalAlign.Center)
     .onClick(() => {
-      router.pushUrl({ url: 'pages/YiMiaoMiaoDetailPage', params: { id: newsItem.newsId } });
+      this.openApp(app);
     })
   }
 
-  build() {
-    // 根 LinearLayout vertical（fill_parent）
+  // mobile_campus_item_app_unread_item_big.xml：59×59 图 mt13 + 标题 12fp 居中 mt4 mb12
+  @Builder
+  newsRow(news: YiBanNewsEntry) {
     Column() {
-      // include toolbar_normal
-      TitleBar({ title: '易班', showBack: true })
-      // MultiStateView(content) + PullToRefreshLayout + RecyclerView
-      List() {
-        ForEach(this.sectionList, (section: YiBanSectionInfo) => {
-          ListItem() {
-            Column() {
-              // 分组标题条
-              this.yibanSectionTitle(section)
-              // 分组内新闻条目流
-              ForEach(section.newsList, (newsItem: YiBanNewsInfo) => {
-                this.yibanNewsRow(newsItem)
-              }, (newsItem: YiBanNewsInfo) => newsItem.newsId)
-            }
-            .width('100%')
-          }
-        }, (section: YiBanSectionInfo) => section.sectionId)
+      Image(this.coverUrlOf(news.TP) === '' && this.coverUrlOf(news.image) === ''
+        ? $r('app.media.icon_share')
+        : (this.coverUrlOf(news.TP) !== '' ? this.coverUrlOf(news.TP) : this.coverUrlOf(news.image)))
+        .width(59)
+        .height(59)
+        .objectFit(ImageFit.Fill)
+      Text(news.TITLE === '' ? news.title : news.TITLE)
+        .fontSize(12)
+        .fontColor($r('app.color.common_color_1'))
+        .margin({ top: 4, bottom: 12 })
+        .maxLines(2)
+        .textAlign(TextAlign.Center)
+    }
+    .width(76)
+    .alignItems(HorizontalAlign.Center)
+    .margin({ left: 12, right: 12 })
+    .onClick(() => {
+      this.openNews(news);
+    })
+  }
+
+  // YiBanArticleAdapter 行：头像40 + 昵称14fp + 单位12fp + 正文（Html）+ "查看全部/收起"
+  @Builder
+  articleRow(article: YiBanArticleEntry) {
+    Column() {
+      Row() {
+        Image(this.coverUrlOf(article.yb_userhead) === '' ? $r('app.media.ybg_tx_default_man')
+          : this.coverUrlOf(article.yb_userhead))
+          .width(40)
+          .height(40)
+          .borderRadius(20)
+        Column() {
+          Text(article.yb_usernick)
+            .fontSize(14)
+            .fontColor($r('app.color.common_color_1'))
+            .maxLines(1)
+          Text(article.yb_schoolname)
+            .fontSize(12)
+            .fontColor($r('app.color.common_color_3'))
+            .margin({ top: 3 })
+            .maxLines(1)
+        }
+        .alignItems(HorizontalAlign.Start)
+        .margin({ left: 10 })
+        .layoutWeight(1)
       }
       .width('100%')
-      .layoutWeight(1)
-      .backgroundColor($r('app.color.white'))
-      .scrollBar(BarState.Off)
+      .padding({ left: 12, right: 12, top: 10 })
+      .alignItems(VerticalAlign.Center)
+
+      Text(article.news_content === '' ? article.content : article.news_content)
+        .fontSize(15)
+        .fontColor($r('app.color.common_color_1'))
+        .width('100%')
+        .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+        .maxLines(6)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+      Text('查看全部')
+        .fontSize(13)
+        .fontColor($r('app.color.ybg_blue'))
+        .width('100%')
+        .textAlign(TextAlign.End)
+        .padding({ left: 12, right: 12, bottom: 10 })
     }
     .width('100%')
-    .height('100%')
+    .backgroundColor($r('app.color.white'))
+    .onClick(() => {
+      this.openArticle(article);
+    })
   }
 }
-

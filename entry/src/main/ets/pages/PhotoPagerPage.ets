@@ -1,142 +1,223 @@
 import { router } from '@kit.ArkUI';
 
 /**
- * 照片浏览页 — 1:1 复刻源布局 activity_photo_pager.xml + fragment_image_pager.xml + item_pager.xml
- * 结构：navigation_bar_normal(顶部导航) + 全屏 ViewPager（pager_bg 深色底）+ 页码指示（n/total）
- * + 底部 #99000000 半透明选择条（右侧"选择"勾选项，drawableLeft social_rb_selector 勾选框）
+ * 图片翻页选择页 — 源码级复刻 PhotoPagerActivity（baselibrary PhotoPicker 包）。
+ * 源码：activity_photo_pager 布局 = ImagePagerFragment（全屏 ViewPager PhotoView）+
+ * navigation_bar_normal（背景 -1728053248=#99000000：nav_back_btn_white 返回 + 左标题
+ * image_index"%1$d/%2$d" common_color_6 + 右"完成"done/done_with_count"完成(%1$d/%2$d)"）+
+ * photo_pager_bottom_bar（#99000000：photo_pager_tv_selected_state"选择" select 圆点
+ * drawablePadding 4vp padding 10vp 靠右）；f1()：photos/current_item/MAX_COUNT=9/SELECTED_PHOTOS；
+ * onPageScrolled → J2() 页码刷新 + 当前页在已选集合 → 圆点选中态；
+ * PhotoPicker 点击回调 a：切换工具栏显隐（500ms 透明动画 + systemUiVisibility）；
+ * d（圆点点击）：已选移除/未选加入（超 MAX_COUNT → over_max_count_tips"你最多可以选择N张图片"）
+ * → 右上文案刷新"完成(N/M)"/"完成"；
+ * b（返回）/c（完成）→ H2(z)：z 且未选 → 加入当前页 → setResult(SELECTED_PHOTOS, isDone)；
+ * onBackPressed → H2(false)。
+ * HAP 等价管道：AppStorage 'photo_pager_result'{selected, isDone}（setResult 等价）。
  */
-interface PagerPhotoItem {
-  photoId: number;
-  selected: boolean;
+class PagerPhotoItem {
+  url: string = '';
+  selected: boolean = false;
 }
 
 @Entry
 @Component
 struct PhotoPagerPage {
-  @State photoList: PagerPhotoItem[] = [];
+  @State photos: PagerPhotoItem[] = [];
+  @State selectedUrls: string[] = [];
   @State currentIndex: number = 0;
-  private readonly totalCount: number = 9;
+  @State barsVisible: boolean = true;
+  private maxCount: number = 9;
+  private barsAnim: number = 0;
 
   aboutToAppear(): void {
-    const seeds: number[] = [];
-    for (let i = 1; i <= this.totalCount; i++) {
-      seeds.push(i);
+    const params: object | undefined = router.getParams() as object | undefined;
+    if (params !== null && params !== undefined) {
+      const record = params as Record<string, Object>;
+      const list: Object = record['photos'];
+      if (Array.isArray(list)) {
+        this.photos = (list as string[]).map((u: string): PagerPhotoItem => {
+          const item = new PagerPhotoItem();
+          item.url = u;
+          return item;
+        });
+      }
+      const start: Object = record['current_item'];
+      if (typeof start === 'number') {
+        this.currentIndex = start as number;
+      }
+      const max: Object = record['MAX_COUNT'];
+      if (typeof max === 'number') {
+        this.maxCount = max as number;
+      }
+      const sel: Object = record['SELECTED_PHOTOS'];
+      if (Array.isArray(sel)) {
+        this.selectedUrls = (sel as string[]).slice();
+      }
     }
-    this.photoList = seeds.map((id: number): PagerPhotoItem => {
-      return { photoId: id, selected: false };
+    // 初始已选态回填
+    this.photos = this.photos.map((p: PagerPhotoItem): PagerPhotoItem => {
+      return { url: p.url, selected: this.selectedUrls.includes(p.url) };
     });
   }
 
-  private toggleCurrentSelected(): void {
-    const item: PagerPhotoItem | undefined = this.photoList[this.currentIndex];
-    if (item === undefined) {
+  /** J2()：页码 text（image_index = "N/total"） */
+  private indexText(): string {
+    return String(this.currentIndex + 1) + '/' + String(this.photos.length);
+  }
+
+  /** 右上文案：size>0 → "完成(N/M)"，否则"完成"（done_with_count/done） */
+  private doneText(): string {
+    if (this.selectedUrls.length > 0) {
+      return '完成(' + String(this.selectedUrls.length) + '/' + String(this.maxCount) + ')';
+    }
+    return '完成';
+  }
+
+  /** d（圆点点击）：toggle 当前页选中；超上限 toast over_max_count_tips */
+  private toggleSelected(): void {
+    const current: PagerPhotoItem | undefined = this.photos[this.currentIndex];
+    if (current === undefined) {
       return;
     }
-    const next: PagerPhotoItem[] = this.photoList.map((it: PagerPhotoItem): PagerPhotoItem => {
-      if (it.photoId === item.photoId) {
-        return { photoId: it.photoId, selected: !it.selected };
+    if (this.selectedUrls.includes(current.url)) {
+      this.selectedUrls = this.selectedUrls.filter((u: string): boolean => u !== current.url);
+    } else {
+      if (this.selectedUrls.length >= this.maxCount) {
+        this.getUIContext().getPromptAction()
+          .showToast({ message: '你最多可以选择' + String(this.maxCount) + '张图片' });
+        return;
       }
-      return it;
+      this.selectedUrls = this.selectedUrls.concat([current.url]);
+    }
+    this.photos = this.photos.map((p: PagerPhotoItem): PagerPhotoItem => {
+      return { url: p.url, selected: this.selectedUrls.includes(p.url) };
     });
-    this.photoList = next;
   }
 
-  private isCurrentSelected(): boolean {
-    const item: PagerPhotoItem | undefined = this.photoList[this.currentIndex];
-    if (item === undefined) {
-      return false;
+  /** H2(z)：z 且未选 → 加入当前页 → AppStorage 管道（setResult(SELECTED_PHOTOS,isDone)）→ finish */
+  private finishPage(isDone: boolean): void {
+    const selected: string[] = this.selectedUrls.slice();
+    if (isDone && selected.length === 0) {
+      const current: PagerPhotoItem | undefined = this.photos[this.currentIndex];
+      if (current !== undefined) {
+        selected.push(current.url);
+      }
     }
-    return item.selected;
+    AppStorage.setOrCreate('photo_pager_result', {
+      'SELECTED_PHOTOS': selected,
+      'isDone': isDone
+    } as Record<string, Object>);
+    router.back();
+  }
+
+  /** a：点击图片 → 工具栏显隐切换（AlphaAnimation 500ms） */
+  private toggleBars(): void {
+    this.barsVisible = !this.barsVisible;
+    this.barsAnim = this.barsVisible ? 1 : 0;
   }
 
   build() {
-    Column() {
-      // navigation_bar_normal：返回 + 居中标题
-      Row() {
-        Image($r('app.media.nav_back_btn'))
-          .objectFit(ImageFit.Contain)
-          .width(24)
-          .height(24)
-          .padding({ left: 15, right: 10 })
-          .onClick(() => {
-            router.back();
-          })
-
-        Text('图片预览')
-          .fontSize(16)
-          .fontColor($r('app.color.common_color_1'))
-          .margin({ left: 12 })
-      }
-      .width('100%')
-      .height(48)
-      .alignItems(VerticalAlign.Center)
-      .backgroundColor($r('app.color.white'))
-
-      // 全屏滑动浏览（fragment_image_pager：ViewPager + pager_bg）
-      Stack({ alignContent: Alignment.TopEnd }) {
+    Stack() {
+      // ImagePagerFragment：全屏 PhotoView 翻页
+      if (this.photos.length > 0) {
         Swiper() {
-          ForEach(this.photoList, (item: PagerPhotoItem) => {
-            Image($r('app.media.up_photo_bg'))
-              .objectFit(ImageFit.Contain)
+          ForEach(this.photos, (item: PagerPhotoItem) => {
+            Image(item.url)
               .width('100%')
               .height('100%')
-          }, (item: PagerPhotoItem) => `pager_${item.photoId}`)
+              .objectFit(ImageFit.Contain)
+              .alt($r('app.media.no_pic'))
+              .onClick(() => {
+                this.toggleBars();
+              })
+          }, (item: PagerPhotoItem) => 'pp_' + item.url)
         }
         .index(this.currentIndex)
         .indicator(false)
         .loop(false)
         .width('100%')
-        .layoutWeight(1)
-        .backgroundColor($r('app.color.pager_bg'))
+        .height('100%')
+        .backgroundColor($r('app.color.black'))
         .onChange((index: number) => {
           this.currentIndex = index;
         })
+      }
 
-        // 页码指示（pager_navigator_layout：n / total）
-        Text(`${this.currentIndex + 1}/${this.totalCount}`)
-          .fontSize(13)
-          .fontColor('#FFFFFFFF')
-          .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-          .borderRadius(10)
-          .backgroundColor('#66000000')
-          .margin({ top: 12, right: 12 })
+      // photo_pager_navigation_bar：#99000000 + 白返回 + N/total + 完成(N/M)
+      Row() {
+        Image($r('app.media.nav_back_btn_white'))
+          .objectFit(ImageFit.Contain)
+          .width(24)
+          .height(24)
+          .padding({ left: 10, right: 5 })
+          .onClick(() => {
+            // b：H2(false)
+            this.finishPage(false);
+          })
+
+        Text(this.indexText())
+          .fontSize(15)
+          .fontColor($r('app.color.common_color_6'))
+          .margin({ left: 5 })
+
+        Blank()
+
+        Text(this.doneText())
+          .fontSize(15)
+          .fontColor($r('app.color.common_color_6'))
+          .padding({ left: 10, right: 10 })
+          .onClick(() => {
+            // c：H2(true)
+            this.finishPage(true);
+          })
       }
       .width('100%')
-      .layoutWeight(1)
+      .height(48)
+      .alignItems(VerticalAlign.Center)
+      .backgroundColor('#99000000')
+      .margin({ top: 0 })
+      .opacity(this.barsAnim)
+      .visibility(this.barsVisible ? Visibility.Visible : Visibility.Hidden)
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
 
-      // 底部选择条：#99000000 半透明，右侧"选择"勾选项
+      // photo_pager_bottom_bar：#99000000 + 右"选择"圆点
       Row() {
         Blank()
 
         Row() {
-          Stack() {
-            if (this.isCurrentSelected()) {
-              Text('✓')
-                .fontSize(10)
-                .fontColor('#FFFFFFFF')
-                .textAlign(TextAlign.Center)
+          Stack({ alignContent: Alignment.Center }) {
+            Circle()
+              .width(16)
+              .height(16)
+              .fill(Color.Transparent)
+              .stroke(Color.White)
+              .strokeWidth(1.5)
+            if (this.photos[this.currentIndex] !== undefined && this.photos[this.currentIndex].selected) {
+              Circle()
+                .width(9)
+                .height(9)
+                .fill(Color.White)
             }
           }
           .width(16)
           .height(16)
-          .borderRadius(8)
-          .backgroundColor(this.isCurrentSelected() ? $r('app.color.mobile_campus_primary_color') : '#00000000')
-          .border({ width: 1.5, color: '#FFFFFFFF' })
-          .margin({ right: 8 })
+          .margin({ right: 4 })
 
-          Text(this.isCurrentSelected() ? '已选择' : '选择')
-            .fontSize(14)
-            .fontColor('#FFFFFFFF')
+          Text('选择')
+            .fontSize(15)
+            .fontColor($r('app.color.common_color_6'))
         }
         .padding(10)
         .onClick(() => {
-          this.toggleCurrentSelected();
+          this.toggleSelected();
         })
       }
       .width('100%')
-      .padding({ right: 10, left: 10 })
       .alignItems(VerticalAlign.Center)
       .backgroundColor('#99000000')
+      .opacity(this.barsAnim)
+      .visibility(this.barsVisible ? Visibility.Visible : Visibility.Hidden)
     }
     .width('100%')
     .height('100%')

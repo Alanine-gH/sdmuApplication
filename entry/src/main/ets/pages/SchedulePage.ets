@@ -1,7 +1,8 @@
 import { router } from '@kit.ArkUI';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
-import { CourseItem } from '../model/CourseModel';
+import { CourseItem, ScheduleTermParams, SCHEDULE_FALLBACK_START, SCHEDULE_FALLBACK_END,
+  parseYmdMs, apkCurrentWeek, apkTotalWeeks } from '../model/CourseModel';
 import { BusinessError } from '@kit.BasicServicesKit';
 
 /**
@@ -26,13 +27,16 @@ import { BusinessError } from '@kit.BasicServicesKit';
  *      500ms Decelerate；主钮点击仅切换展开(c/e 类)
  *   6. 学期切换 ChooseTermDialog(widget/d.java)：标题"Xn学年    第Xq学期"(TextSize2.Color2)
  *      +右上"完成"(TextSize2.Color7=主色)，选择后 H3→重载
- *   7. 周次过滤：APK timetable_djz==当前周；HAP 解析 CourseItem.week("1-16/1,3/单双")过滤
+ *   7. 周次过滤：APK timetable_djz==当前周（scheduleOfTerm 按 djz 拆行）；
+ *      学期起始日 = termInfo.ksrq（失败兜底 2026-08-24），当前周 = APK GetTimeTableUtil.e() 公式
  *   8. 底部脚注 G2()：*课表数据以教务单位提供为准
  * 说明：APK 源码中无月/周视图切换(TimetableActivity 仅加载 WeekCourseFragment)，
  *       timetable_tv_month 为静态月份显示；本次按源码不虚构月视图。
  */
-const SEMESTER_START_MONTH: number = 8;
-const SEMESTER_START_DAY: number = 7;
+// 学期起始日来源：GET /mobileapi_ydxy/api/schedule/termInfo → {ksrq,jsrq,dqxq,...}（TermParamsEntity），
+// 2026-11-17 服务器实测当前学期 ksrq=2026-08-24 jsrq=2027-01-15（此处仅作接口失败兜底）
+const FALLBACK_START_YMD: string = SCHEDULE_FALLBACK_START;
+const FALLBACK_END_YMD: string = SCHEDULE_FALLBACK_END;
 const MAX_WEEK: number = 25;
 const SECTION_HEIGHT: number = 55;
 const AXIS_WIDTH: number = 50;
@@ -81,12 +85,21 @@ class DetailParams {
   weekTime: string;
   session: string;
   place: string;
+  // [W10 timetable-series] CourseDetailActivity courseDetail GET 所需三元组：
+  // xlh=课行周次描述原文、djz=教学周次、xqj=星期几（y(Intent) 校验 xlh/bean 至少其一）
+  xlh: string;
+  djz: string;
+  xqj: string;
 
-  constructor(courseName: string, weekTime: string, session: string, place: string) {
+  constructor(courseName: string, weekTime: string, session: string, place: string,
+    xlh: string, djz: string, xqj: string) {
     this.courseName = courseName;
     this.weekTime = weekTime;
     this.session = session;
     this.place = place;
+    this.xlh = xlh;
+    this.djz = djz;
+    this.xqj = xqj;
   }
 }
 
@@ -106,6 +119,11 @@ struct SchedulePage {
   @State multiCourses: CourseItem[] = [];
   @State multiColorIdx: number = 0;
   @State showMultiDialog: boolean = false;
+  // 学期起止毫秒（termInfo 失败时用服务器实测兜底值，与 APK 常量语义一致）
+  @State semesterStartMs: number = 0;
+  @State semesterEndMs: number = 0;
+  // APK GetTimeTableUtil.r() 总周数（ChooseWeeksPopup 周次列表上限）
+  @State maxWeek: number = MAX_WEEK;
   private weekScroller: Scroller = new Scroller();
   private termScroller: Scroller = new Scroller();
   private termXn: string = '2026-2027';
@@ -124,12 +142,55 @@ struct SchedulePage {
   ];
 
   aboutToAppear(): void {
-    const now: Date = new Date();
-    const start: Date = new Date(2026, SEMESTER_START_MONTH, SEMESTER_START_DAY);
-    let week: number = Math.floor((now.getTime() - start.getTime()) / 604800000) + 1;
-    this.todayWeek = week < 1 ? 1 : week;
+    // 兜底学期（服务器实测 2026-11-17），termInfo 到达后覆盖
+    this.semesterStartMs = parseYmdMs(FALLBACK_START_YMD);
+    this.semesterEndMs = parseYmdMs(FALLBACK_END_YMD);
+    const initWeek: number = apkCurrentWeek(this.semesterStartMs, this.semesterEndMs, this.todayMidnightMs());
+    this.todayWeek = initWeek >= 1 ? initWeek : 1;
     this.applyWeek(this.todayWeek);
+    // 源码 TimeTableNetPresenter.n()：termInfo/termParams → 真实学期起始日 → 当前周
+    ApiService.getScheduleTermParams()
+      .then((response: ApiResponse<ScheduleTermParams>) => {
+        this.applyTermParams(response.data);
+      })
+      .catch((error: BusinessError) => {
+        console.info('SchedulePage termParams fail: ' + error.message);
+      });
     this.loadCourses();
+  }
+
+  /** 用服务器学期参数覆盖常量：ksrq/jsrq → 当前周 + 总周数（APK e()/r()） */
+  private applyTermParams(term: ScheduleTermParams): void {
+    if (!term.hasStart()) {
+      return;
+    }
+    const startMs: number = parseYmdMs(term.ksrq);
+    const endMs: number = parseYmdMs(term.jsrq);
+    if (startMs > 0) {
+      this.semesterStartMs = startMs;
+    }
+    if (endMs > 0) {
+      this.semesterEndMs = endMs;
+    }
+    if (term.xn !== '') {
+      this.termXn = term.xn;
+    }
+    if (term.xq !== '') {
+      this.termXq = term.xq;
+    }
+    const apkWeek: number = apkCurrentWeek(this.semesterStartMs, this.semesterEndMs, this.todayMidnightMs());
+    // TimetableActivity.l1()：今天不在学期区间时兜底第 1 周
+    this.todayWeek = apkWeek >= 1 ? apkWeek : 1;
+    const total: number = apkTotalWeeks(this.semesterStartMs, this.semesterEndMs);
+    if (total >= 1) {
+      this.maxWeek = total > MAX_WEEK ? MAX_WEEK : total;
+    }
+    this.applyWeek(this.todayWeek);
+  }
+
+  private todayMidnightMs(): number {
+    const now: Date = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   }
 
   // APK onActivityResult RESULT_OK→K3 重载：页面回显时刷新数据
@@ -141,6 +202,7 @@ struct SchedulePage {
     ApiService.getScheduleList()
       .then((response: ApiResponse<CourseItem[]>) => {
         const data: CourseItem[] = response.data;
+        console.info('TT SchedulePage loadCourses code=' + response.code + ' size=' + data.length);
         if (data.length > 0) {
           this.courseList = data;
         } else if (response.code !== 0) {
@@ -148,7 +210,7 @@ struct SchedulePage {
         }
       })
       .catch((error: BusinessError) => {
-        console.info('SchedulePage load fail: ' + error.message);
+        console.info('TT SchedulePage loadCourses fail: ' + error.message);
         this.courseList = [];
       });
   }
@@ -157,10 +219,11 @@ struct SchedulePage {
     return value < 10 ? '0' + value : '' + value;
   }
 
-  // APK I3()/f.b.c()：周起始日=ksrq+(week-1)*7，日期条+月份标签重算；今日列高亮仅限本周
+  // APK I3()/GetTimeTableUtil.c()：周起始日=ksrq+(week-1)*7，日期条+月份标签重算；今日列高亮仅限本周
   private applyWeek(week: number): void {
     this.weekNumber = week;
-    const weekStart: Date = new Date(2026, SEMESTER_START_MONTH, SEMESTER_START_DAY + (week - 1) * 7);
+    const weekStart: Date = new Date(this.semesterStartMs);
+    weekStart.setDate(weekStart.getDate() + (week - 1) * 7);
     this.monthLabel = this.twoDigit(weekStart.getMonth() + 1) + '月';
     const todayIdx: number = this.todayIndexInWeek(weekStart);
     const cells: ScheduleDateCell[] = [];
@@ -189,14 +252,24 @@ struct SchedulePage {
   }
 
   private clampWeek(week: number): number {
-    return week < 1 ? 1 : (week > MAX_WEEK ? MAX_WEEK : week);
+    return week < 1 ? 1 : (week > this.maxWeek ? this.maxWeek : week);
   }
 
   private shiftWeek(delta: number): void {
     this.applyWeek(this.clampWeek(this.weekNumber + delta));
   }
 
-  // APK 课表按 timetable_djz 过滤：解析 CourseItem.week("1-16周","1,3,5","1-16(单)")
+  // APK GetTimeTableUtil.o()：本地查询 timetable_djz==当前周（scheduleOfTerm 按 djz 周次拆行）；
+  // djz=0（无周次字段的历史/离线数据）时退回 week 字符串解析
+  private courseVisibleInWeek(course: CourseItem): boolean {
+    if (course.djz > 0) {
+      return course.djz === this.weekNumber;
+    }
+    const weeks: number[] = this.weekNumbersOf(course);
+    return weeks.length === 0 || weeks.indexOf(this.weekNumber) >= 0;
+  }
+
+  // APK 课表 week 字符串兜底解析："1-16周"、"1,3,5"、"1-16(单)"
   private weekNumbersOf(course: CourseItem): number[] {
     const out: number[] = [];
     const raw: string = course.week;
@@ -254,11 +327,6 @@ struct SchedulePage {
       return;
     }
     out.push(num);
-  }
-
-  private courseVisibleInWeek(course: CourseItem): boolean {
-    const weeks: number[] = this.weekNumbersOf(course);
-    return weeks.length === 0 || weeks.indexOf(this.weekNumber) >= 0;
   }
 
   private weekCourses(): CourseItem[] {
@@ -323,10 +391,13 @@ struct SchedulePage {
   }
 
   private openDetail(course: CourseItem): void {
+    // WeekCourseFragment.a 回调：putExtra bean/term/xlh；HAP 传 xlh/djz/xqj 三元组
     router.pushUrl({
       url: 'pages/CourseDetailPage',
       params: new DetailParams(course.name, course.week,
-        '第' + course.sectionStart + '-' + course.sectionEnd + '节', course.location)
+        '第' + course.sectionStart + '-' + course.sectionEnd + '节', course.location,
+        course.xlh, course.djz > 0 ? String(course.djz) : String(this.weekNumber),
+        String(course.dayOfWeek))
     });
   }
 
@@ -395,7 +466,7 @@ struct SchedulePage {
 
   private weekNumbers(): number[] {
     const out: number[] = [];
-    for (let i = 1; i <= MAX_WEEK; i++) {
+    for (let i = 1; i <= this.maxWeek; i++) {
       out.push(i);
     }
     return out;

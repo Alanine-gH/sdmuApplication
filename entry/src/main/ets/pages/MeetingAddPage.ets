@@ -31,7 +31,7 @@ struct MeetingAddPage {
   @State compereCount: number = 1;
   @State attendCount: number = 5;
   @State mustAttendCount: number = 2;
-  @State outsidePerson: string = '张三（外校专家）';
+  @State outsidePerson: string = '';
   private notifyOptions: NotifyOption[] = [
     { key: 'no', label: '不通知' },
     { key: 'one', label: '会前一小时提醒' },

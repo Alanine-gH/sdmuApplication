@@ -51,6 +51,13 @@ struct PersonalDetailPage {
   @State mywechat: string = '';
   @State myphone: string = '';
   @State myemail: string = '';
+  /** [W17 profile-series] 源码 T2：queryBindPhoneStatus → PhoneStatus（bindPhone/message/hasPhone），
+   *  供"手机"行进入 InputPhonePage 携参（PersonalDetailNewActivity.b case"手机"） */
+  @State phoneStatusBind: string = '0';
+  private phoneStatusNeedSms: boolean = false;
+  private phoneStatusHasPhone: boolean = false;
+  /** onPageShow 首次跳过（aboutToAppear 已拉过），返回本页时刷新（源码 EventBus code=4 → X2 重拉） */
+  private hasShownOnce: boolean = false;
 
   aboutToAppear(): void {
     // 首屏：登录会话真值直出（不依赖网络）
@@ -62,29 +69,75 @@ struct PersonalDetailPage {
       .then((v: string) => { if (this.fallbackName === '') { this.fallbackName = v; } });
     PreferencesUtil.getString(Constants.KEY_USER_DEPARTMENT, '')
       .then((v: string) => { if (this.fallbackCollege === '') { this.fallbackCollege = v; } });
+    this.fetchUserInfo();
+  }
 
-    // 实时：getUserInfo 接口（源码 c/h/b/a.R 的真实参数）
-    if (LoginSession.userId !== '') {
-      ApiService.getUserInfo(LoginSession.userId)
-        .then((response: ApiResponse<MobileCampusUserInfo>) => {
-          if (response.code === 1000) {
-            // 源码同款行为：会话过期（session_key 约 30-60 分钟失效）→ 引导重新登录
-            this.getUIContext().getPromptAction().showToast({ message: '登录已失效，请重新登录' });
-            router.replaceUrl({ url: 'pages/LoginPage' });
-            return;
-          }
-          if (response.code === 0 && response.data.userName !== '') {
-            this.info = response.data;
-          }
-          this.isLoading = false;
-        })
-        .catch((error: BusinessError) => {
-          ApiService.logError('PersonalDetail getUserInfo fail: ' + error.message);
-          this.isLoading = false;
-        });
-    } else {
+  /** 源码 X2()：POST getUserInfo{targetSchoolId,targetUserId,targetUserType,type}（e 加密） */
+  private fetchUserInfo(): void {
+    if (LoginSession.userId === '') {
       this.isLoading = false;
+      return;
     }
+    ApiService.getUserInfo(LoginSession.userId)
+      .then((response: ApiResponse<MobileCampusUserInfo>) => {
+        if (response.code === 1000) {
+          // 登录失效统一处理已在网络层触发（HttpClient.bizRequest 拦截：清会话+toast+跳登录）
+          return;
+        }
+        if (response.code === 0 && response.data.userName !== '') {
+          this.info = response.data;
+          // 源码 d3()：渲染绑定区同时 T2() 拉取 PhoneStatus
+          this.fetchPhoneStatus();
+        }
+        this.isLoading = false;
+      })
+      .catch((error: BusinessError) => {
+        ApiService.logError('PersonalDetail getUserInfo fail: ' + error.message);
+        this.isLoading = false;
+      });
+  }
+
+  /** [W17 profile-series] 源码 T2()：BindPhoneModel.T0 POST queryBindPhoneStatus
+   *  {code:userId, type:userType} → PhoneStatus{bindPhone, message, hasPhone}；
+   *  f.g：code=="0" 且非空才覆盖 GlobalParamInfo（失败静默）。
+   */
+  private fetchPhoneStatus(): void {
+    ApiService.queryBindPhoneStatus()
+      .then((response: ApiResponse<Object>) => {
+        if (response.code !== 0) {
+          return;
+        }
+        const raw: Object = response.data;
+        if (typeof raw !== 'string') {
+          return;
+        }
+        const rec: Record<string, Object> = JSON.parse(raw as string) as Record<string, Object>;
+        const bind: Object | undefined = rec['bindPhone'];
+        if (typeof bind === 'string') {
+          this.phoneStatusBind = bind as string;
+        }
+        const msg: Object | undefined = rec['message'];
+        if (typeof msg === 'boolean') {
+          this.phoneStatusNeedSms = msg as boolean;
+        }
+        const has: Object | undefined = rec['hasPhone'];
+        if (typeof has === 'boolean') {
+          this.phoneStatusHasPhone = has as boolean;
+        }
+      })
+      .catch((error: BusinessError) => {
+        ApiService.logError('queryBindPhoneStatus fail: ' + error.message);
+      });
+  }
+
+  /** 源码 c2(EventBusBean)：code==4（昵称修改链广播）→ X2() 重拉 getUserInfo；
+   *  HAP 等价 = 从编辑页返回时（onPageShow 非首显）重拉。
+   */
+  onPageShow(): void {
+    if (this.hasShownOnce) {
+      this.fetchUserInfo();
+    }
+    this.hasShownOnce = true;
   }
 
   private identityLabel(): string {
@@ -171,6 +224,9 @@ struct PersonalDetailPage {
         Scroll() {
           Column() {
             // ===== 头部（源码 X2/e3）：红圆首字 + 名字 + 学院 =====
+            // [W17 profile-series] 源码 d（llNicknameLayout onClick）：SystemSwitch.nickName="0"
+            // → toast"暂不支持修改昵称"，否则携带 bundle{nickname} 进入 ChangeNickNameActivity
+            // （ARouter /personal/changeNickName）；HAP 未持久化 SystemSwitch → null 分支 = 可点击
             Row() {
               Stack({ alignContent: Alignment.Center }) {
                 Text(this.displayHeadName().substring(0, 1))
@@ -208,6 +264,12 @@ struct PersonalDetailPage {
             .alignItems(VerticalAlign.Center)
             .backgroundColor($r('app.color.white'))
             .margin({ top: 10 })
+            .onClick(() => {
+              router.pushUrl({
+                url: 'pages/ChangeNickNamePage',
+                params: { 'nickname': this.info.nickname } as Record<string, string>
+              });
+            })
 
             // ===== 基础信息（源码 c3 顺序，空值跳行） =====
             ForEach(this.baseRows(), (row: InfoRow) => {
@@ -290,13 +352,50 @@ struct PersonalDetailPage {
                   .alignItems(VerticalAlign.Center)
                   .backgroundColor($r('app.color.white'))
                   .onClick(() => {
-                    // 源码：手机→绑定手机页(MobileCampusBindPhoneActivity)；QQ/微信/邮箱→对应绑定页
+                    // [W17 profile-series] 源码 b（PersonalDetail2Adapter 回调）逐行还原：
+                    // 手机 → myphone!="1" → toast"暂不支持修改"，否则 h2(e.a.m=InputPhoneActivity)
+                    //   bundle{bindPhoneState, needSmsVertify, hasBindPhone, currentBindPhone, source:"1"}；
+                    // 邮箱 → myemail!="1" → toast"暂不支持修改"，否则 h2(e.a.n=InputEmailActivity, null)；
+                    // QQ/微信 → mySetup 开关非 "1" → toast，否则 g2(e.a.p1=ChangeQqAndWechatActivity)
                     if (row.key === '手机') {
-                      router.pushUrl({ url: 'pages/BindPhonePage' });
+                      if (this.myphone !== '1') {
+                        this.getUIContext().getPromptAction().showToast({ message: '暂不支持修改' });
+                        return;
+                      }
+                      router.pushUrl({
+                        url: 'pages/InputPhonePage',
+                        params: {
+                          'bindPhoneState': this.phoneStatusBind,
+                          'needSmsVertify': this.phoneStatusNeedSms,
+                          'hasBindPhone': this.phoneStatusHasPhone,
+                          'currentBindPhone': this.info.bindMobile,
+                          'source': '1'
+                        } as Record<string, Object>
+                      });
                     } else if (row.key === '邮箱') {
-                      router.pushUrl({ url: 'pages/BindEmailPage' });
-                    } else if (row.key === 'QQ' || row.key === '微信') {
-                      router.pushUrl({ url: 'pages/ChangeQqWechatPage' });
+                      if (this.myemail !== '1') {
+                        this.getUIContext().getPromptAction().showToast({ message: '暂不支持修改' });
+                        return;
+                      }
+                      router.pushUrl({ url: 'pages/InputEmailPage' });
+                    } else if (row.key === 'QQ') {
+                      if (this.myqq !== '1') {
+                        this.getUIContext().getPromptAction().showToast({ message: '暂不支持修改' });
+                        return;
+                      }
+                      router.pushUrl({
+                        url: 'pages/ChangeQqWechatPage',
+                        params: { 'title': row.key, 'content': this.info.bindQq } as Record<string, string>
+                      });
+                    } else if (row.key === '微信') {
+                      if (this.mywechat !== '1') {
+                        this.getUIContext().getPromptAction().showToast({ message: '暂不支持修改' });
+                        return;
+                      }
+                      router.pushUrl({
+                        url: 'pages/ChangeQqWechatPage',
+                        params: { 'title': row.key, 'content': this.info.bindWechat } as Record<string, string>
+                      });
                     }
                   })
                 }

@@ -3,7 +3,8 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
-import { CourseItem, sectionTimeLabel } from '../model/CourseModel';
+import { CourseItem, ScheduleTermParams, SCHEDULE_FALLBACK_START, SCHEDULE_FALLBACK_END,
+  parseYmdMs, apkCurrentWeek, sectionTimeLabel } from '../model/CourseModel';
 
 /**
  * I校园 Tab — 按 APK 实拍（mobile_campus_fragment_icampus 运行态）逐块复刻：
@@ -34,14 +35,29 @@ export struct ICampusTab {
 
   aboutToAppear(): void {
     this.buildWeekDays();
-    ApiService.getScheduleList()
+    // 源码 TimeTableNetPresenter.n()：termInfo.ksrq → 真实当前周，替代常量
+    ApiService.getScheduleTermParams()
+      .then((response: ApiResponse<ScheduleTermParams>) => {
+        const term: ScheduleTermParams = response.data;
+        if (term.hasStart()) {
+          const startMs: number = parseYmdMs(term.ksrq);
+          const endMs: number = parseYmdMs(term.jsrq);
+          if (startMs > 0 && endMs > 0) {
+            const week: number = apkCurrentWeek(startMs, endMs, new Date().getTime());
+            if (week >= 1) {
+              this.weekNo = week;
+            }
+          }
+        }
+        return ApiService.getScheduleList();
+      })
       .then((response: ApiResponse<CourseItem[]>) => {
         if (response.data.length > 0) {
           this.pickNextCourse(response.data);
         }
       })
       .catch((error: BusinessError) => {
-        hilog.info(0x0000, 'ICampus', 'load fail: %{public}s', (error as BusinessError).message);
+        hilog.info(0x0000, 'ICampus', 'load fail: %{public}s', error.message);
       });
   }
 
@@ -58,10 +74,11 @@ export struct ICampusTab {
       days.push(new WeekDay(labels[i], d.getDate(), i + 1 === dayIdx, i >= 5));
     }
     this.weekDays = days;
-    // 学期起始周一 2026-09-07（与 SchedulePage 同源），推算当前周次
-    const termStart: Date = new Date(2026, 8, 7);
-    const diffDays: number = Math.floor((monday.getTime() - termStart.getTime()) / 86400000);
-    this.weekNo = Math.floor(diffDays / 7) + 1;
+    // 学期起始周一（termInfo.ksrq，兜底 2026-08-24，2026-11-17 服务器实测），APK e() 公式推算当前周次
+    const termStartMs: number = parseYmdMs(SCHEDULE_FALLBACK_START);
+    const termEndMs: number = parseYmdMs(SCHEDULE_FALLBACK_END);
+    const week: number = apkCurrentWeek(termStartMs, termEndMs, monday.getTime());
+    this.weekNo = week >= 1 ? week : 1;
   }
 
   /** 从周课表里挑出当前/下一节课 */
@@ -69,9 +86,12 @@ export struct ICampusTab {
     const now: Date = new Date();
     const nowMin: number = now.getHours() * 60 + now.getMinutes();
     const dayIdx: number = now.getDay() === 0 ? 7 : now.getDay();
-    // searchSchedule 返回整周课表，按 dayOfWeek 过滤出今天的课
+    // scheduleOfTerm 按 djz 周次拆行：取本周今日课程（APK timetable_djz==当前周 + xqj==星期几）
     const today: CourseItem[] = courses.filter((c: CourseItem): boolean => {
-      return c.dayOfWeek === dayIdx;
+      if (c.dayOfWeek !== dayIdx) {
+        return false;
+      }
+      return c.djz <= 0 || c.djz === this.weekNo;
     });
     const list: CourseItem[] = today.length > 0 ? today : courses;
     let picked: CourseItem | null = null;

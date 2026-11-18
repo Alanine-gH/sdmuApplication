@@ -101,6 +101,18 @@
           "when": "inuse"
         }
       }
+      // TEMP-DISABLED（ACL 9568289，真机+正式签名时恢复）:
+      // {
+      //   "name": "ohos.permission.WRITE_CONTACTS",
+      //   "reason": "$string:write_contacts_reason",
+      //   "usedScene": {
+      //     "abilities": [
+      //       "EntryAbility"
+      //     ],
+      //     "when": "inuse"
+      //   }
+      // }
     ]
   }
 }
+

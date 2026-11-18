@@ -1,45 +1,29 @@
 import { router } from '@kit.ArkUI';
 
 /**
- * 日程启动页 — 1:1 复刻 mobile_campus_schedule_guide.xml（ScheduleLaunchActivity，action=sdgy_schedule）
- * 结构：LinearLayout gravity=center(竖向) + ImageView(mobile_campus_schedule_shader 720x452)
- * 外部协议入口页：展示日程引导图后跳转日程主页。
- *
- * 数据源：无服务器接口 — 纯引导展示，1.5s 后跳转 ScheduleMainActivity。
+ * 课表模块启动跳转页 — 1:1 复刻 ScheduleLaunchActivity（lyyd/schedule/view，33 行）
+ * [W22 launch-chain] 源码级翻译：J1()=0 无布局透明壳，f1() 唯一动作：
+ *   g2(e.a.u0 = R$string.mobile_campus_schedule_message_schedule = "/schedule/main"
+ *   → ScheduleMainActivity)，随即 finish()。
+ * HAP 等价：replaceUrl pages/ScheduleMainActivity（/schedule/main 既有翻译页）。
+ * 旧占位的"引导图 + 1.5s 延时"为编造（源码 J1()=0 无 mobile_campus_schedule_guide 布局、
+ * 无任何延时）——本次按源码清除。
+ * 入口链：全源码（含 dex2/3 smali）无显式调用方 —— 外部显式 Intent 入口，应用内无导航；
+ * 本页为源码壳页忠实翻译。
  */
 @Entry
 @Component
 struct ScheduleLaunchPage {
-  @State launched: boolean = false;
-
-  private goScheduleMain(): void {
-    if (this.launched) {
-      return;
-    }
-    this.launched = true;
+  aboutToAppear(): void {
+    // 源码 f1()：g2(a.u0, null) + finish()
     router.replaceUrl({ url: 'pages/ScheduleMainActivity' });
   }
 
-  aboutToAppear(): void {
-    setTimeout(() => {
-      this.goScheduleMain();
-    }, 1500);
-  }
-
   build() {
-    Column() {
-      Image($r('app.media.mobile_campus_schedule_shader'))
-        .width(300)
-        .height(188)
-        .objectFit(ImageFit.Contain)
-        .onClick(() => {
-          this.goScheduleMain();
-        })
-    }
-    .width('100%')
-    .height('100%')
-    .justifyContent(FlexAlign.Center)
-    .alignItems(HorizontalAlign.Center)
-    .backgroundColor($r('app.color.main_bg'))
+    // J1()=0：无 setContentView，透明空壳页
+    Stack()
+      .width('100%')
+      .height('100%')
+      .backgroundColor(Color.Transparent)
   }
 }

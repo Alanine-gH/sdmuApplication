@@ -9,22 +9,39 @@ import { TitleBar } from '../components/TitleBar';
 @Entry
 @Component
 struct SuperviseComingPage {
-  @State className: string = '数据结构';
-  @State teacherName: string = '王强';
-  @State teacherNumber: string = '3001126';
-  @State academyName: string = '计算机学院';
-  @State weekText: string = '第12周';
-  @State sectionText: string = '6-7节';
-  @State locationText: string = '理工楼A210';
-  @State listenTime: string = '2026-11-18 14:00';
+  // [W21 supervise] 编造默认值清除：详情数据由 detailsCourse/detailsListen（xlh）提供，属 LectureDetail 批次；
+  // 本页作为路由落点仅保留结构，未实证前不渲染任何编造课程/教师/时间数据
+  @State className: string = '';
+  @State teacherName: string = '';
+  @State teacherNumber: string = '';
+  @State academyName: string = '';
+  @State weekText: string = '';
+  @State sectionText: string = '';
+  @State locationText: string = '';
+  @State listenTime: string = '';
   @State remindOn: boolean = false;
+  /** [W21 supervise] 路由参数 xlh（MineListenFragment.b：bundle{xlh=NotListening.XLH}） */
+  private xlh: string = '';
+
+  aboutToAppear(): void {
+    const params: object | undefined = router.getParams() as object | undefined;
+    if (params !== undefined && params !== null) {
+      const rec: Record<string, Object> = params as Record<string, Object>;
+      const xlhV: Object = rec['xlh'];
+      if (typeof xlhV === 'string') {
+        this.xlh = xlhV as string;
+      }
+    }
+  }
 
   private deleteListen(): void {
     router.back();
   }
 
   private goEvaluate(): void {
-    router.pushUrl({ url: 'pages/SuperviseEvaluatePage' });
+    // 源码 SuperviseLectureOngoingActivity h2(L0, bundle{xlh}, 120)：评课表单必需 xlh
+    router.pushUrl({ url: 'pages/SuperviseEvaluatePage',
+      params: { 'xlh': this.xlh } as Record<string, string> });
   }
 
   build() {

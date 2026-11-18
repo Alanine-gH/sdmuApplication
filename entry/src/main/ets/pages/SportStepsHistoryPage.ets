@@ -1,343 +1,116 @@
+import { router } from '@kit.ArkUI';
 import { TitleBar } from '../components/TitleBar';
 
 /**
- * 历史记录条目模型 — 服务不可达时使用内置示例数据。
+ * 运动步数历史页 — 源码级翻译（SportStepsHistoryActivity.java 逐行 → ArkTS，[W25 misc-b]）：
+ *
+ * 【布局】mobile_campus_activity_app_sport_steps_history.xml：MToolBar("历史记录") + SmartRefreshLayout
+ *   + RecyclerView padV4
+ * 【数据】O2() 源码字面硬编码 7 条 SportStepsHistoryBean(1234步, 5部门排名, 1校排名, 时间戳
+ *   1664245510000 → 1664072710000 差 2 天(172800000ms)，此后逐条 -86400000)——APK 开发期占位数据
+ *   源码字面，非运行时接口（保真复刻，非编造）；L2() 刷新回调空实现
+ * 【行】item_sport_steps_history.xml：BLLinearLayout 圆角8 #F8F8F8 marginH15 marginV6：
+ *   tvTime 16fp black pad20（昨日差 1 天 → "昨日"，否则 e0.c yyyy-MM-dd）+ "查看" 16fp #999999 mr13
+ *   + icon_arrow_right_gray mr24
+ * 【点击】a 类：行点击 → e.a.y0=/app/SportStepsHistoryDetailActivity（HAP SportStepsRankPage 排行榜详情）
  */
-export class SportHistoryItem {
-  date: string;
-  steps: number;
-  schoolRank: number;
-  deptRank: number;
+class SportStepsHistoryRow {
+  step: number;
+  departmentRanking: number;
+  schoolRanking: number;
+  time: number;
 
-  constructor(date: string, steps: number, schoolRank: number, deptRank: number) {
-    this.date = date;
-    this.steps = steps;
-    this.schoolRank = schoolRank;
-    this.deptRank = deptRank;
+  constructor(step: number, departmentRanking: number, schoolRanking: number, time: number) {
+    this.step = step;
+    this.departmentRanking = departmentRanking;
+    this.schoolRanking = schoolRanking;
+    this.time = time;
   }
 }
 
-/** 历史记录示例数据 */
-function buildHistoryItems(): SportHistoryItem[] {
-  const list: SportHistoryItem[] = [
-    new SportHistoryItem('2022-09-25', 12680, 5, 2),
-    new SportHistoryItem('2022-09-24', 9342, 12, 4),
-    new SportHistoryItem('2022-09-23', 8765, 15, 5),
-    new SportHistoryItem('2022-09-22', 15320, 3, 1),
-    new SportHistoryItem('2022-09-21', 300, 3, 1),
-    new SportHistoryItem('2022-09-20', 11208, 8, 3),
-    new SportHistoryItem('2022-09-19', 6980, 22, 8),
-    new SportHistoryItem('2022-09-18', 14012, 4, 2)
-  ];
-  return list;
-}
-
-/** 排行榜条目模型 */
-export class SportDetailRankItem {
-  rank: number;
-  name: string;
-  college: string;
-  steps: number;
-
-  constructor(rank: number, name: string, college: string, steps: number) {
-    this.rank = rank;
-    this.name = name;
-    this.college = college;
-    this.steps = steps;
-  }
-}
-
-/** 某日排行榜示例数据 */
-function buildDetailRanks(): SportDetailRankItem[] {
-  const list: SportDetailRankItem[] = [
-    new SportDetailRankItem(1, '张伟', '体育教学部', 18246),
-    new SportDetailRankItem(2, '李娜', '外国语学院', 16733),
-    new SportDetailRankItem(3, '王强', '计算机学院', 15210),
-    new SportDetailRankItem(4, '刘洋', '机械工程学院', 14305),
-    new SportDetailRankItem(5, '陈静', '经济管理学院', 13672),
-    new SportDetailRankItem(6, '杨帆', '土木工程学院', 12890),
-    new SportDetailRankItem(7, '赵敏', '医学院', 12118),
-    new SportDetailRankItem(8, '孙丽', '文学院', 11436)
-  ];
-  return list;
-}
-
-/**
- * 步数历史页 — 按源布局 1:1 复刻 mobile_campus_activity_app_sport_steps_history.xml：
- *   LinearLayout vertical
- *   - MToolBar（标题“历史记录”）
- *   - SmartRefreshLayout + RecyclerView（paddingTop/Bottom=4vp）：
- *     item_sport_steps_history：白底圆角8vp #F8F8F8 卡片 margin 15/6，
- *     日期 16sp 黑色 padding 20/18、右侧“查看” 16sp explainColor marginRight=13、箭头 marginRight=24
- * 点击条目进入详情视图（SportStepsHistoryDetailActivity → mobile_campus_activity_app_sport_steps_detail.xml）：
- *   back3 头图 124vp + 三列统计（24sp 白色粗体 + 14sp 白色）+ 白底圆角16vp 列表头“2022年09月21日排行榜”
- */
 @Entry
 @Component
 struct SportStepsHistoryPage {
-  @State historyList: SportHistoryItem[] = buildHistoryItems();
-  @State showDetail: boolean = false;
-  @State currentTab: number = 0;
-  @State detailRanks: SportDetailRankItem[] = buildDetailRanks();
-  @State detailDate: string = '';
+  @State list: SportStepsHistoryRow[] = [];
 
-  /**
-   * item_sport_steps_history.xml — 历史记录条目。
-   */
-  @Builder
-  historyItem(item: SportHistoryItem) {
-    Row() {
-      Text(item.date)
-        .fontSize(16)
-        .fontColor($r('app.color.black'))
-        .maxLines(1)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
-        .padding({ left: 20, right: 20, top: 18, bottom: 18 })
-        .layoutWeight(1)
-      Text('查看')
-        .fontSize(16)
-        .fontColor($r('app.color.explain_color'))
-        .margin({ right: 13 })
-      Image($r('app.media.icon_arrow_right_gray'))
-        .width(16)
-        .height(16)
-        .margin({ right: 24 })
-        .objectFit(ImageFit.Contain)
-    }
-    .width('100%')
-    .backgroundColor($r('app.color.sport_history_item_bg'))
-    .borderRadius(8)
-    .alignItems(VerticalAlign.Center)
-    .margin({ left: 15, right: 15, top: 6, bottom: 6 })
-    .onClick(() => {
-      this.detailDate = item.date;
-      this.currentTab = 0;
-      this.showDetail = true;
-    })
+  aboutToAppear(): void {
+    // 源码 O2()：字面硬编码 7 条（1664245510000→1664072710000 差 2 天，此后逐条 -86400000）
+    this.list = [
+      new SportStepsHistoryRow(1234, 5, 1, 1664245510000),
+      new SportStepsHistoryRow(1234, 5, 1, 1664072710000),
+      new SportStepsHistoryRow(1234, 5, 1, 1663986310000),
+      new SportStepsHistoryRow(1234, 5, 1, 1663899910000),
+      new SportStepsHistoryRow(1234, 5, 1, 1663813510000),
+      new SportStepsHistoryRow(1234, 5, 1, 1663727110000),
+      new SportStepsHistoryRow(1234, 5, 1, 1663640710000)
+    ];
   }
 
-  /**
-   * item_child_sport_steps_rankings.xml — 排行榜条目（详情页复用，无点赞列）。
-   */
-  @Builder
-  rankItem(item: SportDetailRankItem) {
-    Column() {
-      Row() {
-        Stack({ alignContent: Alignment.Center }) {
-          if (item.rank <= 3) {
-            Image(item.rank === 1 ? $r('app.media.sport_steps_rankings_gold') :
-              (item.rank === 2 ? $r('app.media.sport_steps_rankings_silver') : $r('app.media.sport_steps_rankings_bronze')))
-              .width(32)
-              .height(32)
-              .objectFit(ImageFit.Contain)
-          } else {
-            Text(item.rank.toString())
-              .fontSize(18)
-              .fontWeight(FontWeight.Bold)
-              .fontColor($r('app.color.sport_rank_number'))
-          }
-        }
-        .width(50)
-        .height('100%')
-
-        Divider()
-          .vertical(true)
-          .color($r('app.color.common_color_5'))
-          .strokeWidth(0.5)
-          .height('100%')
-          .margin({ right: 20 })
-
-        Column() {
-          Text(item.name)
-            .fontSize(16)
-            .fontColor($r('app.color.black'))
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-          Text(item.college)
-            .fontSize(14)
-            .fontColor($r('app.color.explain_color'))
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .margin({ top: 4 })
-        }
-        .alignItems(HorizontalAlign.Start)
-        .layoutWeight(1)
-        .padding({ right: 10 })
-
-        Text(item.steps.toString())
-          .fontSize(18)
-          .fontColor($r('app.color.sport_steps_blue'))
-      }
-      .width('100%')
-      .padding({ left: 15, top: 12, bottom: 12 })
-      .alignItems(VerticalAlign.Center)
-
-      Divider()
-        .color($r('app.color.common_color_5'))
-        .strokeWidth(0.5)
-        .margin({ left: 15, right: 15 })
+  /** 源码 d(long)：时间戳与今天差恰好 1 天 → "昨日" */
+  private timeTextOf(time: number): string {
+    const d = new Date(time);
+    const y: number = d.getFullYear();
+    const m: number = d.getMonth() + 1;
+    const day: number = d.getDate();
+    const today = new Date();
+    const diffDays: number = Math.floor(
+      (new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()
+        - new Date(y, m - 1, day).getTime()) / 86400000);
+    if (diffDays === 1) {
+      return '昨日';
     }
-    .width('100%')
+    const mm: string = m < 10 ? '0' + m : String(m);
+    const dd: string = day < 10 ? '0' + day : String(day);
+    return `${y}-${mm}-${dd}`;
   }
 
-  /**
-   * mobile_campus_activity_app_sport_steps_detail.xml — 历史详情视图。
-   */
-  @Builder
-  detailView() {
-    Column() {
-      TitleBar({ title: '历史记录' })
-      Stack({ alignContent: Alignment.TopStart }) {
-        Column() {
-          // back3 头图 height=124dip=124vp（AppBarLayout 背景 #BDEBED）
-          Image($r('app.media.sport_steps_rankings_back3'))
-            .width('100%')
-            .height(124)
-            .objectFit(ImageFit.Cover)
-          // 白底顶部圆角16vp区域
-          Column() {
-            Row() {
-              Text(this.detailDate.replace('-', '年').replace('-', '月') + '日排行榜')
-                .fontSize(17)
-                .fontWeight(FontWeight.Bold)
-                .fontColor($r('app.color.black'))
-                .layoutWeight(1)
-              Text('*此数据仅供参考')
-                .fontSize(12)
-                .fontColor($r('app.color.explain_color'))
-            }
-            .width('100%')
-            .padding({ left: 15, right: 15 })
-            .margin({ top: 16 })
-
-            // MagicIndicator Tab 45vp paddingBottom=12
-            Row() {
-              Text('全校排名')
-                .fontSize(16)
-                .fontColor(this.currentTab === 0 ? $r('app.color.sport_steps_blue') : $r('app.color.common_color_1'))
-                .fontWeight(this.currentTab === 0 ? FontWeight.Bold : FontWeight.Normal)
-                .layoutWeight(1)
-                .textAlign(TextAlign.Center)
-                .onClick(() => {
-                  this.currentTab = 0;
-                })
-              Text('部门排名')
-                .fontSize(16)
-                .fontColor(this.currentTab === 1 ? $r('app.color.sport_steps_blue') : $r('app.color.common_color_1'))
-                .fontWeight(this.currentTab === 1 ? FontWeight.Bold : FontWeight.Normal)
-                .layoutWeight(1)
-                .textAlign(TextAlign.Center)
-                .onClick(() => {
-                  this.currentTab = 1;
-                })
-            }
-            .width('100%')
-            .height(45)
-            .padding({ bottom: 12 })
-          }
-          .width('100%')
-          .layoutWeight(1)
-          .backgroundColor($r('app.color.white'))
-          .borderRadius({ topLeft: 16, topRight: 16 })
-        }
-        .width('100%')
-        .height('100%')
-
-        // 头图上的三列统计：24sp 白色粗体 + 14sp 白色 marginTop=5
-        Row() {
-          Column() {
-            Text(this.historyList.find((h: SportHistoryItem): boolean => h.date === this.detailDate)?.steps.toString() ?? '0')
-              .fontSize(24)
-              .fontWeight(FontWeight.Bold)
-              .fontColor($r('app.color.white'))
-              .maxLines(1)
-            Text('运动步数')
-              .fontSize(14)
-              .fontColor($r('app.color.white'))
-              .maxLines(1)
-              .margin({ top: 5 })
-          }
-          .justifyContent(FlexAlign.Center)
-          .layoutWeight(1)
-          .height('100%')
-
-          Column() {
-            Text(this.historyList.find((h: SportHistoryItem): boolean => h.date === this.detailDate)?.schoolRank.toString() ?? '0')
-              .fontSize(24)
-              .fontWeight(FontWeight.Bold)
-              .fontColor($r('app.color.white'))
-              .maxLines(1)
-            Text('全校排名')
-              .fontSize(14)
-              .fontColor($r('app.color.white'))
-              .maxLines(1)
-              .margin({ top: 5 })
-          }
-          .justifyContent(FlexAlign.Center)
-          .layoutWeight(1)
-          .height('100%')
-
-          Column() {
-            Text(this.historyList.find((h: SportHistoryItem): boolean => h.date === this.detailDate)?.deptRank.toString() ?? '0')
-              .fontSize(24)
-              .fontWeight(FontWeight.Bold)
-              .fontColor($r('app.color.white'))
-              .maxLines(1)
-            Text('部门排名')
-              .fontSize(14)
-              .fontColor($r('app.color.white'))
-              .maxLines(1)
-              .margin({ top: 5 })
-          }
-          .justifyContent(FlexAlign.Center)
-          .layoutWeight(1)
-          .height('100%')
-        }
-        .width('100%')
-        .height(124)
-      }
-      .width('100%')
-      .layoutWeight(1)
-
-      // ViewPager2 内容
-      List() {
-        ForEach(this.detailRanks, (item: SportDetailRankItem) => {
-          ListItem() {
-            this.rankItem(item)
-          }
-        }, (item: SportDetailRankItem) => item.rank.toString() + '_' + item.name)
-      }
-      .width('100%')
-      .layoutWeight(1)
-      .scrollBar(BarState.Off)
-    }
-    .width('100%')
-    .height('100%')
-    .backgroundColor($r('app.color.sport_steps_header_blue'))
+  /** 源码 a 类：行点击 → /app/SportStepsHistoryDetailActivity */
+  private openDetail(): void {
+    router.pushUrl({ url: 'pages/SportStepsRankPage' });
   }
 
   build() {
     Column() {
-      if (this.showDetail) {
-        this.detailView()
-      } else {
-        TitleBar({ title: '历史记录' })
-        // SmartRefreshLayout + RecyclerView（paddingTop/Bottom=4）
-        List() {
-          ForEach(this.historyList, (item: SportHistoryItem) => {
-            ListItem() {
-              this.historyItem(item)
+      TitleBar({ title: '历史记录', showBack: true })
+
+      List() {
+        ForEach(this.list, (row: SportStepsHistoryRow, idx: number) => {
+          ListItem() {
+            // item_sport_steps_history.xml：圆角8 #F8F8F8 marginH15 marginV6
+            Row() {
+              Text(this.timeTextOf(row.time))
+                .fontSize(16)
+                .fontColor($r('app.color.black'))
+                .padding({ left: 20, right: 20, top: 18, bottom: 18 })
+                .layoutWeight(1)
+                .maxLines(1)
+              Text('查看')
+                .fontSize(16)
+                .fontColor('#999999')
+                .margin({ right: 13 })
+              Image($r('app.media.icon_arrow_right_gray'))
+                .width(16)
+                .height(16)
+                .margin({ right: 24 })
             }
-          }, (item: SportHistoryItem) => item.date)
-        }
-        .width('100%')
-        .layoutWeight(1)
-        .padding({ top: 4, bottom: 4 })
-        .scrollBar(BarState.Off)
+            .width('100%')
+            .borderRadius(8)
+            .backgroundColor('#F8F8F8')
+            .margin({ left: 15, right: 15, top: 6, bottom: 6 })
+            .alignItems(VerticalAlign.Center)
+            .onClick(() => {
+              this.openDetail();
+            })
+          }
+        }, (row: SportStepsHistoryRow, idx: number) => String(row.time) + '_' + idx)
       }
+      .width('100%')
+      .layoutWeight(1)
+      .padding({ top: 4, bottom: 4 })
+      .scrollBar(BarState.Off)
     }
     .width('100%')
     .height('100%')
-    .backgroundColor($r('app.color.main_bg'))
+    .backgroundColor($r('app.color.white'))
   }
 }

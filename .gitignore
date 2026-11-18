@@ -13,4 +13,6 @@
 /.cache/
 /temp/
 /docs/review_**.md
+/docs/agents_index.md
 /docs/EXTERNAL_AI_TASKS.md
+/AI对话/
