@@ -7,11 +7,11 @@
         "material": {
           "certpath": "C:\\Users\\Administrator\\.ohos\\config\\default_sdmuApplication_NLFw7veBde7CAAE-NoTm21BoOAlGw57bsuVn_DAdhS8=.cer",
           "keyAlias": "debugKey",
-          "keyPassword": "0000001B1B5119038A82CAB5C342EFA516B84C5643B0F3C2086F9156E8E19373DD2023D6B0AEC6925643F1",
+          "keyPassword": "0000001BFC85A6164FFE7A200151D0E5C8399CB8EF1654D619117DBC9753A90F63AC7C4D69AA9C9D4EBD77",
           "profile": "C:\\Users\\Administrator\\.ohos\\config\\default_sdmuApplication_NLFw7veBde7CAAE-NoTm21BoOAlGw57bsuVn_DAdhS8=.p7b",
           "signAlg": "SHA256withECDSA",
           "storeFile": "C:\\Users\\Administrator\\.ohos\\config\\default_sdmuApplication_NLFw7veBde7CAAE-NoTm21BoOAlGw57bsuVn_DAdhS8=.p12",
-          "storePassword": "0000001B1EE1BF0C1831B2163E5995097D3647DBA4D73877AC374A42130E28264CA43819F925AF676D0712"
+          "storePassword": "0000001B88A17101D43E86967A3DB32F58D5E52A71778475851BBD82652071D754FFB98EC78608F41C50AA"
         }
       }
     ],

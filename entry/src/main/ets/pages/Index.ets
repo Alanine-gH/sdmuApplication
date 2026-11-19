@@ -574,6 +574,8 @@ struct Index {
   @State isReady: boolean = false;
   @State isLogged: boolean = false;
   @State currentTabIndex: number = 0;
+  /** [tablet-adapt] EntryAbility onWindowStageCreate 注册 windowSizeChange 写入的宽屏断点（≥600vp） */
+  @StorageProp('isWideScreen') isWideScreen: boolean = false;
 
   aboutToAppear(): void {
     // 启动即恢复持久化会话（UC/aesKey/sessionKey），业务请求免重新协商
@@ -643,18 +645,41 @@ struct Index {
         // cbNews 仅教师(userType=2)可见、cbContact 由 isHideContactTab 隐藏、
         // cbYiban 由 mobile_campus_yiban_visibility=false 隐藏、cbDaiBan/cbXueGong 未启用。
         Tabs({ barPosition: BarPosition.End }) {
+          // [tablet-adapt] 宽屏内容区限宽 560vp 居中；窄屏 maxWidth='100%' 与改动前渲染一致。
+          // 根容器/Tabs 仍全宽、背景延续 main_bg，仅内容 Column 限宽（左右留白与背景同色）。
           TabContent() {
-            ReportTab()
+            Row() {
+              ReportTab()
+                .width('100%')
+                .constraintSize({ maxWidth: this.isWideScreen ? 560 : '100%' })
+            }
+            .width('100%')
+            .height('100%')
+            .justifyContent(FlexAlign.Center)
           }
           .tabBar(this.bottomTab($r('app.media.mobile_campus_home'), $r('app.media.mobile_campus_home_select'),
             '首页', 0))
           TabContent() {
-            AppsTab()
+            Row() {
+              AppsTab()
+                .width('100%')
+                .constraintSize({ maxWidth: this.isWideScreen ? 560 : '100%' })
+            }
+            .width('100%')
+            .height('100%')
+            .justifyContent(FlexAlign.Center)
           }
           .tabBar(this.bottomTab($r('app.media.mobile_campus_work'), $r('app.media.mobile_campus_work_select'),
             '应用', 1))
           TabContent() {
-            MineTab()
+            Row() {
+              MineTab()
+                .width('100%')
+                .constraintSize({ maxWidth: this.isWideScreen ? 560 : '100%' })
+            }
+            .width('100%')
+            .height('100%')
+            .justifyContent(FlexAlign.Center)
           }
           .tabBar(this.bottomTab($r('app.media.mobile_campus_my'), $r('app.media.mobile_campus_my_select'),
             '我的', 2))

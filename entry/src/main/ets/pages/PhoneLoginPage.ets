@@ -294,7 +294,9 @@ struct PhoneLoginPage {
           Blank()
         }
         .width('100%')
-        .height('100%')
+        // 修复：表单区用 layoutWeight 占据剩余空间，底部 radio 同意行才能显示
+        // （原 height('100%') 撑满根 Column，把协议勾选行挤出屏幕外，导致"请先同意"toast 无解）
+        .layoutWeight(1)
       } else {
         // ===== 阶段2：输入验证码（InputIdentifyCodeActivity + VerifyCodeView 复刻） =====
         Column() {
@@ -381,8 +383,9 @@ struct PhoneLoginPage {
           Blank()
         }
         .width('100%')
-        .height('100%')
         .alignItems(HorizontalAlign.Center)
+        // 修复同阶段1：layoutWeight 让底部协议行可见
+        .layoutWeight(1)
       }
 
       // ===== 底部圆形 radio 同意行（LoginPage 同款） =====

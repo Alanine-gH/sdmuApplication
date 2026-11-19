@@ -30,6 +30,8 @@ export struct TitleBar {
   @Prop rightEnabled: boolean = true;
   /** [W20 social] 右侧文字自定义色（PostDetailActivity.T1 "更多" ybg_blue；null 保持黑色） */
   rightTextColor: string | null = null;
+  /** [tablet-adapt] EntryAbility 写入的宽屏断点（≥600vp）：标题栏内容区同步限宽 560vp 居中 */
+  @StorageProp('isWideScreen') isWideScreen: boolean = false;
 
   build() {
     Column() {
@@ -112,11 +114,16 @@ export struct TitleBar {
       .height(44)
       .alignItems(VerticalAlign.Center)
       .backgroundColor($r('app.color.main_bg'))
+      // [tablet-adapt] 宽屏标题栏内容限宽 560vp 居中（窄屏 100% 与改动前一致）
+      .constraintSize({ maxWidth: this.isWideScreen ? 560 : '100%' })
+      .alignSelf(ItemAlign.Center)
 
       Divider()
         .color($r('app.color.common_color_5'))
         .strokeWidth(0.5)
         .width('100%')
+        .constraintSize({ maxWidth: this.isWideScreen ? 560 : '100%' })
+        .alignSelf(ItemAlign.Center)
     }
     .width('100%')
     .height(45)

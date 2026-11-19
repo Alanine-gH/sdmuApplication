@@ -44,7 +44,9 @@ struct LightAppPage {
   @State loadProgress: number = 0;
   @State pageTitle: string = '';
   @State targetUrl: string = '';
-  @State loadFailed: boolean = false;
+  // [R57] 用字符串视图状态替代布尔：避免 Web 销毁/重建回调与 loadFailed 布尔的竞态导致错误态不显示
+  @State viewState: string = 'web';
+  private loadFailed: boolean = false;
   private yyid: string = '';
   private headers: HttpHeader[] = [];
   private webAttached: boolean = false;
@@ -160,6 +162,15 @@ struct LightAppPage {
     // 原 7 字段异步 AT 直载实现已被上方 APK 分支矩阵替代（注释溯源）
   }
 
+  /** [R59] 错误态文案：一卡通系列目标服务器仅校园内网可达，明确提示避免误判为 APP 故障 */
+  private errorTip(): string {
+    const cardYYIDs: string[] = ['ewm', 'yktsy', 'common_ybg_onecard', 'schoolCard', 'gsjg'];
+    if (cardYYIDs.indexOf(this.yyid.toLowerCase()) >= 0) {
+      return '一卡通服务需在校园网内使用\n请连接校园网后重试';
+    }
+    return '网络异常，请检查网络后重试';
+  }
+
   /** [W1 light-url] 免登头组（Light I2() L745-752 / X5 L1573-1582：AT + Unique-Code + AppType） */
   private buildAuthHeaders(uc: string): HttpHeader[] {
     const list: HttpHeader[] = [
@@ -216,6 +227,35 @@ struct LightAppPage {
             .width('100%')
             .layoutWeight(1)
             .justifyContent(FlexAlign.Center)
+          } else if (this.viewState === 'error') {
+            // [R57] 主帧加载失败（如 ERR_TIMED_OUT / 目标站点不可达）：明确错误态 + 重试，
+            // 避免 WebView 无限转圈白屏。APK 无对应错误态（X5 内核自带），HAP 补体验兜底。
+            Column() {
+              Image($r('app.media.mobile_campus_page_error'))
+                .width(120)
+                .objectFit(ImageFit.Contain)
+              Text(this.errorTip())
+                .fontSize(14)
+                .fontColor($r('app.color.sdmu_text_hint'))
+                .textAlign(TextAlign.Center)
+                .margin({ top: 12 })
+              Text('重试')
+                .fontSize(15)
+                .fontColor($r('app.color.white'))
+                .textAlign(TextAlign.Center)
+                .padding({ left: 17, right: 17, top: 3, bottom: 3 })
+                .backgroundColor($r('app.color.blue_default'))
+                .margin({ top: 16 })
+                .onClick(() => {
+                  this.loadFailed = false;
+                  this.loadProgress = 0;
+                  // viewState 切回 'web' 会重建 Web，onControllerAttached 自动 loadUrl（loadFailed 已复位）
+                  this.viewState = 'web';
+                })
+            }
+            .width('100%')
+            .layoutWeight(1)
+            .justifyContent(FlexAlign.Center)
           } else {
             // [W1 light-url] src 置空防裸请求：统一在 onControllerAttached 带免登头加载（springboard 302 链依赖 AT 头）
             // [W6 light-diag] domStorageAccess 开启：taskcenter-v4 等 Vue SPA 依赖 localStorage/sessionStorage，
@@ -228,8 +268,11 @@ struct LightAppPage {
               .onControllerAttached(() => {
                 this.webAttached = true;
                 // 源码 loadUrl(url, map)：认证头注入
-                this.diag('controllerAttached, loadUrl=' + this.targetUrl);
-                this.webController.loadUrl(this.targetUrl, this.headers);
+                // [R57] loadFailed=true 时由重试按钮手动 loadUrl，此处不重复加载
+                if (!this.loadFailed) {
+                  this.diag('controllerAttached, loadUrl=' + this.targetUrl);
+                  this.webController.loadUrl(this.targetUrl, this.headers);
+                }
               })
               .onLoadIntercept((event: OnLoadInterceptEvent) => {
                 // [W6 light-diag] 请求链全量打印（主帧+子资源）：对照 Python probe_lighturl5 逐跳核对
@@ -255,7 +298,10 @@ struct LightAppPage {
                 // [W6 light-diag] 资源加载错误（含主帧）：定位混合内容/协议降级/DNS
                 this.diag('errorReceive url=' + event.request.getRequestUrl() +
                   ' code=' + event.error.getErrorCode() + ' info=' + event.error.getErrorInfo());
+                // [R57] 失败即切错误态：302 跳转后的 request isMainFrame() 可能 false，
+                // 不能用它判断（实测 ERR_TIMED_OUT 白屏卡死）；子资源误判可接受，优先消灭无限白屏。
                 this.loadFailed = true;
+                this.viewState = 'error';
               })
               .onHttpErrorReceive((event: OnHttpErrorReceiveEvent) => {
                 // [W6 light-diag] HTTP >=400 响应（302 不触发）：CAS/myhall 拒绝时可在此看到
@@ -273,12 +319,9 @@ struct LightAppPage {
         .height('100%')
         .alignItems(HorizontalAlign.Start)
 
-        Image($r('app.media.icon_text_size_switch'))
-          .width(50)
-          .height(50)
-          .objectFit(ImageFit.Contain)
-          .margin({ right: 20, bottom: 20 })
-          .alignSelf(ItemAlign.End)
+        // [R60] 字号切换按钮（Aa）已移除：APK X5LightActivity L2157-2160 实证该按钮仅
+        //   schoolId=="XNZY"（另一所定制学校）时 setVisibility(0)，SDMU 下 XML 默认不可见——
+        //   山东管理学院 APK 里此按钮不存在，HAP 无条件渲染属翻译错误，删除对齐源码。
       }
       .width('100%')
       .layoutWeight(1)
