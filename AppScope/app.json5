@@ -2,8 +2,8 @@
   "app": {
     "bundleName": "com.sdmu.sdmuapplication",
     "vendor": "example",
-    "versionCode": 68,
-    "versionName": "3.2.0",
+    "versionCode": 69,
+    "versionName": "3.3.0",
     "buildVersion": "1",
     "icon": "$media:app_icon",
     "label": "$string:app_name"

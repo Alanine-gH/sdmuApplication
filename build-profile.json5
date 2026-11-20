@@ -5,13 +5,13 @@
         "name": "default",
         "type": "HarmonyOS",
         "material": {
-          "storeFile": "D:/projects/sdmuApplication/发布/3.2sc.p12",
-          "storePassword": "0000003087DE71D71ECFE112ED7DB63E5714B7BB4B6C796F1B06BF4F3F57DBA1C41F26AEFA6EEDF5FBD2F080A0A68E8E1F114E4ECBE08D3C88B72100C543E624",
-          "keyAlias": "3.2sc",
-          "keyPassword": "0000003038AD6585281EF06B807C37F0EECDD80F8CE5504BF36A98680226A0136EED8568C89B60D38815DC3E2C1F6EAB35EB168312790D98EE3F9BC55008DC42",
+          "certpath": "C:/Users/Administrator/.ohos/config/default_sdmuApplication_NLFw7veBde7CAAE-NoTm21BoOAlGw57bsuVn_DAdhS8=.cer",
+          "keyAlias": "debugKey",
+          "keyPassword": "0000001AB0B61B2878029D1DFE4DC74813A284C98DD55E99DCC34CA65D39F89984FB1C28CE46BFDBE1C7",
+          "profile": "C:/Users/Administrator/.ohos/config/default_sdmuApplication_NLFw7veBde7CAAE-NoTm21BoOAlGw57bsuVn_DAdhS8=.p7b",
           "signAlg": "SHA256withECDSA",
-          "profile": "D:/projects/sdmuApplication/发布/3.2scRelease.p7b",
-          "certpath": "D:/projects/sdmuApplication/发布/3.2sc.cer"
+          "storeFile": "C:/Users/Administrator/.ohos/config/default_sdmuApplication_NLFw7veBde7CAAE-NoTm21BoOAlGw57bsuVn_DAdhS8=.p12",
+          "storePassword": "0000001A7CBA4666B3192CC33DADA00FD92CABB4DC64F33B7E65FF6E4D2D5622908DFE1EA6DCA8BD257F"
         }
       }
     ],
