@@ -46,10 +46,14 @@ struct LightAppPage {
   @State targetUrl: string = '';
   // [R57] 用字符串视图状态替代布尔：避免 Web 销毁/重建回调与 loadFailed 布尔的竞态导致错误态不显示
   @State viewState: string = 'web';
+  // [R61] 主帧错误码（-7=超时等），错误页按码细分提示
+  @State lastErrorCode: number = 0;
   private loadFailed: boolean = false;
   private yyid: string = '';
   private headers: HttpHeader[] = [];
   private webAttached: boolean = false;
+  // [R61b] setHttpDns 为全局静态接口，只需调用一次；用标记防止每个轻应用页重复调用
+  private httpDnsSet: boolean = false;
   // [W1 light-url] WebView 免登加密 AT（4字段版）+ 路由 LX（决定 APK 加载分支）
   private webAccessToken: string = '';
   private lx: string = '';
@@ -71,6 +75,9 @@ struct LightAppPage {
     } catch {
       this.diag('setWebDebuggingAccess failed (non-fatal)');
     }
+    // [R61b 崩溃修复] setHttpDns 严禁在首个 Web 创建前调用——引擎 NetworkService 未就绪时
+    // GetNetworkService() 返回 NULL 直接 SIGSEGV（真机 Mate 60 Pro 崩溃实证）。
+    // 已挪至 onControllerAttached（Web 创建后）时机，见下方回调。
     // 路由参数：url（服务端 app/list 下发地址）+ yyid（AppBean.YYID）+ lx（AppBean.LX，APK 分支依据）+ title
     // [W26 partial-finish] 扫码分流追加：h5（AppBean.h5 extra）/ loadOnly（isLoadOnly extra）
     const params = router.getParams() as Record<string, string> | undefined;
@@ -162,11 +169,18 @@ struct LightAppPage {
     // 原 7 字段异步 AT 直载实现已被上方 APK 分支矩阵替代（注释溯源）
   }
 
-  /** [R59] 错误态文案：一卡通系列目标服务器仅校园内网可达，明确提示避免误判为 APP 故障 */
+  /** [R59/R61] 错误态文案：一卡通系列按错误码细分；-7 超时提示 IPv6/DNS 优化已启用 */
   private errorTip(): string {
     const cardYYIDs: string[] = ['ewm', 'yktsy', 'common_ybg_onecard', 'schoolCard', 'gsjg'];
-    if (cardYYIDs.indexOf(this.yyid.toLowerCase()) >= 0) {
+    const isCard: boolean = cardYYIDs.indexOf(this.yyid.toLowerCase()) >= 0;
+    if (isCard) {
+      if (this.lastErrorCode === -7) {
+        return '一卡通服务连接超时\n已启用公共DNS优化解析\n请点击重试，或在 Wi-Fi 与移动网络间切换';
+      }
       return '一卡通服务需在校园网内使用\n请连接校园网后重试';
+    }
+    if (this.lastErrorCode === -7) {
+      return '连接超时，请检查网络后重试';
     }
     return '网络异常，请检查网络后重试';
   }
@@ -267,6 +281,20 @@ struct LightAppPage {
               .databaseAccess(true)
               .onControllerAttached(() => {
                 this.webAttached = true;
+                // [R61 IPv6优化→R61b 挪时机] DoH 解析（AUTO：DoH 优先，失败回退系统 DNS）。
+                //   setHttpDns 依赖引擎 NetworkService，首个 Web 创建前调用会 NULL 解引用 SIGSEGV
+                //   （真机 Mate 60 Pro 崩溃实证：CefApplyHttpDns→GetNetworkService()+188）；
+                //   onControllerAttached 时 Web 已创建、引擎已初始化，为官方文档要求的正确时机。
+                //   全局静态接口，一次调用全进程生效，httpDnsSet 防重复。
+                if (!this.httpDnsSet) {
+                  try {
+                    webview.WebviewController.setHttpDns(webview.SecureDnsMode.AUTO, 'https://dns.alidns.com/dns-query');
+                    this.httpDnsSet = true;
+                    this.diag('setHttpDns applied (AUTO, alidns)');
+                  } catch {
+                    this.diag('setHttpDns failed (non-fatal)');
+                  }
+                }
                 // 源码 loadUrl(url, map)：认证头注入
                 // [R57] loadFailed=true 时由重试按钮手动 loadUrl，此处不重复加载
                 if (!this.loadFailed) {
@@ -301,7 +329,31 @@ struct LightAppPage {
                 // [R57] 失败即切错误态：302 跳转后的 request isMainFrame() 可能 false，
                 // 不能用它判断（实测 ERR_TIMED_OUT 白屏卡死）；子资源误判可接受，优先消灭无限白屏。
                 this.loadFailed = true;
+                this.lastErrorCode = event.error.getErrorCode();
                 this.viewState = 'error';
+              })
+              .onSslErrorEventReceive((event: OnSslErrorEventReceiveEvent) => {
+                // [R61 IPv6优化] 校园网第三方服务网关（zf.cwc 等）波动期可能返回异常证书：
+                // 仅对学校域名白名单（*.sdmu.edu.cn）忽略 SSL 错误继续加载，其余域默认拒绝（安全限定）
+                const hostOf = (u: string): string => {
+                  const p = u.indexOf('://');
+                  if (p < 0) {
+                    return '';
+                  }
+                  const rest = u.substring(p + 3);
+                  const slash = rest.indexOf('/');
+                  const hp = slash < 0 ? rest : rest.substring(0, slash);
+                  const colon = hp.indexOf(':');
+                  return colon < 0 ? hp : hp.substring(0, colon);
+                };
+                const mainHost: string = hostOf(this.targetUrl);
+                const allowed: boolean = mainHost === 'sdmu.edu.cn' || mainHost.endsWith('.sdmu.edu.cn');
+                this.diag('sslError code=' + event.error + ' host=' + mainHost + ' allowed=' + allowed);
+                if (allowed) {
+                  event.handler.handleConfirm();
+                } else {
+                  event.handler.handleCancel();
+                }
               })
               .onHttpErrorReceive((event: OnHttpErrorReceiveEvent) => {
                 // [W6 light-diag] HTTP >=400 响应（302 不触发）：CAS/myhall 拒绝时可在此看到
