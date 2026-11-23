@@ -152,8 +152,10 @@ export struct WMHTab {
         .fontColor($r('app.color.common_color_3'))
         .margin({ top: 4 })
     }
-    .layoutWeight(1)
-    .padding({ top: 24, bottom: 20 })
+    .width('100%')
+    .height(128)
+    .justifyContent(FlexAlign.Center)
+    .padding({ top: 16, bottom: 16 })
     .backgroundColor($r('app.color.white'))
     .borderRadius(this.currentBreakpoint === 'sm' ? 0 : 12)
     .visualEffect(ImmersiveLightHelper.cardGlow())
@@ -175,34 +177,40 @@ export struct WMHTab {
           // 3. 宫格入口：窄屏维持 2 列原布局，宽屏/平板/折叠屏扩展为 4 列卡片 + 课表速览卡
           if (this.currentBreakpoint === 'sm') {
             Row() {
-              this.gridCell($r('app.color.wmh_grid_scan_pink'), $r('sys.symbol.qrcode'),
-                '扫一扫', '扫码', 'pages/QrCodeScanPage')
+              Column() {
+                this.gridCell($r('app.color.wmh_grid_scan_pink'), $r('sys.symbol.qrcode'),
+                  '扫一扫', '扫码', 'pages/QrCodeScanPage')
+              }
+              .layoutWeight(1)
               Divider()
                 .vertical(true)
                 .strokeWidth(1)
                 .height(120)
                 .color($r('app.color.common_color_6'))
-              this.gridCell($r('app.color.blue_default'), $r('sys.symbol.doc_text'),
-                '发票助手', '轻松开发票', 'pages/ReceiptAssistPage')
+              Column() {
+                this.gridCell($r('app.color.blue_default'), $r('sys.symbol.doc_text'),
+                  '发票助手', '轻松开发票', 'pages/ReceiptAssistPage')
+              }
+              .layoutWeight(1)
             }
             .width('100%')
             .alignItems(VerticalAlign.Center)
             .backgroundColor($r('app.color.white'))
           } else {
             GridRow({ columns: 4, gutter: { x: 12, y: 12 } }) {
-              GridCol() {
+              GridCol({ span: 1 }) {
                 this.gridCell($r('app.color.wmh_grid_scan_pink'), $r('sys.symbol.qrcode'),
                   '扫一扫', '扫码', 'pages/QrCodeScanPage')
               }
-              GridCol() {
+              GridCol({ span: 1 }) {
                 this.gridCell($r('app.color.blue_default'), $r('sys.symbol.doc_text'),
                   '发票助手', '轻松开发票', 'pages/ReceiptAssistPage')
               }
-              GridCol() {
+              GridCol({ span: 1 }) {
                 this.gridCell($r('app.color.sdmu_primary'), $r('sys.symbol.calendar'),
                   '课程表', '学期课表', 'pages/SchedulePage')
               }
-              GridCol() {
+              GridCol({ span: 1 }) {
                 this.gridCell($r('app.color.common_color_12'), $r('sys.symbol.person_2'),
                   '通讯录', '校内联系', 'pages/ContactPage')
               }

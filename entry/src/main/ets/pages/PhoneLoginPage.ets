@@ -109,7 +109,7 @@ struct PhoneLoginPage {
       // APK GetKeyUtil 同款：加密请求前确保协商 key 就绪（UC/aesKey 复用或新协商）
       const negotiated: boolean = await LoginSession.ensureNegotiated();
       if (!negotiated) {
-        this.toast('无法连接学校认证服务器，请在校园网环境下使用或确认网络后重试');
+        this.toast('无法连接学校服务器，请稍后重试或检查网络');
         this.sending = false;
         return;
       }
@@ -117,7 +117,7 @@ struct PhoneLoginPage {
       const check: ApiResponse<CheckLoginPhoneResult> = await ApiService.checkLoginPhone(this.phoneNum);
       if (check.code !== 0) {
         const msg: string = check.message.indexOf('网络请求失败') >= 0
-          ? '无法连接学校认证服务器，请在校园网环境下使用或确认网络后重试'
+          ? '无法连接学校服务器，请稍后重试或检查网络'
           : (check.message === '' ? '请求失败，请稍后重试' : check.message);
         this.toast(msg);
         this.sending = false;
