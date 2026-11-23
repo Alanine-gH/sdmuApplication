@@ -1,0 +1,41 @@
+{
+  "forms": [
+    {
+      "name": "schedule_widget",
+      "displayName": "$string:app_name",
+      "description": "今日课表服务卡片",
+      "src": "./ets/widget/pages/ScheduleWidgetCard.ets",
+      "uiSyntax": "arkts",
+      "window": {
+        "designWidth": 720,
+        "autoDesignWidth": true
+      },
+      "isDefault": true,
+      "updateEnabled": true,
+      "scheduledUpdateTime": "07:00",
+      "updateDuration": 1,
+      "defaultDimension": "2*2",
+      "supportDimensions": [
+        "2*2",
+        "2*4"
+      ]
+    },
+    {
+      "name": "quick_entry_widget",
+      "displayName": "$string:app_name",
+      "description": "一卡通与待办快捷入口卡片",
+      "src": "./ets/widget/pages/QuickEntryWidgetCard.ets",
+      "uiSyntax": "arkts",
+      "window": {
+        "designWidth": 720,
+        "autoDesignWidth": true
+      },
+      "isDefault": false,
+      "updateEnabled": false,
+      "defaultDimension": "2*2",
+      "supportDimensions": [
+        "2*2"
+      ]
+    }
+  ]
+}
