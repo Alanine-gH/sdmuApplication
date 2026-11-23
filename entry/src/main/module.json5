@@ -100,16 +100,6 @@
           ],
           "when": "inuse"
         }
-      },
-      {
-        "name": "ohos.permission.WRITE_CONTACTS",
-        "reason": "$string:write_contacts_reason",
-        "usedScene": {
-          "abilities": [
-            "EntryAbility"
-          ],
-          "when": "inuse"
-        }
       }
     ]
   }

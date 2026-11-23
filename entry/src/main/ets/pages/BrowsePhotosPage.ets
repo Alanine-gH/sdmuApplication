@@ -209,6 +209,30 @@ struct BrowsePhotosPage {
 
           Blank()
 
+          if (this.extraOperation !== 'delete' && this.photos.length > 0) {
+            Row() {
+              SaveButton({
+                icon: SaveIconStyle.FULL_FILLED,
+                text: SaveDescription.SAVE,
+                buttonType: ButtonType.Capsule
+              })
+                .height(28)
+                .fontSize(12)
+                .fontColor($r('app.color.white'))
+                .iconColor($r('app.color.white'))
+                .backgroundColor('#4D000000')
+                .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
+                  if (result === SaveButtonOnClickResult.SUCCESS &&
+                    this.currentIndex >= 0 && this.currentIndex < this.photos.length) {
+                    this.saveToGallery(this.photos[this.currentIndex].url);
+                  } else {
+                    promptAction.showToast({ message: '未获得保存授权' });
+                  }
+                })
+            }
+            .margin({ right: 8 })
+          }
+
           if (this.opRes() !== null) {
             Image(this.opRes() as Resource)
               .objectFit(ImageFit.Contain)

@@ -259,7 +259,7 @@ struct ContactPersonalDetailPage {
     }
   }
 
-  /** 源码 h 类 tvAddToLocal：BGDH+SJDH+SJHM(覆写后) 非空 → WRITE_CONTACTS 权限 → ContactsKit 写入 */
+  /** 源码 h 类 tvAddToLocal：BGDH+SJDH+SJHM(覆写后) 非空 → 免受限权限拉起系统通讯录保存页 */
   private saveToLocal(): void {
     const list: string[] = [];
     if (this.info.userInfo.BGDH !== '') {
@@ -276,38 +276,29 @@ struct ContactPersonalDetailPage {
       return;
     }
     const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
-    abilityAccessCtrl.createAtManager()
-      .requestPermissionsFromUser(ctx, ['ohos.permission.WRITE_CONTACTS'])
-      .then((result) => {
-        let granted: boolean = false;
-        for (const r of result.authResults) {
-          if (r === 0) {
-            granted = true;
-          }
+    const phones: contact.PhoneNumber[] = [];
+    for (const p of list) {
+      const phone: contact.PhoneNumber = new contact.PhoneNumber();
+      phone.phoneNumber = p;
+      phones.push(phone);
+    }
+    const c: contact.Contact = new contact.Contact();
+    c.name = { fullName: this.info.name } as contact.Name;
+    c.phoneNumbers = phones;
+    if (this.info.userInfo.DZYJ !== '') {
+      const emailObj: contact.Email = new contact.Email();
+      emailObj.email = this.info.userInfo.DZYJ.replace('/', ',').split(',')[0].trim();
+      c.emails = [emailObj];
+    }
+    contact.addContactViaUI(ctx, c)
+      .then((contactId: number) => {
+        if (contactId >= 0) {
+          this.getUIContext().getPromptAction().showToast({ message: '已保存到本地通讯录' });
         }
-        if (!granted) {
-          return;
-        }
-        const phones: contact.PhoneNumber[] = [];
-        for (const p of list) {
-          const phone: contact.PhoneNumber = new contact.PhoneNumber();
-          phone.phoneNumber = p;
-          phones.push(phone);
-        }
-        const c: contact.Contact = new contact.Contact();
-        // [W23 协作解堵] 本 SDK contact.Name 必填 fullName（displayName 可选）——姓名入 fullName
-        c.name = { fullName: this.info.name } as contact.Name;
-        c.phoneNumbers = phones;
-        contact.addContact(ctx, c)
-          .then(() => {
-            this.getUIContext().getPromptAction().showToast({ message: '已保存到本地通讯录' });
-          })
-          .catch(() => {
-            ApiService.logError('ContactPersonalDetailPage addContact fail');
-          });
       })
       .catch(() => {
-        ApiService.logError('ContactPersonalDetailPage request perm fail');
+        ApiService.logError('ContactPersonalDetailPage addContactViaUI fail');
+        this.getUIContext().getPromptAction().showToast({ message: '保存联系人失败' });
       });
   }
 
