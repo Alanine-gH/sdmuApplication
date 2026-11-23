@@ -2,6 +2,7 @@ import { HttpClient } from '../network/HttpClient';
 import { ApiResponse } from '../model/ResponseModel';
 import { Constants } from '../data/Constants';
 import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 常用功能设置页 — 源码级复刻 AppsSettingActivity（view 包，ARouter /app/editCommonApp，
@@ -179,6 +180,7 @@ struct AppsSettingPage {
     }
     .width('100%')
     .backgroundColor('#f9f9f9')
+    .hoverEffect(HoverEffect.Highlight)
     .onClick(() => {
       this.toggleApp(app);
     })
@@ -235,12 +237,20 @@ struct AppsSettingPage {
                     }
                   }, (app: SettingAppBean) => 'st_' + app.yyid + '_' + app.yymc)
                 }
-                .columnsTemplate('1fr 1fr 1fr 1fr')
+                .columnsTemplate(AdaptiveLayoutHelper.buildColumnsTemplate(
+                  BreakpointSystem.getGridColumns(this.currentBreakpoint, 4)
+                ))
                 .rowsGap(12)
                 .columnsGap(4)
                 .width('100%')
                 .padding({ left: 12, right: 12, bottom: 12 })
-                .height(Math.ceil(group.apps.length / 4) * 72)
+                .height(AdaptiveLayoutHelper.computeGridHeightVp(
+                  group.apps.length,
+                  BreakpointSystem.getGridColumns(this.currentBreakpoint, 4),
+                  60,
+                  12,
+                  12
+                ))
                 .backgroundColor($r('app.color.ybg_white'))
               }
             }

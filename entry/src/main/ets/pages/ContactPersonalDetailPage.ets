@@ -70,6 +70,7 @@ struct ContactPersonalDetailPage {
   @StorageProp('windowWidthVp') windowWidthVp: number = 360;
   @StorageProp('windowHeightVp') windowHeightVp: number = 780;
   @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
   private gh: string = '';
   private contactSearchType: string = '';
   /** 源码 l 类 setResult(-1) 等价：拨号/常用变化刷新标记，上游 onPageShow 消费 */
@@ -619,8 +620,7 @@ struct ContactPersonalDetailPage {
     .height('100%')
     .bindSheet(this.showMore, this.moreSheetBuilder(), {
       height: 380,
-      preferType: AdaptiveLayoutHelper.shouldUseCenterSheet(this.currentBreakpoint)
-        ? SheetType.CENTER : SheetType.BOTTOM,
+      preferType: AdaptiveLayoutHelper.getSheetPreferType(this.currentBreakpoint, this.isCompactHeight),
       showClose: false,
       backgroundColor: '#F2F2F2',
       onDisappear: () => {
@@ -880,35 +880,24 @@ struct ContactPersonalDetailPage {
   /** ContactMoreDialog 底部弹窗（bindSheet 等价 ExpressionPopupAnim） */
   @Builder
   moreSheetBuilder() {
-    Column() {
-      if (this.addToNetVisible()) {
-        Text(this.addToNetText())
-          .fontSize(18)
-          .fontColor('#3A92ED')
-          .width('100%')
-          .height(56)
-          .textAlign(TextAlign.Center)
-          .backgroundColor($r('app.color.white'))
-          .onClick(() => {
-            this.showMore = false;
-            this.onAddToNetTap();
-          })
-      }
-      // tvAddToLocal：收集三号 → 系统通讯录写入
-      Text('保存到通讯录')
-        .fontSize(18)
-        .fontColor('#3A92ED')
-        .width('100%')
-        .height(56)
-        .margin({ top: 1 })
-        .textAlign(TextAlign.Center)
-        .backgroundColor($r('app.color.white'))
-        .onClick(() => {
-          this.showMore = false;
-          this.saveToLocal();
-        })
-      if (this.moreRoleType !== '0') {
-        Text(this.permissionsText())
+    Scroll() {
+      Column() {
+        if (this.addToNetVisible()) {
+          Text(this.addToNetText())
+            .fontSize(18)
+            .fontColor('#3A92ED')
+            .width('100%')
+            .height(56)
+            .textAlign(TextAlign.Center)
+            .backgroundColor($r('app.color.white'))
+            .hoverEffect(HoverEffect.Highlight)
+            .onClick(() => {
+              this.showMore = false;
+              this.onAddToNetTap();
+            })
+        }
+        // tvAddToLocal：收集三号 → 系统通讯录写入
+        Text('保存到通讯录')
           .fontSize(18)
           .fontColor('#3A92ED')
           .width('100%')
@@ -916,37 +905,57 @@ struct ContactPersonalDetailPage {
           .margin({ top: 1 })
           .textAlign(TextAlign.Center)
           .backgroundColor($r('app.color.white'))
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             this.showMore = false;
-            this.onPermissionsTap();
+            this.saveToLocal();
+          })
+        if (this.moreRoleType !== '0') {
+          Text(this.permissionsText())
+            .fontSize(18)
+            .fontColor('#3A92ED')
+            .width('100%')
+            .height(56)
+            .margin({ top: 1 })
+            .textAlign(TextAlign.Center)
+            .backgroundColor($r('app.color.white'))
+            .hoverEffect(HoverEffect.Highlight)
+            .onClick(() => {
+              this.showMore = false;
+              this.onPermissionsTap();
+            })
+        }
+        Text('生成名片二维码')
+          .fontSize(18)
+          .fontColor('#3A92ED')
+          .width('100%')
+          .height(56)
+          .margin({ top: 1 })
+          .textAlign(TextAlign.Center)
+          .backgroundColor($r('app.color.white'))
+          .hoverEffect(HoverEffect.Highlight)
+          .onClick(() => {
+            this.showMore = false;
+            this.openQrModal();
+          })
+        Text('取消')
+          .fontSize(20)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#3A92ED')
+          .width('100%')
+          .height(56)
+          .margin({ top: 8 })
+          .textAlign(TextAlign.Center)
+          .backgroundColor($r('app.color.white'))
+          .hoverEffect(HoverEffect.Highlight)
+          .onClick(() => {
+            this.showMore = false;
           })
       }
-      Text('生成名片二维码')
-        .fontSize(18)
-        .fontColor('#3A92ED')
-        .width('100%')
-        .height(56)
-        .margin({ top: 1 })
-        .textAlign(TextAlign.Center)
-        .backgroundColor($r('app.color.white'))
-        .onClick(() => {
-          this.showMore = false;
-          this.openQrModal();
-        })
-      Text('取消')
-        .fontSize(20)
-        .fontWeight(FontWeight.Bold)
-        .fontColor('#3A92ED')
-        .width('100%')
-        .height(56)
-        .margin({ top: 8 })
-        .textAlign(TextAlign.Center)
-        .backgroundColor($r('app.color.white'))
-        .onClick(() => {
-          this.showMore = false;
-        })
+      .width('100%')
+      .padding({ top: 1 })
     }
     .width('100%')
-    .padding({ top: 1 })
+    .scrollBar(BarState.Off)
   }
 }

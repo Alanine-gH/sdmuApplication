@@ -3,6 +3,7 @@ import { TitleBar } from '../components/TitleBar';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 考试科目处理页 — 1:1 翻译原 APK HandleExamCourseActivity.java（examination/view）
@@ -53,6 +54,9 @@ struct HandleExamCoursePage {
   @State pickDay: number = 0;
   @State pickHour: number = 0;
   @State pickMinute: number = 0;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 780;
   /** 源码 l=HandleExamCourseType{type,title}；m=ExamCourseInfo；B=handleExamData */
   private handleExamType: string = 'add';
   private handleExamTitle: string = '期末考试';
@@ -351,56 +355,67 @@ struct HandleExamCoursePage {
   timeDialog() {
     // 遮罩 + ChooseTimeDialog 等价面板（三滚轮 + 标题 + 确定）
     Column() {
-      Column() {
-        // 源码 tv_setexamtimetitle：u() 实时 "yyyy-MM-dd 周X HH:mm"
-        Text(this.timeDisplay(new Date(new Date().getFullYear(), new Date().getMonth(),
-          new Date().getDate() + this.pickDay, this.pickHour, this.pickMinute)))
-          .fontSize(17)
-          .fontColor($r('app.color.common_color_1'))
-          .height(44)
-          .textAlign(TextAlign.Center)
+      Scroll() {
+        Column() {
+          // 源码 tv_setexamtimetitle：u() 实时 "yyyy-MM-dd 周X HH:mm"
+          Text(this.timeDisplay(new Date(new Date().getFullYear(), new Date().getMonth(),
+            new Date().getDate() + this.pickDay, this.pickHour, this.pickMinute)))
+            .fontSize(17)
+            .fontColor($r('app.color.common_color_1'))
+            .height(44)
+            .textAlign(TextAlign.Center)
+            .width('100%')
+          Row() {
+            TextPicker({ range: this.dayLabels, selected: this.pickDay })
+              .layoutWeight(3)
+              .onChange((value: string | string[], index: number | number[]) => {
+                this.pickDay = Array.isArray(index) ? Number((index as number[])[0]) : Number(index);
+              })
+            TextPicker({ range: this.hourLabels, selected: this.pickHour })
+              .layoutWeight(1)
+              .onChange((value: string | string[], index: number | number[]) => {
+                this.pickHour = Array.isArray(index) ? Number((index as number[])[0]) : Number(index);
+              })
+            TextPicker({ range: this.minuteLabels, selected: this.pickMinute })
+              .layoutWeight(1)
+              .onChange((value: string | string[], index: number | number[]) => {
+                this.pickMinute = Array.isArray(index) ? Number((index as number[])[0]) : Number(index);
+              })
+          }
           .width('100%')
-        Row() {
-          TextPicker({ range: this.dayLabels, selected: this.pickDay })
-            .layoutWeight(3)
-            .onChange((value: string | string[], index: number | number[]) => {
-              this.pickDay = Array.isArray(index) ? Number((index as number[])[0]) : Number(index);
-            })
-          TextPicker({ range: this.hourLabels, selected: this.pickHour })
-            .layoutWeight(1)
-            .onChange((value: string | string[], index: number | number[]) => {
-              this.pickHour = Array.isArray(index) ? Number((index as number[])[0]) : Number(index);
-            })
-          TextPicker({ range: this.minuteLabels, selected: this.pickMinute })
-            .layoutWeight(1)
-            .onChange((value: string | string[], index: number | number[]) => {
-              this.pickMinute = Array.isArray(index) ? Number((index as number[])[0]) : Number(index);
+          .height(200)
+          Text('确定')
+            .fontSize(17)
+            .fontColor($r('app.color.white'))
+            .width('80%')
+            .height(44)
+            .textAlign(TextAlign.Center)
+            .borderRadius(4)
+            .backgroundColor($r('app.color.common_color_7'))
+            .margin({ top: 12, bottom: 16 })
+            .hoverEffect(HoverEffect.Highlight)
+            .onClick(() => {
+              this.showTimeDialog = false;
+              this.onTimePicked(this.pickDay, this.pickHour, this.pickMinute);
             })
         }
         .width('100%')
-        .height(200)
-        Text('确定')
-          .fontSize(17)
-          .fontColor($r('app.color.white'))
-          .width('80%')
-          .height(44)
-          .textAlign(TextAlign.Center)
-          .borderRadius(4)
-          .backgroundColor($r('app.color.common_color_7'))
-          .margin({ top: 12, bottom: 16 })
-          .onClick(() => {
-            this.showTimeDialog = false;
-            this.onTimePicked(this.pickDay, this.pickHour, this.pickMinute);
-          })
       }
-      .width('86%')
+      .scrollBar(BarState.Off)
+      .width(BreakpointSystem.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp))
+      .constraintSize({ maxHeight: BreakpointSystem.getDialogMaxHeight(this.windowHeightVp) })
       .borderRadius(8)
       .backgroundColor($r('app.color.white'))
+      .onClick(() => {
+        // 拦截弹窗内点击
+      })
     }
     .width('100%')
     .height('100%')
+    .padding({ left: 16, right: 16 })
     .justifyContent(FlexAlign.Center)
-    .backgroundColor('rgba(0,0,0,0.4)')
+    .alignItems(HorizontalAlign.Center)
+    .backgroundColor('#66000000')
     .onClick(() => {
       this.showTimeDialog = false;
     })

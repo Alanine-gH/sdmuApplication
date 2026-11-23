@@ -127,9 +127,13 @@ struct InputEmailPage {
             .fontColor($r('app.color.common_color_1'))
             .backgroundColor(Color.Transparent)
             .type(InputType.Email)
+            .enterKeyType(EnterKeyType.Done)
             .padding({ left: 56, right: 56 })
             .margin({ top: 18 })
             .defaultFocus(true)
+            .onSubmit(() => {
+              this.submit();
+            })
             .onChange((value: string) => {
               this.email = value;
             })
@@ -139,6 +143,7 @@ struct InputEmailPage {
             .fontColor(this.submitting ? '#CECECE' : '#1B68B7')
             .padding(10)
             .margin({ top: 38 })
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               this.submit();
             })

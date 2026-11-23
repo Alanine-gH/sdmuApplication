@@ -4,6 +4,7 @@ import { WorkApplyEntry } from '../model/OaTodoModel';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { EmptyView } from '../components/EmptyView';
 import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 业务申请更多页 — 1:1 翻译原 APK WorkApplyMoreActivity.java(107行)：
@@ -66,16 +67,17 @@ struct WorkApplyMorePage {
     Column() {
       // toolbar_normal（T1：gVar.n("更多")）
       Row() {
-        Text('＜')
-          .fontSize(17)
-          .fontColor($r('app.color.common_color_1'))
-          .width(40)
-          .height('100%')
-          .textAlign(TextAlign.Center)
-          .margin({ left: 15 })
-          .onClick(() => {
-            router.back();
-          })
+          Text('＜')
+            .fontSize(17)
+            .fontColor($r('app.color.common_color_1'))
+            .width(40)
+            .height('100%')
+            .textAlign(TextAlign.Center)
+            .margin({ left: 15 })
+            .hoverEffect(HoverEffect.Highlight)
+            .onClick(() => {
+              router.back();
+            })
         Text('更多')
           .fontSize(17)
           .fontColor($r('app.color.common_color_1'))
@@ -130,13 +132,16 @@ struct WorkApplyMorePage {
               }
               .alignItems(HorizontalAlign.Center)
               .width('100%')
+              .hoverEffect(HoverEffect.Highlight)
               .onClick(() => {
                 this.openFormConfig(item);
               })
             }
           }, (item: WorkApplyEntry, idx: number) => idx.toString() + item.processId)
         }
-        .columnsTemplate('1fr 1fr 1fr 1fr')
+        .columnsTemplate(AdaptiveLayoutHelper.buildColumnsTemplate(
+          BreakpointSystem.getGridColumns(this.currentBreakpoint, 4)
+        ))
         .columnsGap(16)
         .rowsGap(10)
         .width('100%')
@@ -155,5 +160,6 @@ struct WorkApplyMorePage {
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.ybg_white'))
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
   }
 }

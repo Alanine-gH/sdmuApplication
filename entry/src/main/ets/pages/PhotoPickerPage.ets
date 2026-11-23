@@ -5,6 +5,7 @@ import { Context } from '@kit.AbilityKit';
 import { fileIo as fs } from '@kit.CoreFileKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 import { TitleBar } from '../components/TitleBar';
 import { ApiService } from '../network/ApiService';
 
@@ -321,6 +322,7 @@ struct PhotoPickerPage {
     }
     .width('100%')
     .aspectRatio(1)
+    .hoverEffect(HoverEffect.Highlight)
     .onClick(() => {
       this.takePhoto();
     })
@@ -338,25 +340,32 @@ struct PhotoPickerPage {
       })
 
       if (this.showCamera || this.photos.length > 0) {
-        Grid() {
-          if (this.showCamera) {
-            GridItem() {
-              this.cameraCell()
+        Row() {
+          Grid() {
+            if (this.showCamera) {
+              GridItem() {
+                this.cameraCell()
+              }
             }
+            ForEach(this.photos, (item: PickerPhotoItem, index: number) => {
+              GridItem() {
+                this.photoCell(item, index)
+              }
+            }, (item: PickerPhotoItem, index: number) => item.uri + '_' + String(index))
           }
-          ForEach(this.photos, (item: PickerPhotoItem, index: number) => {
-            GridItem() {
-              this.photoCell(item, index)
-            }
-          }, (item: PickerPhotoItem, index: number) => item.uri + '_' + String(index))
+          .columnsTemplate(AdaptiveLayoutHelper.buildColumnsTemplate(
+            BreakpointSystem.getGridColumns(this.currentBreakpoint, 3)
+          ))
+          .columnsGap(1)
+          .rowsGap(1)
+          .width('100%')
+          .height('100%')
+          .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+          .backgroundColor($r('app.color.ybg_white'))
         }
-        .columnsTemplate('1fr 1fr 1fr')
-        .columnsGap(1)
-        .rowsGap(1)
         .width('100%')
-        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
         .layoutWeight(1)
-        .backgroundColor($r('app.color.ybg_white'))
+        .justifyContent(FlexAlign.Center)
       } else {
         Scroll() {
           Column() {
@@ -370,6 +379,7 @@ struct PhotoPickerPage {
         }
         .width('100%')
         .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
         .layoutWeight(1)
         .scrollBar(BarState.Off)
       }
@@ -379,6 +389,7 @@ struct PhotoPickerPage {
           .fontSize(14)
           .fontColor($r('app.color.common_color_1'))
           .padding(10)
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             this.pickFromGallery();
           })
@@ -388,12 +399,14 @@ struct PhotoPickerPage {
           .fontColor(this.selectCount > 0 ? $r('app.color.common_color_1') : $r('app.color.common_color_3'))
           .padding(10)
           .enabled(this.selectCount > 0)
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             this.openPager(0);
           })
       }
       .width('100%')
       .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+      .alignSelf(ItemAlign.Center)
       .padding({
         left: Math.max(5, this.avoidAreaLeftVp),
         right: Math.max(5, this.avoidAreaRightVp),
@@ -406,5 +419,6 @@ struct PhotoPickerPage {
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.ybg_white'))
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
   }
 }

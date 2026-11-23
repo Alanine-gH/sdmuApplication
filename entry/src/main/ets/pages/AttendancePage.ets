@@ -8,6 +8,8 @@ import { TitleBar } from '../components/TitleBar';
 import { EmptyView } from '../components/EmptyView';
 import { LoadingView } from '../components/LoadingView';
 import { Constants } from '../data/Constants';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 考勤页 — 源码级逐行翻译：
@@ -109,6 +111,10 @@ struct AttendancePage {
   @State bossGroups: AttendanceGroupBean[] = [];
   @State expandedGroup: number = -1;
   @State leaderLoading: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 780;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   /** 周模式锚点（周一 key）；'' 时按选中日/今天推导（haibin getCurrentWeekCalendars） */
   private weekAnchorKey: string = '';
 
@@ -1153,36 +1159,48 @@ struct AttendancePage {
     .height('100%')
     .backgroundColor('#66000000')
     .justifyContent(FlexAlign.End)
+    .alignItems(HorizontalAlign.Center)
   }
 
   /** bigkoo pickerview 顶栏：取消 #333333 / 确定 #057DFF（pickerview_timebtn_nor） */
   @Builder
   monthPickerPanel() {
-    Column() {
-      Row() {
-        Text('取消')
-          .fontSize(16)
-          .fontColor('#333333')
-          .padding({ left: 16, right: 16, top: 12, bottom: 12 })
-          .onClick(() => {
-            this.showPicker = false;
-          })
-        Blank().layoutWeight(1)
-        Text('确定')
-          .fontSize(16)
-          .fontColor('#057DFF')
-          .padding({ left: 16, right: 16, top: 12, bottom: 12 })
-          .onClick(() => {
-            this.onPickerConfirm();
-          })
+    Scroll() {
+      Column() {
+        Row() {
+          Text('取消')
+            .fontSize(16)
+            .fontColor('#333333')
+            .padding({ left: 16, right: 16, top: 12, bottom: 12 })
+            .hoverEffect(HoverEffect.Highlight)
+            .onClick(() => {
+              this.showPicker = false;
+            })
+          Blank().layoutWeight(1)
+          Text('确定')
+            .fontSize(16)
+            .fontColor('#057DFF')
+            .padding({ left: 16, right: 16, top: 12, bottom: 12 })
+            .hoverEffect(HoverEffect.Highlight)
+            .onClick(() => {
+              this.onPickerConfirm();
+            })
+        }
+        .width('100%')
+        .backgroundColor('#F5F5F5')
+        this.monthPickerWheels()
       }
       .width('100%')
-      .backgroundColor('#F5F5F5')
-      this.monthPickerWheels()
+      .padding({ bottom: this.avoidAreaBottomVp })
     }
-    .width('100%')
+    .scrollBar(BarState.Off)
+    .width(AdaptiveLayoutHelper.getSheetMaxWidth(this.currentBreakpoint, this.windowWidthVp))
+    .constraintSize({ maxHeight: BreakpointSystem.getDialogMaxHeight(this.windowHeightVp) })
     .backgroundColor($r('app.color.white'))
     .borderRadius({ topLeft: 12, topRight: 12 })
+    .onClick(() => {
+      // 拦截底部弹窗点击
+    })
   }
 
   /** 年+月两轮（源码 c(new boolean[]{true,true,false,false,false,false})） */

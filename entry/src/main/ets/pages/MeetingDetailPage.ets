@@ -1,15 +1,18 @@
 import { router } from '@kit.ArkUI';
-import { common } from '@kit.AbilityKit';
+import { common, Want } from '@kit.AbilityKit';
 import { scanBarcode, scanCore } from '@kit.ScanKit';
 import { PdfView, pdfService, pdfViewManager } from '@kit.PDFKit';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
-import { BusinessError } from '@kit.BasicServicesKit';
+import { BusinessError, pasteboard } from '@kit.BasicServicesKit';
+import { call } from '@kit.TelephonyKit';
 import { LiveViewIntentHelper } from '../common/LiveViewIntentHelper';
 import { FilePreviewHelper } from '../common/FilePreviewHelper';
 import { BreakpointSystem } from '../common/BreakpointSystem';
 import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 import { ImmersiveLightHelper } from '../common/ImmersiveLightHelper';
+import { NluEntityHelper, NluEntityChip } from '../common/NluEntityHelper';
+import { ReminderCalendarHelper } from '../common/ReminderCalendarHelper';
 import { LoadingView } from '../components/LoadingView';
 import { EmptyView } from '../components/EmptyView';
 import { MeetingObjEntity, MeetingAttachmentEntity, MeetingExtraEntity,
@@ -59,6 +62,8 @@ struct MeetingDetailPage {
   @State downloadingAttach: boolean = false;
   @State showPdfModal: boolean = false;
   @State pdfTitle: string = '';
+  @State pendingPdfPath: string = '';
+  @State nluEntities: NluEntityChip[] = [];
   @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
   @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
   @StorageProp('windowWidthVp') windowWidthVp: number = 360;
@@ -68,6 +73,7 @@ struct MeetingDetailPage {
   @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   private xlh: string = '';
   private taskType: string = '';
+  private nluRequestToken: number = 0;
   private pdfController: pdfViewManager.PdfController = new pdfViewManager.PdfController();
 
   aboutToDisappear(): void {
@@ -75,6 +81,7 @@ struct MeetingDetailPage {
   }
 
   private closePdfModal(): void {
+    this.pendingPdfPath = '';
     if (this.showPdfModal) {
       this.showPdfModal = false;
       try {
@@ -82,6 +89,21 @@ struct MeetingDetailPage {
       } catch {
         // 忽略释放异常
       }
+    }
+  }
+
+  private async loadPendingPdf(): Promise<void> {
+    const path: string = this.pendingPdfPath;
+    if (path === '') {
+      return;
+    }
+    try {
+      const parseRes = await this.pdfController.loadDocument(path);
+      if (parseRes !== pdfService.ParseResult.PARSE_SUCCESS) {
+        this.toast('PDF 文档解析失败');
+      }
+    } catch {
+      this.toast('PDF 文档加载失败');
     }
   }
 
@@ -102,16 +124,10 @@ struct MeetingDetailPage {
         return;
       }
       if (res.method === 'pdfView' && res.localPath !== '') {
-        try {
-          const parseRes = await this.pdfController.loadDocument(res.localPath);
-          if (parseRes === pdfService.ParseResult.PARSE_SUCCESS) {
-            this.pdfTitle = att.FILENAME;
-            this.showPdfModal = true;
-            return;
-          }
-        } catch {
-          // 降级提示
-        }
+        this.pendingPdfPath = res.localPath;
+        this.pdfTitle = att.FILENAME;
+        this.showPdfModal = true;
+        return;
       }
       if (res.message !== '') {
         this.toast(res.message);
@@ -206,6 +222,7 @@ struct MeetingDetailPage {
           this.obj = response.data;
           this.isCreator = this.obj.IS_CURRENT_USER_PLAN === '1';
           this.loadFail = false;
+          this.extractMeetingEntities();
           // 源码 l3()：feedBackType 非空 → o3() 拉公告角标
           if (this.obj.feedBackType !== '') {
             this.loadNoticeCount();
@@ -220,6 +237,98 @@ struct MeetingDetailPage {
         this.loadFail = true;
         this.loading = false;
       });
+  }
+
+  private async extractMeetingEntities(): Promise<void> {
+    this.nluEntities = [];
+    this.nluRequestToken += 1;
+    const token: number = this.nluRequestToken;
+    const source: string = NluEntityHelper.buildMeetingNluSource(
+      this.obj.TITLE,
+      this.obj.ADDRESS,
+      this.obj.KSSJ,
+      this.obj.JSSJ,
+      this.obj.LXR,
+      this.obj.LXRDH
+    );
+    const result = await NluEntityHelper.extractEntities(source);
+    if (token !== this.nluRequestToken) {
+      return;
+    }
+    this.nluEntities = result.entities;
+  }
+
+  private async onEntityChipTap(chip: NluEntityChip): Promise<void> {
+    if (chip.action === 'calendar') {
+      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      const startMs: number = chip.timestampMs !== null ? chip.timestampMs : Date.now() + 3600000;
+      const endMs: number = startMs + 3600000;
+      const calRes = await ReminderCalendarHelper.addCalendarEventWithResult(
+        ctx,
+        this.obj.TITLE !== '' ? this.obj.TITLE : '会议日程',
+        chip.text,
+        startMs,
+        endMs,
+        this.obj.ADDRESS
+      );
+      if (calRes.success) {
+        this.toast(calRes.message);
+        return;
+      }
+      if (startMs > Date.now()) {
+        const remRes = await ReminderCalendarHelper.publishCalendarReminderWithResult(
+          this.obj.TITLE !== '' ? this.obj.TITLE : '会议提醒',
+          chip.text,
+          new Date(startMs),
+          ctx
+        );
+        this.toast(remRes.success ? remRes.message : (remRes.message || calRes.message));
+        return;
+      }
+      this.toast(calRes.message);
+      return;
+    }
+    if (chip.action === 'dial') {
+      try {
+        call.makeCall(chip.text, () => {
+        });
+      } catch {
+        this.toast('无法拉起拨号');
+      }
+      return;
+    }
+    if (chip.action === 'email') {
+      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      try {
+        ctx.startAbility({
+          action: 'mailto:' + chip.text,
+          entities: ['entity.system.default'],
+          parameters: { 'email': [chip.text] }
+        } as Want).catch(() => {
+          this.toast('请安装邮箱应用');
+        });
+      } catch {
+        this.toast('请安装邮箱应用');
+      }
+      return;
+    }
+    if (chip.action === 'url') {
+      const lower: string = chip.text.toLowerCase();
+      const targetUrl: string = (lower.startsWith('http://') || lower.startsWith('https://'))
+        ? chip.text
+        : 'https://' + chip.text;
+      this.pushRoute('pages/WebViewPage', { 'url': targetUrl, 'title': '网页详情' });
+      return;
+    }
+    if (chip.action === 'location') {
+      try {
+        const data: pasteboard.PasteData = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, chip.text);
+        await pasteboard.getSystemPasteboard().setData(data);
+        this.toast('已复制地点：' + chip.text);
+      } catch {
+        this.toast('复制地点失败');
+      }
+    }
   }
 
   /** 源码 o3()：l.W(new a).D(v.HYID) → POST findMeetingFeedBack {meetingId}（仅取 size 作角标） */
@@ -431,6 +540,7 @@ struct MeetingDetailPage {
           .borderRadius(17)
           .systemMaterial(ImmersiveLightHelper.pillMaterial())
           .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.94 })
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             router.back();
           })
@@ -449,6 +559,7 @@ struct MeetingDetailPage {
             .borderRadius(14)
             .systemMaterial(ImmersiveLightHelper.pillMaterial())
             .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.95 })
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               LiveViewIntentHelper.startLocalLiveView(
                 1001,
@@ -463,6 +574,7 @@ struct MeetingDetailPage {
               : $r('app.media.mobile_campus_meeting_scan'))
               .width(22)
               .height(22)
+              .hoverEffect(HoverEffect.Highlight)
               .onClick(() => {
                 this.onToolbarIconClick();
               })
@@ -502,6 +614,9 @@ struct MeetingDetailPage {
       Scroll() {
         Column() {
           this.detailView()
+          if (this.nluEntities.length > 0) {
+            this.nluEntitySection()
+          }
           this.fileView()
         }
         .width('100%')
@@ -561,6 +676,7 @@ struct MeetingDetailPage {
               .margin({ left: 10 })
               .borderRadius(16)
               .border({ width: 0.5, color: '#C80D28' })
+              .hoverEffect(HoverEffect.Highlight)
               .onClick(() => {
                 this.showCancelDialogIfAllowed();
               })
@@ -695,6 +811,7 @@ struct MeetingDetailPage {
           }
           .width('100%')
           .padding({ left: 18, right: 18, top: 8, bottom: 8 })
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             this.openAttachment(att);
           })
@@ -717,6 +834,7 @@ struct MeetingDetailPage {
         .textAlign(TextAlign.Center)
         .layoutWeight(1)
         .height('100%')
+        .hoverEffect(HoverEffect.Highlight)
         .onClick(() => {
           this.noAttendReason = '';
           this.showNoAttendDialog = true;
@@ -733,6 +851,7 @@ struct MeetingDetailPage {
         .textAlign(TextAlign.Center)
         .layoutWeight(1)
         .height('100%')
+        .hoverEffect(HoverEffect.Highlight)
         .onClick(() => {
           this.submitJoinState('1', '');
         })
@@ -762,6 +881,7 @@ struct MeetingDetailPage {
         .layoutWeight(1)
         .height(48)
         .justifyContent(FlexAlign.Center)
+        .hoverEffect(HoverEffect.Highlight)
         .onClick(() => {
           this.openStaffSituation();
         })
@@ -779,6 +899,7 @@ struct MeetingDetailPage {
           .layoutWeight(1)
           .textAlign(TextAlign.Center)
           .height(48)
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             this.openMeetingReport();
           })
@@ -799,6 +920,7 @@ struct MeetingDetailPage {
         .height(48)
         .backgroundColor($r('app.color.mobile_campus_schedule_color9'))
         .alignItems(VerticalAlign.Center)
+        .hoverEffect(HoverEffect.Highlight)
         .onClick(() => {
           this.openAnnouncement();
         })
@@ -849,6 +971,7 @@ struct MeetingDetailPage {
           .textAlign(TextAlign.Center)
           .width('100%')
           .height(44)
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             if (this.showCancelDialog) {
               this.submitCancelMeeting();
@@ -896,6 +1019,7 @@ struct MeetingDetailPage {
             .fontSize(14)
             .fontColor('#3A92ED')
             .padding({ left: 10, right: 4, top: 4, bottom: 4 })
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               this.closePdfModal();
             })
@@ -914,6 +1038,9 @@ struct MeetingDetailPage {
         })
           .width('100%')
           .layoutWeight(1)
+          .onAppear(() => {
+            this.loadPendingPdf();
+          })
       }
       .width(AdaptiveLayoutHelper.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp))
       .height(AdaptiveLayoutHelper.getDialogMaxHeight(this.windowHeightVp))
@@ -933,5 +1060,52 @@ struct MeetingDetailPage {
     .onClick(() => {
       this.closePdfModal();
     })
+  }
+
+  @Builder
+  nluEntitySection() {
+    Column() {
+      Text('智能识别与快捷操作')
+        .fontSize(12)
+        .fontColor($r('app.color.common_color_3'))
+        .margin({ bottom: 6 })
+      Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Start }) {
+        ForEach(this.nluEntities, (chip: NluEntityChip, idx: number) => {
+          Row({ space: 4 }) {
+            Text(chip.typeLabel)
+              .fontSize(11)
+              .fontColor('#1B68B7')
+              .padding({ left: 5, right: 5, top: 1, bottom: 1 })
+              .borderRadius(4)
+              .backgroundColor('#EBF4FF')
+            Text(chip.text)
+              .fontSize(12)
+              .fontColor($r('app.color.common_color_1'))
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+              .constraintSize({ maxWidth: 180 })
+            Text(chip.actionLabel)
+              .fontSize(11)
+              .fontColor('#1B68B7')
+          }
+          .padding({ left: 8, right: 8, top: 5, bottom: 5 })
+          .margin({ right: 8, bottom: 8 })
+          .borderRadius(14)
+          .backgroundColor('#F7F9FC')
+          .border({ width: 0.5, color: '#D6E4F5' })
+          .alignItems(VerticalAlign.Center)
+          .hoverEffect(HoverEffect.Highlight)
+          .onClick(() => {
+            this.onEntityChipTap(chip);
+          })
+        }, (chip: NluEntityChip, idx: number) => `${idx}_${chip.type}_${chip.text}`)
+      }
+      .width('100%')
+    }
+    .width('100%')
+    .padding({ left: 18, right: 18, top: 10, bottom: 6 })
+    .margin({ top: 12 })
+    .backgroundColor($r('app.color.white'))
+    .alignItems(HorizontalAlign.Start)
   }
 }

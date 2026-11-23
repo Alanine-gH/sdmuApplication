@@ -4,7 +4,8 @@ import { photoAccessHelper } from '@kit.MediaLibraryKit';
 import { http } from '@kit.NetworkKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import fs from '@ohos.file.fs';
-import { BreakpointSystem } from '../common/BreakpointSystem';
+import { CreaseRegionVp } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 照片全屏浏览页 — 源码级复刻 BrowsePhotosActivity（baseapp weiget 包，PhotoView+ViewPager）。
@@ -36,6 +37,8 @@ struct BrowsePhotosPage {
   @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
   @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
+  @StorageProp('foldStatus') foldStatus: number = 0;
+  @StorageProp('creaseRegionVp') creaseRegionVp: CreaseRegionVp | null = null;
   private filePathCache: string = '';
 
   aboutToAppear(): void {
@@ -182,8 +185,8 @@ struct BrowsePhotosPage {
   }
 
   build() {
-    Column() {
-      Stack() {
+    FolderStack({ upperItems: ['browse_photos_stage'] }) {
+      Stack({ alignContent: Alignment.TopStart }) {
         // HackyViewPager：全屏翻页（PhotoView 单击/长按绑定）
         if (this.photos.length > 0) {
           Swiper() {
@@ -222,6 +225,7 @@ struct BrowsePhotosPage {
             .objectFit(ImageFit.Contain)
             .width(24)
             .height(24)
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               this.closePage();
             })
@@ -259,6 +263,7 @@ struct BrowsePhotosPage {
               .height(24)
               .padding(3)
               .margin({ right: 10 })
+              .hoverEffect(HoverEffect.Highlight)
               .onClick(() => {
                 // b（DELETE）：移除当前
                 this.deleteCurrent();
@@ -276,31 +281,41 @@ struct BrowsePhotosPage {
         .backgroundColor($r('app.color.alpha_20'))
         .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
       }
+      .id('browse_photos_stage')
       .width('100%')
-      .layoutWeight(1)
+      .height('100%')
 
-      // CirclePageIndicator：>1 张显示（fill #bbbbbb / page #454545 半径 2vp 间距 7vp）
-      if (this.photos.length > 1) {
-        Row() {
-          ForEach(this.photos, (item: BrowsePhotoItem, index: number) => {
-            Circle()
-              .width(4)
-              .height(4)
-              .fill(index === this.currentIndex
-                ? $r('app.color.browse_photos_hover_dot') : $r('app.color.browse_photos_normal_dot'))
-              .margin({ left: 3.5, right: 3.5 })
-          }, (item: BrowsePhotoItem) => 'dot_' + item.url)
+      // 下半屏指示器与折痕避让区（位于 upperItems 之外，半折叠悬停时保持在下半屏）
+      Column() {
+        if (this.photos.length > 1) {
+          Row() {
+            ForEach(this.photos, (item: BrowsePhotoItem, index: number) => {
+              Circle()
+                .width(4)
+                .height(4)
+                .fill(index === this.currentIndex
+                  ? $r('app.color.browse_photos_hover_dot') : $r('app.color.browse_photos_normal_dot'))
+                .margin({ left: 3.5, right: 3.5 })
+            }, (item: BrowsePhotoItem) => 'dot_' + item.url)
+          }
+          .justifyContent(FlexAlign.Center)
+          .width('100%')
+          .padding({
+            top: 10 + AdaptiveLayoutHelper.getCreaseAvoidHeightVp(this.creaseRegionVp, this.foldStatus),
+            bottom: Math.max(10, this.avoidAreaBottomVp + 10),
+            left: this.avoidAreaLeftVp,
+            right: this.avoidAreaRightVp
+          })
+          .backgroundColor('#66000000')
         }
-        .justifyContent(FlexAlign.Center)
-        .width('100%')
-        .padding({
-          top: 10,
-          bottom: Math.max(10, this.avoidAreaBottomVp + 10),
-          left: this.avoidAreaLeftVp,
-          right: this.avoidAreaRightVp
-        })
       }
+      .width('100%')
+      .height('100%')
+      .justifyContent(FlexAlign.End)
+      .hitTestBehavior(HitTestMode.Transparent)
     }
+    .enableAnimation(true)
+    .autoHalfFold(true)
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.black'))

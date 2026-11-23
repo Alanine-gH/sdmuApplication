@@ -1,6 +1,7 @@
 import { router } from '@kit.ArkUI';
 import { photoAccessHelper } from '@kit.MediaLibraryKit';
 import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 import { TitleBar } from '../components/TitleBar';
 import { ApiService, FeedbackTypeEntry } from '../network/ApiService';
 import { LoginSession } from '../network/LoginSession';
@@ -276,23 +277,33 @@ struct FeedbackPage {
                   this.photoGridItem(uri, index)
                 }
               }, (uri: string, index: number) => uri + '_' + index)
-              if (this.photos.length < 6) {
-                GridItem() {
-                  // 添加项：feedback_add 图 75dip
-                  Image($r('app.media.mobile_campus_feedback_add'))
-                    .width(75)
-                    .height(75)
+                if (this.photos.length < 6) {
+                  GridItem() {
+                    // 添加项：feedback_add 图 75dip
+                    Image($r('app.media.mobile_campus_feedback_add'))
+                      .width(75)
+                      .height(75)
+                  }
+                  .hoverEffect(HoverEffect.Highlight)
+                  .onClick(() => {
+                    this.pickPhotos();
+                  })
                 }
-                .onClick(() => {
-                  this.pickPhotos();
-                })
               }
-            }
-            .columnsTemplate('1fr 1fr 1fr')
-            .columnsGap(16)
-            .rowsGap(10)
-            .margin({ top: 16 })
-            .width('100%')
+              .columnsTemplate(AdaptiveLayoutHelper.buildColumnsTemplate(
+                BreakpointSystem.getGridColumns(this.currentBreakpoint, 3)
+              ))
+              .columnsGap(16)
+              .rowsGap(10)
+              .margin({ top: 16 })
+              .width('100%')
+              .height(AdaptiveLayoutHelper.computeGridHeightVp(
+                this.photos.length + (this.photos.length < 6 ? 1 : 0),
+                BreakpointSystem.getGridColumns(this.currentBreakpoint, 3),
+                75,
+                10,
+                0
+              ))
           }
           .width('100%')
           .padding(16)
@@ -386,6 +397,7 @@ struct FeedbackPage {
               .borderRadius(10)
               .backgroundColor(this.submitEnabled() ?
                 $r('app.color.mobile_campus_primary_color') : $r('app.color.common_color_24'))
+              .hoverEffect(HoverEffect.Highlight)
               .onClick(() => {
                 this.submit();
               })
@@ -406,5 +418,6 @@ struct FeedbackPage {
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.white'))
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
   }
 }

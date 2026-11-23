@@ -179,6 +179,7 @@ struct ModifyPasswordPage {
               Row() {
                 TextInput({ placeholder: '请输入原密码', text: this.oldPwd })
                   .type(InputType.Password)
+                  .enterKeyType(EnterKeyType.Next)
                   .fontSize(16)
                   .fontColor($r('app.color.common_color_3'))
                   .placeholderColor($r('app.color.common_color_3'))
@@ -188,6 +189,9 @@ struct ModifyPasswordPage {
                   .layoutWeight(1)
                   .margin({ right: 12 })
                   .defaultFocus(true)
+                  .onSubmit(() => {
+                    this.getUIContext().getFocusController().requestFocus('modify_new_pwd');
+                  })
                   .onChange((value: string) => {
                     this.oldPwd = value;
                     this.validate();
@@ -206,7 +210,9 @@ struct ModifyPasswordPage {
             Column() {
               Row() {
                 TextInput({ placeholder: '请输入新密（6-12位）', text: this.newPwd })
+                  .id('modify_new_pwd')
                   .type(InputType.Password)
+                  .enterKeyType(EnterKeyType.Next)
                   .fontSize(16)
                   .fontColor($r('app.color.common_color_3'))
                   .placeholderColor($r('app.color.common_color_3'))
@@ -216,6 +222,9 @@ struct ModifyPasswordPage {
                   .padding(0)
                   .layoutWeight(1)
                   .margin({ right: 12 })
+                  .onSubmit(() => {
+                    this.getUIContext().getFocusController().requestFocus('modify_confirm_pwd');
+                  })
                   .onChange((value: string) => {
                     this.newPwd = value;
                     this.validate();
@@ -229,7 +238,9 @@ struct ModifyPasswordPage {
 
               Row() {
                 TextInput({ placeholder: '再次请输入新密（6-12位）', text: this.confirmPwd })
+                  .id('modify_confirm_pwd')
                   .type(InputType.Password)
+                  .enterKeyType(EnterKeyType.Done)
                   .fontSize(16)
                   .fontColor($r('app.color.common_color_3'))
                   .placeholderColor($r('app.color.common_color_3'))
@@ -239,6 +250,9 @@ struct ModifyPasswordPage {
                   .padding(0)
                   .layoutWeight(1)
                   .margin({ right: 12 })
+                  .onSubmit(() => {
+                    this.submit();
+                  })
                   .onChange((value: string) => {
                     this.confirmPwd = value;
                     this.validate();
@@ -275,6 +289,7 @@ struct ModifyPasswordPage {
                 .borderRadius(4)
                 .backgroundColor(this.submitEnabled ?
                   $r('app.color.mobile_campus_primary_color') : '#DEE3E9')
+                .hoverEffect(HoverEffect.Highlight)
                 .onClick(() => {
                   this.submit();
                 })

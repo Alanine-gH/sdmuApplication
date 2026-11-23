@@ -8,6 +8,7 @@ import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { Constants } from '../data/Constants';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 会议报告编辑页 — MeetingReportEditActivity.java(420行) 源码级翻译
@@ -50,6 +51,10 @@ struct MeetingReportEditPage {
   @State submitting: boolean = false;
   @State showDiscardDialog: boolean = false;
   @State previewIndex: number = -1;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 640;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   private hyid: string = '';
   private meetingXLH: string = '';
   private oldPicXLH: string = '';
@@ -323,77 +328,83 @@ struct MeetingReportEditPage {
   build() {
     Stack() {
       Column() {
-        TitleBar({ title: '会议报告', showBack: true, onBack: (): void => {
-          this.onBackClick();
-        } })
-        // toolbar 右"完成"（toolBar_text_but：61×26 pill，enabled ybg_blue 白字/disabled #CCCCCC 黑字）
-        Text('完成')
-          .fontSize(16)
-          .fontColor(this.canSubmit ? Color.White : Color.Black)
-          .textAlign(TextAlign.Center)
-          .width(61)
-          .height(26)
-          .borderRadius(4)
-          .backgroundColor(this.canSubmit ? $r('app.color.common_color_12') : '#CCCCCC')
-          .position({ x: '88%', y: 9 })
-          .onClick(() => {
+        TitleBar({
+          title: '会议报告',
+          showBack: true,
+          rightText: '完成',
+          rightButtonStyle: true,
+          rightEnabled: this.canSubmit,
+          onRightClick: (): void => {
             this.submit();
-          })
-
-        // edit_content：白底 padding 25/20 layoutWeight1
-        TextArea({ text: this.reportText, placeholder: '' })
-          .fontSize(16)
-          .fontColor($r('app.color.common_color_1'))
-          .placeholderColor($r('app.color.common_color_35'))
-          .backgroundColor($r('app.color.white'))
-          .padding({ left: 25, right: 25, top: 20, bottom: 20 })
-          .width('100%')
-          .layoutWeight(1)
-          .onChange((value: string) => {
-            // 源码 TextWatcher：trim 空 → 完成禁用
-            this.reportText = value;
-            this.canSubmit = value.trim() !== '';
-          })
-
-        // 底部相机/相册行 40dip（camera marginLeft 13 + album marginLeft 15）
-        Row() {
-          Image($r('app.media.mobile_campus_meeting_camera'))
-            .width(22)
-            .height(22)
-            .margin({ left: 13 })
-            .onClick(() => {
-              this.pickFromCamera();
-            })
-          Image($r('app.media.mobile_campus_meeting_image'))
-            .width(22)
-            .height(22)
-            .margin({ left: 15 })
-            .onClick(() => {
-              this.pickFromAlbum();
-            })
-        }
-        .width('100%')
-        .height(40)
-        .alignItems(VerticalAlign.Center)
-        .backgroundColor($r('app.color.white'))
-
-        // photoAdapter RecyclerView 横向（padding 4）
-        Scroll() {
-          Row() {
-            ForEach(this.pics, (pic: string, index: number) => {
-              this.photoCell(pic, index)
-            }, (pic: string, index: number) => 'pic_' + String(index) + '_' + pic.substring(0, 16))
+          },
+          onBack: (): void => {
+            this.onBackClick();
           }
-          .padding(4)
+        })
+
+        Column() {
+          // edit_content：白底 padding 25/20 layoutWeight1
+          TextArea({ text: this.reportText, placeholder: '' })
+            .fontSize(16)
+            .fontColor($r('app.color.common_color_1'))
+            .placeholderColor($r('app.color.common_color_35'))
+            .backgroundColor($r('app.color.white'))
+            .padding({ left: 25, right: 25, top: 20, bottom: 20 })
+            .width('100%')
+            .layoutWeight(1)
+            .onChange((value: string) => {
+              // 源码 TextWatcher：trim 空 → 完成禁用
+              this.reportText = value;
+              this.canSubmit = value.trim() !== '';
+            })
+
+          // 底部相机/相册行 40dip（camera marginLeft 13 + album marginLeft 15）
+          Row() {
+            Image($r('app.media.mobile_campus_meeting_camera'))
+              .width(22)
+              .height(22)
+              .margin({ left: 13 })
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick(() => {
+                this.pickFromCamera();
+              })
+            Image($r('app.media.mobile_campus_meeting_image'))
+              .width(22)
+              .height(22)
+              .margin({ left: 15 })
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick(() => {
+                this.pickFromAlbum();
+              })
+          }
+          .width('100%')
+          .height(40)
           .alignItems(VerticalAlign.Center)
+          .backgroundColor($r('app.color.white'))
+
+          // photoAdapter RecyclerView 横向（padding 4）
+          Scroll() {
+            Row() {
+              ForEach(this.pics, (pic: string, index: number) => {
+                this.photoCell(pic, index)
+              }, (pic: string, index: number) => 'pic_' + String(index) + '_' + pic.substring(0, 16))
+            }
+            .padding(4)
+            .alignItems(VerticalAlign.Center)
+          }
+          .scrollable(ScrollDirection.Horizontal)
+          .scrollBar(BarState.Off)
+          .width('100%')
+          .padding({ bottom: this.avoidAreaBottomVp > 0 ? this.avoidAreaBottomVp : 0 })
         }
-        .scrollable(ScrollDirection.Horizontal)
-        .scrollBar(BarState.Off)
         .width('100%')
+        .layoutWeight(1)
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignItems(HorizontalAlign.Start)
       }
       .width('100%')
       .height('100%')
-      .alignItems(HorizontalAlign.Start)
+      .alignItems(HorizontalAlign.Center)
       .backgroundColor($r('app.color.main_bg'))
 
       // 大图预览（源码 BrowsePhotosActivity NONE 模式等价）
@@ -409,6 +420,7 @@ struct MeetingReportEditPage {
     .width('100%')
     .height('100%')
     .alignContent(Alignment.Center)
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
   }
 
   /** mobile_campus_meeting_item_photo：75×75 图（margin 7.5）+ delete_icon 右上（padL4 padB4） */
@@ -458,48 +470,71 @@ struct MeetingReportEditPage {
   @Builder
   discardDialog() {
     Column() {
-      Text('放弃此次编辑？')
-        .fontSize(17)
-        .fontColor($r('app.color.common_color_1'))
-        .margin({ top: 16, bottom: 16 })
-      Divider()
-        .color($r('app.color.common_color_5'))
-        .strokeWidth(0.5)
+      Scroll() {
+        Column() {
+          Text('放弃此次编辑？')
+            .fontSize(17)
+            .fontColor($r('app.color.common_color_1'))
+            .margin({ top: 16, bottom: 16 })
+          Divider()
+            .color($r('app.color.common_color_5'))
+            .strokeWidth(0.5)
+            .width('100%')
+          Row() {
+            Text('取消')
+              .fontSize(17)
+              .fontColor($r('app.color.common_color_3'))
+              .textAlign(TextAlign.Center)
+              .layoutWeight(1)
+              .height(44)
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick(() => {
+                this.showDiscardDialog = false;
+              })
+            Divider()
+              .vertical(true)
+              .color($r('app.color.common_color_5'))
+              .strokeWidth(0.5)
+              .height(44)
+            Text('确定')
+              .fontSize(17)
+              .fontColor($r('app.color.mobile_campus_primary_color_default'))
+              .textAlign(TextAlign.Center)
+              .layoutWeight(1)
+              .height(44)
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick(() => {
+                // 源码 a.a()：finish()
+                this.showDiscardDialog = false;
+                router.back();
+              })
+          }
+          .width('100%')
+          .alignItems(VerticalAlign.Center)
+        }
         .width('100%')
-      Row() {
-        Text('取消')
-          .fontSize(17)
-          .fontColor($r('app.color.common_color_3'))
-          .textAlign(TextAlign.Center)
-          .layoutWeight(1)
-          .height(44)
-          .onClick(() => {
-            this.showDiscardDialog = false;
-          })
-        Divider()
-          .vertical(true)
-          .color($r('app.color.common_color_5'))
-          .strokeWidth(0.5)
-          .height(44)
-        Text('确定')
-          .fontSize(17)
-          .fontColor($r('app.color.mobile_campus_primary_color_default'))
-          .textAlign(TextAlign.Center)
-          .layoutWeight(1)
-          .height(44)
-          .onClick(() => {
-            // 源码 a.a()：finish()
-            this.showDiscardDialog = false;
-            router.back();
-          })
+        .alignItems(HorizontalAlign.Center)
       }
       .width('100%')
-      .alignItems(VerticalAlign.Center)
+      .constraintSize({
+        maxWidth: BreakpointSystem.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp),
+        maxHeight: BreakpointSystem.getDialogMaxHeight(this.windowHeightVp)
+      })
+      .borderRadius(8)
+      .backgroundColor($r('app.color.white'))
+      .clip(true)
+      .onClick(() => {
+        // 拦截弹窗内部点击，防止误触遮罩关闭
+      })
     }
-    .width(270)
-    .borderRadius(8)
-    .backgroundColor($r('app.color.white'))
+    .width('100%')
+    .height('100%')
+    .padding({ left: 16, right: 16 })
+    .backgroundColor('#66000000')
+    .justifyContent(FlexAlign.Center)
     .alignItems(HorizontalAlign.Center)
-    .clip(true)
+    .onClick(() => {
+      this.showDiscardDialog = false;
+    })
   }
 }

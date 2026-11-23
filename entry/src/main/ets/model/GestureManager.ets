@@ -4,7 +4,7 @@
  *   HAP 等价存储 = PreferencesUtil（源码 Hawk.d(app).build() 同语义持久化）。
  *   b(userId) 按 userId 线性查找；c(userId, list) 命中同 userId 则先 remove 再 add（源码顺序）。
  */
-import { PreferencesUtil } from '../data/PreferencesUtil';
+import { SecureAssetHelper } from '../common/SecureAssetHelper';
 
 /** GesturePwdBean（module/my/entity/GesturePwdBean.java 两字段 1:1） */
 export class GesturePwdBean {
@@ -13,11 +13,12 @@ export class GesturePwdBean {
 }
 
 const KEY_ALL_GESTURE: string = 'allGesturePwdDatas';
+const ALIAS_ALL_GESTURE: string = 'sdmu_gesture_pwd_datas';
 
 export class GestureManager {
-  /** 源码 a()：读全部（解析失败 → 空数组等价 catch 返回 null 的空遍历语义） */
+  /** 源码 a()：读全部（优先硬件 TEE，回退 PreferencesUtil；解析失败 → 空数组） */
   static async all(): Promise<GesturePwdBean[]> {
-    const raw: string = await PreferencesUtil.getString(KEY_ALL_GESTURE, '[]');
+    const raw: string = await SecureAssetHelper.getSecret(ALIAS_ALL_GESTURE, KEY_ALL_GESTURE);
     if (raw === '' || raw === '[]') {
       return [];
     }
@@ -66,7 +67,7 @@ export class GestureManager {
     bean.gesturePwds = list;
     if (all.length <= 0) {
       const arr: GesturePwdBean[] = [bean];
-      await PreferencesUtil.putString(KEY_ALL_GESTURE, JSON.stringify(arr));
+      await SecureAssetHelper.putSecret(ALIAS_ALL_GESTURE, JSON.stringify(arr), KEY_ALL_GESTURE);
       return;
     }
     let hitIndex: number = -1;
@@ -79,6 +80,6 @@ export class GestureManager {
       all.splice(hitIndex, 1);
     }
     all.push(bean);
-    await PreferencesUtil.putString(KEY_ALL_GESTURE, JSON.stringify(all));
+    await SecureAssetHelper.putSecret(ALIAS_ALL_GESTURE, JSON.stringify(all), KEY_ALL_GESTURE);
   }
 }

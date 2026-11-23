@@ -5,6 +5,8 @@ import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { AuditCourseNameEntry, AuditGradeEntry, AuditMajorEntry } from '../model/CourseModel';
 import { PreferencesUtil } from '../data/PreferencesUtil';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 蹭课课程名列表页 — 1:1 复刻 timetable/view/ChooseCourseActivity.java（ChooseAcademyActivity
@@ -57,6 +59,10 @@ struct ChooseCoursePage {
   @State filterOpen: boolean = false;
   @State supportFilter: boolean = false;
   @State listTitle: string = '';
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 640;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   private xydm: string = '';
   private pageNum: number = 1;
   private noMore: boolean = false;
@@ -308,6 +314,7 @@ struct ChooseCoursePage {
       .padding({ left: 12, right: 12, top: 15, bottom: 15 })
       .alignItems(VerticalAlign.Center)
       .backgroundColor($r('app.color.white'))
+      .hoverEffect(HoverEffect.Highlight)
       .onClick(() => {
         this.onRowClick(index);
       })
@@ -332,6 +339,7 @@ struct ChooseCoursePage {
       .padding({ top: 6, bottom: 6 })
       .borderRadius(6)
       .backgroundColor(index === this.gradeIdx ? $r('app.color.ybg_blue') : $r('app.color.common_color_5'))
+      .hoverEffect(HoverEffect.Highlight)
       .onClick(() => {
         this.gradeIdx = index;
       })
@@ -348,112 +356,129 @@ struct ChooseCoursePage {
       .width('100%')
       .padding({ top: 10, right: 10, bottom: 10 })
       .backgroundColor($r('app.color.white'))
+      .hoverEffect(HoverEffect.Highlight)
       .onClick(() => {
         this.majorIdx = index;
         this.chosenMajorText = index === 0 ? '全部' : item.zymc;
       })
   }
 
-  /** ChooseCourseFilterPopup：全屏 popup_translucence_bg，白面板顶置（showAsDropDown 锚
-   * toolbar 下）+ marginBottom 60vp；面板以下全部为 dismiss 区（onTouch y>panel.bottom），
-   * dismiss 即回调 a(grade,major)（0 位=全部→null） */
+  /** ChooseCourseFilterPopup：全屏半透明遮罩 + 自适应宽/高 Scroll 面板 + 自适应列数年级网格 */
   @Builder
   filterPopup() {
     Column() {
-      Column() {
-        Row()
-          .width('100%')
-          .height(8)
-          .backgroundColor($r('app.color.common_color_6'))
-        Row() {
-          Text('年级')
-            .fontSize(17)
-            .fontColor($r('app.color.common_color_1'))
-            .margin({ right: 27 })
-          Grid() {
-            ForEach(this.gradeOptions, (item: AuditGradeEntry, index: number) => {
-              GridItem() {
-                this.gradeItem(item, index)
-              }
-            }, (item: AuditGradeEntry) => 'gr' + item.nj + '_' + item.njmc)
-          }
-          .columnsTemplate('1fr 1fr 1fr')
-          .columnsGap(22)
-          .rowsGap(10)
-          .layoutWeight(1)
-          .margin({ right: 12 })
-        }
-        .width('100%')
-        .padding({ left: 12, right: 0, top: 12, bottom: 15 })
-        .alignItems(VerticalAlign.Center)
-        Row()
-          .width('100%')
-          .height(8)
-          .backgroundColor($r('app.color.common_color_6'))
+      Scroll() {
         Column() {
+          Row()
+            .width('100%')
+            .height(8)
+            .backgroundColor($r('app.color.common_color_6'))
           Row() {
-            Text('专业')
+            Text('年级')
               .fontSize(17)
               .fontColor($r('app.color.common_color_1'))
-              .margin({ top: 20, bottom: 20 })
-            Text(this.chosenMajorText)
-              .fontSize(17)
-              .fontColor($r('app.color.common_color_1'))
-              .maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-              .margin({ left: 60 })
-              .layoutWeight(1)
-            Image(this.showMajors ? $r('app.media.arrow_up_blue_desk_widget') :
-              $r('app.media.arrow_down_blue_desk_widget'))
-              .width(39)
-              .height(32.5)
-              .padding(12)
-              .onClick(() => {
-                this.showMajors = !this.showMajors;
-              })
+              .margin({ right: 27 })
+            Grid() {
+              ForEach(this.gradeOptions, (item: AuditGradeEntry, index: number) => {
+                GridItem() {
+                  this.gradeItem(item, index)
+                }
+              }, (item: AuditGradeEntry) => 'gr' + item.nj + '_' + item.njmc)
+            }
+            .columnsTemplate(AdaptiveLayoutHelper.buildColumnsTemplate(
+              BreakpointSystem.getGridColumns(this.currentBreakpoint, 3)
+            ))
+            .columnsGap(22)
+            .rowsGap(10)
+            .layoutWeight(1)
+            .height(AdaptiveLayoutHelper.computeGridHeightVp(
+              this.gradeOptions.length,
+              BreakpointSystem.getGridColumns(this.currentBreakpoint, 3),
+              34,
+              10,
+              0
+            ))
+            .margin({ right: 12 })
           }
           .width('100%')
-          .padding({ left: 12 })
+          .padding({ left: 12, right: 0, top: 12, bottom: 15 })
           .alignItems(VerticalAlign.Center)
-          if (this.showMajors) {
-            Divider()
-              .color($r('app.color.common_color_5'))
-              .strokeWidth(0.5)
-              .width('100%')
-            Column() {
-              ForEach(this.majorOptions, (item: AuditMajorEntry, index: number) => {
-                this.majorItem(item, index)
-              }, (item: AuditMajorEntry) => 'mj' + item.zydm + '_' + item.zymc)
+          Row()
+            .width('100%')
+            .height(8)
+            .backgroundColor($r('app.color.common_color_6'))
+          Column() {
+            Row() {
+              Text('专业')
+                .fontSize(17)
+                .fontColor($r('app.color.common_color_1'))
+                .margin({ top: 20, bottom: 20 })
+              Text(this.chosenMajorText)
+                .fontSize(17)
+                .fontColor($r('app.color.common_color_1'))
+                .maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+                .margin({ left: 60 })
+                .layoutWeight(1)
+              Image(this.showMajors ? $r('app.media.arrow_up_blue_desk_widget') :
+                $r('app.media.arrow_down_blue_desk_widget'))
+                .width(39)
+                .height(32.5)
+                .padding(12)
+                .hoverEffect(HoverEffect.Highlight)
+                .onClick(() => {
+                  this.showMajors = !this.showMajors;
+                })
             }
             .width('100%')
-            .padding({ left: 60 })
-            .backgroundColor($r('app.color.divider_grey'))
-            .alignItems(HorizontalAlign.Start)
+            .padding({ left: 12 })
+            .alignItems(VerticalAlign.Center)
+            if (this.showMajors) {
+              Divider()
+                .color($r('app.color.common_color_5'))
+                .strokeWidth(0.5)
+                .width('100%')
+              Column() {
+                ForEach(this.majorOptions, (item: AuditMajorEntry, index: number) => {
+                  this.majorItem(item, index)
+                }, (item: AuditMajorEntry) => 'mj' + item.zydm + '_' + item.zymc)
+              }
+              .width('100%')
+              .padding({ left: 60 })
+              .backgroundColor($r('app.color.divider_grey'))
+              .alignItems(HorizontalAlign.Start)
+            }
           }
+          .width('100%')
+          .alignItems(HorizontalAlign.Start)
         }
         .width('100%')
-        .alignItems(HorizontalAlign.Start)
       }
       .width('100%')
+      .constraintSize({
+        maxWidth: AdaptiveLayoutHelper.getSheetMaxWidth(this.currentBreakpoint, this.windowWidthVp),
+        maxHeight: BreakpointSystem.getDialogMaxHeight(this.windowHeightVp)
+      })
       .backgroundColor($r('app.color.ybg_white'))
+      .borderRadius(this.currentBreakpoint === 'xs' || this.currentBreakpoint === 'sm' ?
+        0 : { bottomLeft: 12, bottomRight: 12 })
+      .clip(true)
       .onClick(() => {
         // 拦截面板内点击
       })
-      // 面板以下（含 marginBottom 60vp 空隙，padding 计入点击区）：透明区触摸 dismiss →
-      // applyFilter 回调（源码 onTouch y>panel.bottom）
+      // 面板以下透明区触摸 dismiss → applyFilter 回调
       Column()
         .width('100%')
         .layoutWeight(1)
-        .padding({ top: 60 })
         .onClick(() => {
           this.applyFilter();
         })
     }
     .width('100%')
     .height('100%')
-    .alignItems(HorizontalAlign.Start)
+    .alignItems(HorizontalAlign.Center)
     .justifyContent(FlexAlign.Start)
-    .backgroundColor($r('app.color.popup_translucence_bg'))
+    .backgroundColor('#66000000')
   }
 
   build() {
@@ -477,6 +502,8 @@ struct ChooseCoursePage {
             this.searchBox()
           }
           .width('100%')
+          .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+          .alignSelf(ItemAlign.Center)
           .padding({ left: 10, right: 10 })
         }
         .width('100%')
@@ -495,46 +522,61 @@ struct ChooseCoursePage {
               .height(72)
               .color($r('app.color.ybg_blue'))
           } else if (this.loadState === 2) {
-            Column() {
-              Image($r('app.media.no_report'))
-                .width(220)
-                .height(150)
-                .objectFit(ImageFit.Contain)
-                .margin({ left: 25, right: 25 })
+            Scroll() {
+              Column() {
+                Image($r('app.media.no_report'))
+                  .width(220)
+                  .height(150)
+                  .objectFit(ImageFit.Contain)
+                  .margin({ left: 25, right: 25 })
+              }
+              .width('100%')
+              .constraintSize({ minHeight: 280 })
+              .justifyContent(FlexAlign.Center)
             }
             .width('100%')
             .height('100%')
-            .justifyContent(FlexAlign.Center)
           } else if (this.loadState === 3) {
-            Column() {
-              Image($r('app.media.empty_error'))
-                .width(220)
-                .height(150)
-                .objectFit(ImageFit.Contain)
-                .margin({ left: 25, right: 25 })
-              Text(this.errorTips)
-                .fontSize(12)
-                .fontColor('#CECECE')
-                .textAlign(TextAlign.Center)
-                .padding(15)
+            Scroll() {
+              Column() {
+                Image($r('app.media.empty_error'))
+                  .width(220)
+                  .height(150)
+                  .objectFit(ImageFit.Contain)
+                  .margin({ left: 25, right: 25 })
+                Text(this.errorTips)
+                  .fontSize(12)
+                  .fontColor('#CECECE')
+                  .textAlign(TextAlign.Center)
+                  .padding(15)
+              }
+              .width('100%')
+              .constraintSize({ minHeight: 280 })
+              .justifyContent(FlexAlign.Center)
+            }
+            .width('100%')
+            .height('100%')
+          } else {
+            Row() {
+              List() {
+                ForEach(this.rows, (item: AuditCourseNameEntry, index: number) => {
+                  ListItem() {
+                    this.courseRow(item, index)
+                  }
+                }, (item: AuditCourseNameEntry, index: number) => 'row' + item.kcmc + '_' + index)
+              }
+              .width('100%')
+              .height('100%')
+              .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+              .contentEndOffset(this.avoidAreaBottomVp > 0 ? this.avoidAreaBottomVp : 0)
+              .scrollBar(BarState.Off)
+              .onReachEnd(() => {
+                this.loadMore();
+              })
             }
             .width('100%')
             .height('100%')
             .justifyContent(FlexAlign.Center)
-          } else {
-            List() {
-              ForEach(this.rows, (item: AuditCourseNameEntry, index: number) => {
-                ListItem() {
-                  this.courseRow(item, index)
-                }
-              }, (item: AuditCourseNameEntry, index: number) => 'row' + item.kcmc + '_' + index)
-            }
-            .width('100%')
-            .height('100%')
-            .scrollBar(BarState.Off)
-            .onReachEnd(() => {
-              this.loadMore();
-            })
           }
         }
         .width('100%')
@@ -549,5 +591,6 @@ struct ChooseCoursePage {
     }
     .width('100%')
     .height('100%')
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
   }
 }

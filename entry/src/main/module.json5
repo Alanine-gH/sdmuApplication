@@ -87,6 +87,9 @@
         "name": "ohos.permission.PRIVACY_WINDOW"
       },
       {
+        "name": "ohos.permission.ACCESS_BIOMETRIC"
+      },
+      {
         "name": "ohos.permission.READ_CALENDAR",
         "reason": "$string:read_calendar_reason",
         "usedScene": {

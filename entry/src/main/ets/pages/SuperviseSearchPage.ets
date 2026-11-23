@@ -202,6 +202,7 @@ struct SuperviseSearchPage {
               .padding(0)
               .layoutWeight(1)
               .height(32)
+              .enterKeyType(EnterKeyType.Search)
               .defaultFocus(true)
               .onChange((value: string) => {
                 this.keyword = value;
@@ -227,6 +228,7 @@ struct SuperviseSearchPage {
             .fontColor($r('app.color.common_color_1'))
             .height(44)
             .padding({ left: 8, right: 4 })
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               // 源码 f.onClick：finish
               this.getUIContext().getRouter().back();
@@ -325,6 +327,7 @@ struct SuperviseSearchPage {
         .width('100%')
         .justifyContent(FlexAlign.Center)
         .padding({ top: 29.5, bottom: 20 })
+        .hoverEffect(HoverEffect.Highlight)
         .onClick(() => {
           this.clearCache();
         })
@@ -356,6 +359,7 @@ struct SuperviseSearchPage {
           .width(14)
           .height(14)
           .padding(8)
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             this.onCacheRemove(index);
           })
@@ -364,6 +368,7 @@ struct SuperviseSearchPage {
       .padding({ left: 12, right: 12 })
       .backgroundColor($r('app.color.white'))
       .alignItems(VerticalAlign.Center)
+      .hoverEffect(HoverEffect.Highlight)
       .onClick(() => {
         this.onCacheItemClick(word);
       })
@@ -401,6 +406,7 @@ struct SuperviseSearchPage {
             .padding(12)
             .alignItems(VerticalAlign.Center)
             .backgroundColor($r('app.color.white'))
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               this.onResultClick(item);
             })

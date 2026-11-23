@@ -6,6 +6,7 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { LoadingView } from '../components/LoadingView';
 import { EmptyView } from '../components/EmptyView';
 import { PreferencesUtil } from '../data/PreferencesUtil';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * OA 待办搜索页 — 1:1 翻译原 APK TodoSearchActivity.java(332行)：
@@ -58,6 +59,11 @@ struct TodoSearchPage {
   @State everSearched: boolean = false;
   /** EMPTY_SEARCH / 失败态文案（''=不显示空态） */
   @State emptyText: string = '';
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
+  @StorageProp('keyboardHeightVp') keyboardHeightVp: number = 0;
 
   aboutToAppear(): void {
     // 源码 f1：u.setData(y.a()) 读缓存；有缓存 → child0，无 → child1 且 n 隐藏
@@ -286,53 +292,63 @@ struct TodoSearchPage {
   /** mobile_campus_oa_toolbar_todo_search.xml：44vp 白底 + 搜索框(32vp 圆角灰) + "取消" */
   @Builder
   searchBar() {
-    Row() {
+    Column() {
       Row() {
-        Image($r('app.media.mobile_campus_oa_search_b'))
-          .width(16)
-          .height(16)
-          .margin({ left: 8, right: 9 })
-        TextInput({
-          text: this.keyword,
-          placeholder: '输入关键字搜索...'
-        })
-          .fontSize(14)
-          .fontColor($r('app.color.common_color_1'))
-          .placeholderColor('#B5B5B5')
-          .placeholderFont({ size: 14 })
-          .backgroundColor(Color.Transparent)
-          .padding(0)
-          .layoutWeight(1)
-          .height('100%')
-          .enterKeyType(EnterKeyType.Search)
-          .onChange((value: string) => {
-            this.keyword = value;
+        Row() {
+          Image($r('app.media.mobile_campus_oa_search_b'))
+            .width(16)
+            .height(16)
+            .margin({ left: 8, right: 9 })
+          TextInput({
+            text: this.keyword,
+            placeholder: '输入关键字搜索...'
           })
-          .onSubmit(() => {
-            // 源码 g.onEditorAction：IME actionSearch → w=1 → b3(keyword, 1)
-            this.startSearch(this.keyword.trim(), 1);
+            .fontSize(14)
+            .fontColor($r('app.color.common_color_1'))
+            .placeholderColor('#B5B5B5')
+            .placeholderFont({ size: 14 })
+            .backgroundColor(Color.Transparent)
+            .padding(0)
+            .layoutWeight(1)
+            .height('100%')
+            .enterKeyType(EnterKeyType.Search)
+            .defaultFocus(true)
+            .onChange((value: string) => {
+              this.keyword = value;
+            })
+            .onSubmit(() => {
+              // 源码 g.onEditorAction：IME actionSearch → w=1 → b3(keyword, 1)
+              this.startSearch(this.keyword.trim(), 1);
+            })
+        }
+        .width('100%')
+        .height(32)
+        // 源码 mobile_campus_shape_base_sesarch_bg：#F2F2F2 + 1px #DADBDF 描边 + 圆角 8dip
+        .backgroundColor('#F2F2F2')
+        .borderRadius(8)
+        .border({ width: 1, color: '#DADBDF' })
+        .layoutWeight(1)
+        Text('取消')
+          .fontSize(15)
+          .fontColor($r('app.color.mobile_campus_primary_color_default'))
+          .margin({ left: 8 })
+          .hoverEffect(HoverEffect.Highlight)
+          .onClick(() => {
+            // 源码 h.onClick → finish()
+            router.back();
           })
       }
       .width('100%')
-      .height(32)
-      // 源码 mobile_campus_shape_base_sesarch_bg：#F2F2F2 + 1px #DADBDF 描边 + 圆角 8dip
-      .backgroundColor('#F2F2F2')
-      .borderRadius(8)
-      .border({ width: 1, color: '#DADBDF' })
-      .layoutWeight(1)
-      Text('取消')
-        .fontSize(15)
-        .fontColor($r('app.color.mobile_campus_primary_color_default'))
-        .margin({ left: 8 })
-        .onClick(() => {
-          // 源码 h.onClick → finish()
-          router.back();
-        })
+      .height(44)
+      .padding({
+        left: Math.max(12, this.avoidAreaLeftVp),
+        right: Math.max(12, this.avoidAreaRightVp)
+      })
+      .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+      .alignSelf(ItemAlign.Center)
+      .alignItems(VerticalAlign.Center)
     }
     .width('100%')
-    .height(44)
-    .padding({ left: 12, right: 12 })
-    .alignItems(VerticalAlign.Center)
     .backgroundColor($r('app.color.main_bg'))
     .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
   }
@@ -367,6 +383,7 @@ struct TodoSearchPage {
                 .width(16)
                 .height(16)
                 .padding(4)
+                .hoverEffect(HoverEffect.Highlight)
                 .onClick(() => {
                   this.onCacheRemove(row);
                 })
@@ -376,6 +393,7 @@ struct TodoSearchPage {
             .padding({ left: 12.5, right: 12 })
             .alignItems(VerticalAlign.Center)
             .backgroundColor($r('app.color.white'))
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               this.onCacheClick(row);
             })
@@ -397,6 +415,7 @@ struct TodoSearchPage {
           }
           .width('100%')
           .alignItems(HorizontalAlign.Center)
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             this.onCacheClear();
           })
@@ -404,9 +423,13 @@ struct TodoSearchPage {
       }
       .width('100%')
       .layoutWeight(1)
+      .contentEndOffset(this.keyboardHeightVp + this.avoidAreaBottomVp)
       .scrollBar(BarState.Off)
     }
     .width('100%')
+    .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+    .alignSelf(ItemAlign.Center)
+    .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
     .layoutWeight(1)
   }
 
@@ -421,6 +444,7 @@ struct TodoSearchPage {
           EmptyView({ tipText: this.emptyText === '' ? '暂无搜索结果' : this.emptyText })
         }
         .width('100%')
+        .padding({ bottom: this.keyboardHeightVp + this.avoidAreaBottomVp })
         .layoutWeight(1)
         .onClick(() => {
           if (this.emptyText !== '') {
@@ -448,6 +472,7 @@ struct TodoSearchPage {
         }
         .width('100%')
         .layoutWeight(1)
+        .contentEndOffset(this.keyboardHeightVp + this.avoidAreaBottomVp)
         .scrollBar(BarState.Off)
         .edgeEffect(EdgeEffect.Spring)
         .onReachEnd(() => {
@@ -456,6 +481,9 @@ struct TodoSearchPage {
       }
     }
     .width('100%')
+    .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+    .alignSelf(ItemAlign.Center)
+    .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
     .layoutWeight(1)
   }
 
@@ -500,6 +528,7 @@ struct TodoSearchPage {
     .height(72)
     .padding({ left: 11.5 })
     .backgroundColor($r('app.color.white'))
+    .hoverEffect(HoverEffect.Highlight)
     .onClick(() => {
       this.onChildClick(row);
     })

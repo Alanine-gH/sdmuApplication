@@ -7,6 +7,8 @@ import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { AttendanceDetail, AttendanceByDayBean, AttendanceDetailErrorRecord } from '../model/AttendanceModel';
 import { Constants } from '../data/Constants';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 个人考勤 — AttendancePersonalActivity 源码级翻译（attendance/activity/view）。
@@ -41,6 +43,10 @@ struct AttendancePersonalPage {
   @State showPicker: boolean = false;
   @State selYear: number = 2026;
   @State selMonth: number = 1;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 780;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   private personId: string = '';
   private monthValue: string = '';
 
@@ -239,46 +245,57 @@ struct AttendancePersonalPage {
 
   @Builder
   monthPickerPanel() {
-    Column() {
-      Row() {
-        Text('取消')
-          .fontSize(16)
-          .fontColor('#333333')
-          .padding({ left: 16, right: 16, top: 12, bottom: 12 })
-          .onClick((): void => { this.showPicker = false; })
-        Blank().layoutWeight(1)
-        Text('确定')
-          .fontSize(16)
-          .fontColor('#057DFF')
-          .padding({ left: 16, right: 16, top: 12, bottom: 12 })
-          .onClick((): void => { this.onPickerConfirm(); })
+    Scroll() {
+      Column() {
+        Row() {
+          Text('取消')
+            .fontSize(16)
+            .fontColor('#333333')
+            .padding({ left: 16, right: 16, top: 12, bottom: 12 })
+            .hoverEffect(HoverEffect.Highlight)
+            .onClick((): void => { this.showPicker = false; })
+          Blank().layoutWeight(1)
+          Text('确定')
+            .fontSize(16)
+            .fontColor('#057DFF')
+            .padding({ left: 16, right: 16, top: 12, bottom: 12 })
+            .hoverEffect(HoverEffect.Highlight)
+            .onClick((): void => { this.onPickerConfirm(); })
+        }
+        .width('100%')
+        .backgroundColor('#F5F5F5')
+        Row() {
+          TextPicker({ range: this.pickerYears(), selected: this.selYearIndex() })
+            .layoutWeight(1)
+            .height(160)
+            .onChange((value: string | string[], index: number | number[]) => {
+              const idx: number = Array.isArray(index) ? (index.length > 0 ? index[0] : 0) : index;
+              const years: string[] = this.pickerYears();
+              if (idx >= 0 && idx < years.length) {
+                this.selYear = Number(years[idx]);
+              }
+            })
+          TextPicker({ range: this.pickerMonths(), selected: this.selMonth - 1 })
+            .layoutWeight(1)
+            .height(160)
+            .onChange((value: string | string[], index: number | number[]) => {
+              const idx: number = Array.isArray(index) ? (index.length > 0 ? index[0] : 0) : index;
+              this.selMonth = idx + 1;
+            })
+        }
+        .width('100%')
       }
       .width('100%')
-      .backgroundColor('#F5F5F5')
-      Row() {
-        TextPicker({ range: this.pickerYears(), selected: this.selYearIndex() })
-          .layoutWeight(1)
-          .height(160)
-          .onChange((value: string | string[], index: number | number[]) => {
-            const idx: number = Array.isArray(index) ? (index.length > 0 ? index[0] : 0) : index;
-            const years: string[] = this.pickerYears();
-            if (idx >= 0 && idx < years.length) {
-              this.selYear = Number(years[idx]);
-            }
-          })
-        TextPicker({ range: this.pickerMonths(), selected: this.selMonth - 1 })
-          .layoutWeight(1)
-          .height(160)
-          .onChange((value: string | string[], index: number | number[]) => {
-            const idx: number = Array.isArray(index) ? (index.length > 0 ? index[0] : 0) : index;
-            this.selMonth = idx + 1;
-          })
-      }
-      .width('100%')
+      .padding({ bottom: this.avoidAreaBottomVp })
     }
-    .width('100%')
+    .scrollBar(BarState.Off)
+    .width(AdaptiveLayoutHelper.getSheetMaxWidth(this.currentBreakpoint, this.windowWidthVp))
+    .constraintSize({ maxHeight: BreakpointSystem.getDialogMaxHeight(this.windowHeightVp) })
     .backgroundColor($r('app.color.white'))
     .borderRadius({ topLeft: 12, topRight: 12 })
+    .onClick(() => {
+      // 拦截底部弹窗点击
+    })
   }
 
   build() {
@@ -325,6 +342,8 @@ struct AttendancePersonalPage {
         }
         .width('100%')
         .height('100%')
+        .justifyContent(FlexAlign.End)
+        .alignItems(HorizontalAlign.Center)
         .backgroundColor('#66000000')
       }
     }

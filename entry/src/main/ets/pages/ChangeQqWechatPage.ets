@@ -135,7 +135,11 @@ struct ChangeQqWechatPage {
             .padding(15)
             .margin({ top: 20 })
             .defaultFocus(true)
+            .enterKeyType(EnterKeyType.Done)
             .type(this.kind === 'QQ' ? InputType.Number : InputType.Normal)
+            .onSubmit(() => {
+              this.submit(false);
+            })
             .onChange((value: string) => {
               this.onInput(value);
             })
@@ -155,6 +159,7 @@ struct ChangeQqWechatPage {
               .padding({ top: 13, bottom: 13 })
               .backgroundColor(this.canSubmit() ? '#1B68B7' : $r('app.color.gray_nickname'))
               .borderRadius(8)
+              .hoverEffect(HoverEffect.Highlight)
               .onClick(() => {
                 this.submit(false);
               })
@@ -171,6 +176,7 @@ struct ChangeQqWechatPage {
               .padding({ top: 13, bottom: 13 })
               .borderRadius(8)
               .border({ width: 0.5, color: '#e96161' })
+              .hoverEffect(HoverEffect.Highlight)
               .onClick(() => {
                 this.submit(true);
               })

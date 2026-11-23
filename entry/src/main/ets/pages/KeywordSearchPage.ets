@@ -121,6 +121,7 @@ struct KeywordSearchPage {
       .borderRadius(8)
       .backgroundColor('#f2f2f2')
       .margin({ left: 0, right: 16, top: 8, bottom: 8 })
+      .hoverEffect(HoverEffect.Highlight)
       .onClick(() => {
         // c(str)：回填 + 光标末位 + O2()
         this.searchText = keyword;
@@ -137,6 +138,7 @@ struct KeywordSearchPage {
           .height(20)
           .objectFit(ImageFit.Contain)
           .padding({ left: 11.5, right: 7.5, top: 1 })
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             // e()：onBackPressed → 同发 64
             this.submitSearch();
@@ -179,13 +181,12 @@ struct KeywordSearchPage {
               .layoutWeight(1)
               .height(28)
               .enterKeyType(EnterKeyType.Search)
+              .defaultFocus(true)
               .onChange((value: string) => {
                 this.searchText = value;
               })
-              .onSubmit((enterKey: EnterKeyType) => {
-                if (enterKey === EnterKeyType.Search) {
-                  this.submitSearch();
-                }
+              .onSubmit(() => {
+                this.submitSearch();
               })
           }
           .width('100%')
@@ -199,6 +200,7 @@ struct KeywordSearchPage {
               .width(20)
               .height(13.5)
               .objectFit(ImageFit.None)
+              .hoverEffect(HoverEffect.Highlight)
               .onClick(() => {
                 // g()：清空输入
                 this.searchText = '';
@@ -213,6 +215,7 @@ struct KeywordSearchPage {
           .fontColor($r('app.color.sdmu_primary'))
           .padding({ left: 15, right: 15 })
           .height('100%')
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             // f()：O2()
             this.submitSearch();
@@ -241,6 +244,7 @@ struct KeywordSearchPage {
                   .height(20)
                   .objectFit(ImageFit.Contain)
                   .padding({ left: 16, right: 16 })
+                  .hoverEffect(HoverEffect.Highlight)
                   .onClick(() => {
                     // h()：确认弹窗 → K2()
                     this.getUIContext().showAlertDialog({

@@ -98,6 +98,10 @@ struct ChangeNickNamePage {
             .padding(15)
             .margin({ top: 20 })
             .defaultFocus(true)
+            .enterKeyType(EnterKeyType.Done)
+            .onSubmit(() => {
+              this.submit();
+            })
             .onChange((value: string) => {
               this.nickName = value;
             })
@@ -117,6 +121,7 @@ struct ChangeNickNamePage {
               .padding({ top: 13, bottom: 13 })
               .backgroundColor(this.canSubmit() ? '#1B68B7' : $r('app.color.gray_nickname'))
               .borderRadius(8)
+              .hoverEffect(HoverEffect.Highlight)
               .onClick(() => {
                 this.submit();
               })

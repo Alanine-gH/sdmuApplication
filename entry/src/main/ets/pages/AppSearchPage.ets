@@ -293,6 +293,7 @@ struct AppSearchPage {
       .borderRadius(8)
       .backgroundColor('#f2f2f2')
       .margin({ left: 0, right: 16, top: 8, bottom: 8 })
+      .hoverEffect(HoverEffect.Highlight)
       .onClick(() => {
         // o(str)：回填 + 光标末位 + f3()
         this.searchText = keyword;
@@ -356,6 +357,7 @@ struct AppSearchPage {
       .borderRadius(8)
       .backgroundColor('#F8F8F8')
       .alignItems(VerticalAlign.Center)
+      .hoverEffect(HoverEffect.Highlight)
       .onClick(() => {
         this.openApp(app);
       })
@@ -412,6 +414,7 @@ struct AppSearchPage {
                 .layoutWeight(1)
                 .height(34)
                 .enterKeyType(EnterKeyType.Search)
+                .defaultFocus(true)
                 .onChange((value: string) => {
                   // l TextWatcher：空 → 历史区显/列表隐 + ivClear 隐；非空 → ivClear 显
                   this.searchText = value;
@@ -420,10 +423,8 @@ struct AppSearchPage {
                     this.searched = false;
                   }
                 })
-                .onSubmit((enterKey: EnterKeyType) => {
-                  if (enterKey === EnterKeyType.Search) {
-                    this.doSearch();
-                  }
+                .onSubmit(() => {
+                  this.doSearch();
                 })
             }
             .width('100%')
@@ -437,6 +438,7 @@ struct AppSearchPage {
                 .width(40)
                 .height(40)
                 .objectFit(ImageFit.None)
+                .hoverEffect(HoverEffect.Highlight)
                 .onClick(() => {
                   // q()：清空输入 + ivClear 隐
                   this.searchText = '';
@@ -487,6 +489,7 @@ struct AppSearchPage {
             .fontColor($r('app.color.sdmu_primary'))
             .padding({ left: 16, right: 20 })
             .height('100%')
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               // p()：finish
               router.back();
@@ -518,6 +521,7 @@ struct AppSearchPage {
                 .height(20)
                 .objectFit(ImageFit.Contain)
                 .padding({ left: 16, right: 16 })
+                .hoverEffect(HoverEffect.Highlight)
                 .onClick(() => {
                   // r()：确认弹窗 → T2() 清空
                   this.getUIContext().showAlertDialog({

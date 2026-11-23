@@ -8,6 +8,8 @@ import { ApiResponse } from '../model/ResponseModel';
 import { LoginSession } from '../network/LoginSession';
 import { SocialPost, SocialComment, SocialLike, SocialSubComment } from '../model/SocialModels';
 import { Constants } from '../data/Constants';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 帖子详情页 — 1:1 复刻 PostDetailActivity（social_news_activity + social_post_detail_head）+ PostDetailPresenter。
@@ -35,6 +37,9 @@ struct PostDetailPage {
   @State commentText: string = '';
   @State replyTarget: SocialComment | null = null;
   @State avatarVersion: number = 0;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('keyboardHeightVp') keyboardHeightVp: number = 0;
   private postId: string = '';
   private targetUserId: string = '';
   private avatarMap: Map<string, string> = new Map();
@@ -387,10 +392,18 @@ struct PostDetailPage {
             }
           }, (pic: string) => pic)
         }
-        .columnsTemplate('1fr 1fr 1fr')
+        .columnsTemplate(AdaptiveLayoutHelper.buildColumnsTemplate(
+          BreakpointSystem.getGridColumns(this.currentBreakpoint, 3)
+        ))
         .columnsGap(2.5)
         .rowsGap(2.5)
-        .height(117.5)
+        .height(AdaptiveLayoutHelper.computeGridHeightVp(
+          p.pictureList().length,
+          BreakpointSystem.getGridColumns(this.currentBreakpoint, 3),
+          105,
+          2.5,
+          4
+        ))
         .width('100%')
       }
     }
@@ -605,7 +618,7 @@ struct PostDetailPage {
     Column()
       .width('100%')
       .height('100%')
-      .backgroundColor('rgba(0,0,0,0.35)')
+      .backgroundColor('#66000000')
       .onClick(() => {
         this.showInput = false;
       })
@@ -633,6 +646,7 @@ struct PostDetailPage {
           .borderRadius(6)
           .padding({ left: 14, right: 14, top: 9, bottom: 9 })
           .margin({ left: 8 })
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             this.submitComment();
           })
@@ -641,7 +655,8 @@ struct PostDetailPage {
       .alignItems(VerticalAlign.Bottom)
     }
     .width('100%')
-    .padding(15)
+    .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+    .padding({ left: 15, right: 15, top: 15, bottom: Math.max(15, this.avoidAreaBottomVp + this.keyboardHeightVp + 12) })
     .backgroundColor($r('app.color.white'))
     .borderRadius({ topLeft: 8, topRight: 8 })
   }
@@ -660,74 +675,97 @@ struct PostDetailPage {
           LoadingView()
             .layoutWeight(1)
         } else if (this.pageState === 1 && this.post !== null) {
-          List() {
-            ListItem() {
-              this.detailHead(this.post as SocialPost)
-            }
-            ListItem() {
-              Column() {
-                Text('全部评论')
-                  .fontSize(13)
-                  .fontColor($r('app.color.common_color_3'))
-                  .width('100%')
-                  .padding({ left: 15, top: 10, bottom: 6 })
-              }
-              .width('100%')
-              .backgroundColor($r('app.color.main_bg'))
-            }
-            ForEach(this.comments, (c: SocialComment) => {
+          Row() {
+            List() {
               ListItem() {
-                this.commentItem(c)
+                this.detailHead(this.post as SocialPost)
               }
-            }, (c: SocialComment) => c.id)
-            if (this.comments.length === 0) {
               ListItem() {
-                Text('快来发表你的评论吧')
-                  .fontSize(13)
-                  .fontColor($r('app.color.common_color_4'))
-                  .width('100%')
-                  .textAlign(TextAlign.Center)
-                  .padding(30)
+                Column() {
+                  Text('全部评论')
+                    .fontSize(13)
+                    .fontColor($r('app.color.common_color_3'))
+                    .width('100%')
+                    .padding({ left: 15, top: 10, bottom: 6 })
+                }
+                .width('100%')
+                .backgroundColor($r('app.color.main_bg'))
+              }
+              ForEach(this.comments, (c: SocialComment) => {
+                ListItem() {
+                  this.commentItem(c)
+                }
+              }, (c: SocialComment) => c.id)
+              if (this.comments.length === 0) {
+                ListItem() {
+                  Text('快来发表你的评论吧')
+                    .fontSize(13)
+                    .fontColor($r('app.color.common_color_4'))
+                    .width('100%')
+                    .textAlign(TextAlign.Center)
+                    .padding(30)
+                }
+              }
+              if (this.hasMore) {
+                ListItem() {
+                  Text('加载更多')
+                    .fontSize(13)
+                    .fontColor($r('app.color.common_color_12'))
+                    .width('100%')
+                    .textAlign(TextAlign.Center)
+                    .padding(12)
+                    .hoverEffect(HoverEffect.Highlight)
+                    .onClick(() => {
+                      this.loadComments(this.pageNum + 1);
+                    })
+                }
               }
             }
-            if (this.hasMore) {
-              ListItem() {
-                Text('加载更多')
-                  .fontSize(13)
-                  .fontColor($r('app.color.common_color_12'))
-                  .width('100%')
-                  .textAlign(TextAlign.Center)
-                  .padding(12)
-                  .onClick(() => {
-                    this.loadComments(this.pageNum + 1);
-                  })
-              }
-            }
-          }
-          .width('100%')
-          .layoutWeight(1)
-          .backgroundColor($r('app.color.main_bg'))
-        } else {
-          Column({ space: 12 }) {
-            Text('ⓘ')
-              .fontSize(44)
-              .fontColor($r('app.color.common_color_4'))
-            Text(this.pageState === 3 ? '帖子已删除' : this.errMsg === '' ? '加载失败' : this.errMsg)
-              .fontSize(14)
-              .fontColor($r('app.color.common_color_3'))
-            Text('重试')
-              .fontSize(14)
-              .fontColor($r('app.color.common_color_12'))
-              .onClick(() => {
-                this.loadDetail();
-              })
+            .width('100%')
+            .height('100%')
+            .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+            .backgroundColor($r('app.color.main_bg'))
           }
           .width('100%')
           .layoutWeight(1)
           .justifyContent(FlexAlign.Center)
+        } else {
+          Scroll() {
+            Column({ space: 12 }) {
+              Text('ⓘ')
+                .fontSize(44)
+                .fontColor($r('app.color.common_color_4'))
+              Text(this.pageState === 3 ? '帖子已删除' : this.errMsg === '' ? '加载失败' : this.errMsg)
+                .fontSize(14)
+                .fontColor($r('app.color.common_color_3'))
+              Text('重试')
+                .fontSize(14)
+                .fontColor($r('app.color.common_color_12'))
+                .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+                .hoverEffect(HoverEffect.Highlight)
+                .onClick(() => {
+                  this.loadDetail();
+                })
+            }
+            .width('100%')
+            .constraintSize({ minHeight: 320 })
+            .justifyContent(FlexAlign.Center)
+          }
+          .width('100%')
+          .layoutWeight(1)
         }
         if (this.pageState === 1 && this.post !== null) {
-          this.bottomBar(this.post as SocialPost)
+          Row() {
+            Column() {
+              this.bottomBar(this.post as SocialPost)
+            }
+            .width('100%')
+            .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+          }
+          .width('100%')
+          .justifyContent(FlexAlign.Center)
+          .padding({ bottom: this.avoidAreaBottomVp })
+          .backgroundColor($r('app.color.white'))
         }
       }
       .width('100%')
@@ -740,5 +778,6 @@ struct PostDetailPage {
     }
     .width('100%')
     .height('100%')
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
   }
 }

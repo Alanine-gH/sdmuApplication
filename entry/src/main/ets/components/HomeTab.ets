@@ -1,6 +1,7 @@
 import { router } from '@kit.ArkUI';
 import { ApiService } from '../network/ApiService';
 import { NewsItem } from '../model/NewsModel';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 首页新闻区块 — 按源布局 1:1 复刻：
@@ -12,6 +13,27 @@ import { NewsItem } from '../model/NewsModel';
 @Component
 export struct HomeTab {
   @State newsList: NewsItem[] = [];
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 640;
+
+  private getBannerHeight(): number {
+    if (this.isCompactHeight) {
+      const safeH: number = this.windowHeightVp > 0 ? this.windowHeightVp : 360;
+      return Math.min(120, Math.max(88, Math.round(safeH * 0.28)));
+    }
+    if (this.currentBreakpoint === 'lg' || this.currentBreakpoint === 'xl') {
+      return 180;
+    }
+    if (this.currentBreakpoint === 'md') {
+      return 156;
+    }
+    return 130;
+  }
+
+  private getListLanes(): number {
+    return BreakpointSystem.getListColumns(this.currentBreakpoint);
+  }
 
   aboutToAppear(): void {
     ApiService.getNewsList()
@@ -47,6 +69,7 @@ export struct HomeTab {
     }
     .width('100%')
     .height('100%')
+    .hoverEffect(HoverEffect.Highlight)
     .onClick(() => {
       router.pushUrl({ url: 'pages/NewsDetailPage', params: { id: item.id } });
     })
@@ -101,6 +124,8 @@ export struct HomeTab {
                   .textOverflow({ overflow: TextOverflow.Ellipsis })
                   .padding({ left: 12, right: 12, top: 10, bottom: 10 })
                   .width('100%')
+                  .borderRadius(6)
+                  .hoverEffect(HoverEffect.Highlight)
                   .onClick(() => {
                     router.pushUrl({ url: 'pages/NewsDetailPage', params: { id: item.id } });
                   })
@@ -125,6 +150,8 @@ export struct HomeTab {
             .textAlign(TextAlign.Center)
             .padding({ top: 10, bottom: 10 })
             .width('100%')
+            .borderRadius(6)
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               router.pushUrl({ url: 'pages/NewsPage' });
             })
@@ -137,6 +164,37 @@ export struct HomeTab {
       .padding({ left: 12, right: 12, top: 10 })
     }
     .width('100%')
+    .backgroundColor($r('app.color.mobile_campus_primary_color'))
+  }
+
+  /**
+   * Banner 区块 builder（用于 ListItemGroup header，使多栏模式下 Banner 仍通栏展示）
+   */
+  @Builder
+  bannerHeader() {
+    Stack({ alignContent: Alignment.BottomStart }) {
+      if (this.newsList.length > 0) {
+        // AutoScrollViewPager → Swiper 自动轮播（indicator visibility=gone，不显示指示器）
+        Swiper() {
+          ForEach(this.newsList, (item: NewsItem) => {
+            this.bannerCell(item)
+          }, (item: NewsItem) => 'banner_' + item.id)
+        }
+        .width('100%')
+        .height('100%')
+        .autoPlay(true)
+        .interval(4000)
+        .indicator(false)
+      } else {
+        // 数据未加载时显示默认图（main_head_image：scaleType=centerCrop）
+        Image($r('app.media.mobile_campus_main_new_default'))
+          .width('100%')
+          .height('100%')
+          .objectFit(ImageFit.Cover)
+      }
+    }
+    .width('100%')
+    .height(this.getBannerHeight())
     .backgroundColor($r('app.color.mobile_campus_primary_color'))
   }
 
@@ -165,21 +223,21 @@ export struct HomeTab {
             .fontColor($r('app.color.common_color_1'))
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .margin({ top: 8, bottom: 8, left: 12, right: 48 })
+            .margin({ top: 8, bottom: 8, left: 12, right: this.getListLanes() > 1 ? 16 : 48 })
           // tvSubTitle：px_to_sp_26/2=13fp、@color/common_color_3、maxLines=1、marginBottom=8vp
           Text(item.summary)
             .fontSize(13)
             .fontColor($r('app.color.common_color_3'))
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .margin({ bottom: 8, left: 12, right: 48 })
+            .margin({ bottom: 8, left: 12, right: this.getListLanes() > 1 ? 16 : 48 })
           // tvTime：px_to_sp_26/2=13fp、@color/common_color_3、maxLines=1、marginBottom=8vp
           Text(item.publishTime)
             .fontSize(13)
             .fontColor($r('app.color.common_color_3'))
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .margin({ bottom: 8, left: 12, right: 48 })
+            .margin({ bottom: 8, left: 12, right: this.getListLanes() > 1 ? 16 : 48 })
           // 分隔 View：alignParentBottom、background=@color/common_color_6、height=1.0dip=1vp、fill_parent
           Divider()
             .color($r('app.color.common_color_6'))
@@ -194,6 +252,7 @@ export struct HomeTab {
     }
     .width('100%')
     .backgroundColor($r('app.color.white'))
+    .hoverEffect(HoverEffect.Highlight)
     .onClick(() => {
       router.pushUrl({ url: 'pages/NewsDetailPage', params: { id: item.id } });
     })
@@ -201,51 +260,33 @@ export struct HomeTab {
 
   build() {
     // 首页滚动容器（ExpandableListView：background=@color/mobile_campus_bg_color）
-    List() {
-      // Banner 区块：RelativeLayout main_head_banner、height=px_to_dip_260/2=130vp、
-      // background=@color/mobile_campus_primary_color
-      ListItem() {
-        Stack({ alignContent: Alignment.BottomStart }) {
-          if (this.newsList.length > 0) {
-            // AutoScrollViewPager → Swiper 自动轮播（indicator visibility=gone，不显示指示器）
-            Swiper() {
-              ForEach(this.newsList, (item: NewsItem) => {
-                this.bannerCell(item)
-              }, (item: NewsItem) => 'banner_' + item.id)
+    Row() {
+      List() {
+        // Banner 区块（通栏 header）
+        ListItemGroup({ header: this.bannerHeader() })
+
+        // “动态”中部模块（通栏 header）
+        ListItemGroup({ header: this.centerNewsSection() })
+
+        // 首页新闻列表（lg/xl 双列 lanes，其余单列）
+        ListItemGroup() {
+          ForEach(this.newsList, (item: NewsItem) => {
+            ListItem() {
+              this.newsRow(item)
             }
-            .width('100%')
-            .height('100%')
-            .autoPlay(true)
-            .interval(4000)
-            .indicator(false)
-          } else {
-            // 数据未加载时显示默认图（main_head_image：scaleType=centerCrop）
-            Image($r('app.media.mobile_campus_main_new_default'))
-              .width('100%')
-              .height('100%')
-              .objectFit(ImageFit.Cover)
-          }
+          }, (item: NewsItem) => item.id)
         }
-        .width('100%')
-        .height(130)
-        .backgroundColor($r('app.color.mobile_campus_primary_color'))
       }
-
-      // “动态”中部模块（mobile_campus_view_main_center_news.xml）
-      ListItem() {
-        this.centerNewsSection()
-      }
-
-      // 首页新闻列表（mobile_campus_view_main_news.xml 条目）
-      ForEach(this.newsList, (item: NewsItem) => {
-        ListItem() {
-          this.newsRow(item)
-        }
-      }, (item: NewsItem) => item.id)
+      .lanes(this.getListLanes(), this.getListLanes() > 1 ? 8 : 0)
+      .width('100%')
+      .height('100%')
+      .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+      .backgroundColor($r('app.color.mobile_campus_bg_color'))
+      .scrollBar(BarState.Off)
     }
     .width('100%')
     .height('100%')
+    .justifyContent(FlexAlign.Center)
     .backgroundColor($r('app.color.mobile_campus_bg_color'))
-    .scrollBar(BarState.Off)
   }
 }

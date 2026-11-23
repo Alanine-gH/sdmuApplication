@@ -5,12 +5,13 @@ import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { ContactInitData, ContactTopContactListBean,
   ContactRootOrganizationBean, ContactClassAddressBookBean,
-  ContactCourseTeacherBean } from '../model/ContactModel';
+  ContactCourseTeacherBean, ContactAddressBookUserInfo } from '../model/ContactModel';
 import { TitleBar } from '../components/TitleBar';
 import { EmptyView } from '../components/EmptyView';
 import { LoadingView } from '../components/LoadingView';
 import { PreferencesUtil } from '../data/PreferencesUtil';
 import { Constants } from '../data/Constants';
+import { AdaptiveLayoutHelper, SplitPaneConfig } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 通讯录页 — 源码级翻译（APK 逐行 → ArkTS，禁截图猜测）：
@@ -54,6 +55,15 @@ struct ContactPage {
   @State isLoading: boolean = true;
   /** 组展开状态（组名→已展开），持久化 contact_group_expand（源码 ContactCachePImpl b.e/b.f） */
   @State expandedKeys: string[] = [];
+  @State selectedPersonGh: string = '';
+  @State selectedPersonDetail: ContactAddressBookUserInfo | null = null;
+  @State detailLoading: boolean = false;
+  @State detailError: string = '';
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   /** 源码 w：0=教师视图 getInitData，1=学生视图 getStudentInitData（SystemSwitch 缺省=0） */
   private viewMode: number = 0;
   private readonly EXPAND_KEY: string = 'contact_group_expand';
@@ -244,8 +254,50 @@ struct ContactPage {
 
   /** 源码 a1(m0, bundle{gh}) 个人详情页 */
   private gotoPersonalDetail(gh: string): void {
+    const splitCfg: SplitPaneConfig =
+      AdaptiveLayoutHelper.getSplitPaneConfig(this.currentBreakpoint, this.windowWidthVp);
+    if (!splitCfg.useTwoPane) {
+      this.openPersonalDetailFullPage(gh);
+      return;
+    }
+    this.selectPersonForPreview(gh);
+  }
+
+  private openPersonalDetailFullPage(gh: string): void {
     router.pushUrl({ url: 'pages/ContactPersonalDetailPage',
       params: { 'gh': gh } as Record<string, string> });
+  }
+
+  private selectPersonForPreview(gh: string): void {
+    this.selectedPersonGh = gh;
+    this.selectedPersonDetail = null;
+    this.detailError = '';
+    this.detailLoading = true;
+    ApiService.getContactUserInfo(gh, '')
+      .then((response: ApiResponse<ContactAddressBookUserInfo>) => {
+        if (response.code === 1000) {
+          this.detailLoading = false;
+          return;
+        }
+        if (this.selectedPersonGh !== gh) {
+          return;
+        }
+        this.detailLoading = false;
+        if (response.code === 0) {
+          const bean: ContactAddressBookUserInfo = response.data;
+          bean.userInfo.SJHM = bean.userInfo.BDSJH === '' ? bean.userInfo.SJHM : bean.userInfo.BDSJH;
+          this.selectedPersonDetail = bean;
+        } else {
+          this.detailError = response.message === '' ? '获取联系人详情失败' : response.message;
+        }
+      })
+      .catch((error: BusinessError) => {
+        ApiService.logError('ContactPage inline detail fail: ' + error.message);
+        if (this.selectedPersonGh === gh) {
+          this.detailLoading = false;
+          this.detailError = '网络异常，请稍后重试';
+        }
+      });
   }
 
   /** 源码 l.onItemLongClick()：topContactList 子项长按移除确认 */
@@ -459,14 +511,47 @@ struct ContactPage {
   build() {
     Column() {
       TitleBar({ title: this.pageTitle, showBack: true })
-      this.searchBar()
-      if (this.isLoading) {
-        LoadingView()
-      } else if (this.isYellowMode) {
-        // 源码 ContactFragment.a.g() 黄页分支：显示黄页入口（YellowPageFragment 内容属黄页子页）
-        this.yellowEntryRow()
+      if (AdaptiveLayoutHelper.getSplitPaneConfig(this.currentBreakpoint, this.windowWidthVp).useTwoPane &&
+        !this.isYellowMode) {
+        Row() {
+          Column() {
+            this.searchBar()
+            if (this.isLoading) {
+              LoadingView()
+            } else {
+              this.groupList()
+            }
+          }
+          .layoutWeight(AdaptiveLayoutHelper.getSplitPaneConfig(
+            this.currentBreakpoint, this.windowWidthVp).masterRatio)
+          .height('100%')
+
+          Divider()
+            .vertical(true)
+            .width(0.5)
+            .height('100%')
+            .color($r('app.color.common_color_5'))
+
+          Column() {
+            this.contactDetailPane()
+          }
+          .layoutWeight(AdaptiveLayoutHelper.getSplitPaneConfig(
+            this.currentBreakpoint, this.windowWidthVp).detailRatio)
+          .height('100%')
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
       } else {
-        this.groupList()
+        this.searchBar()
+        if (this.isLoading) {
+          LoadingView()
+        } else if (this.isYellowMode) {
+          // 源码 ContactFragment.a.g() 黄页分支：显示黄页入口（YellowPageFragment 内容属黄页子页）
+          this.yellowEntryRow()
+        } else {
+          this.groupList()
+        }
       }
     }
     .width('100%')
@@ -503,6 +588,7 @@ struct ContactPage {
     .height(44)
     .padding({ top: 5, bottom: 5, left: 12, right: 12 })
     .backgroundColor($r('app.color.white'))
+    .hoverEffect(HoverEffect.Highlight)
     .onClick(() => {
       // 源码 a 类：a1(o0, bundle, 2333) → ContactSearchActivity；返回刷新
       router.pushUrl({ url: 'pages/ContactSearchPage' });
@@ -531,6 +617,7 @@ struct ContactPage {
       .margin({ top: 12 })
       .backgroundColor($r('app.color.white'))
       .alignItems(VerticalAlign.Center)
+      .hoverEffect(HoverEffect.Highlight)
       .onClick(() => {
         router.pushUrl({ url: 'pages/ContactYellowPage' });
       })
@@ -595,6 +682,7 @@ struct ContactPage {
     .margin({ top: 12 })
     .backgroundColor($r('app.color.white'))
     .alignItems(VerticalAlign.Center)
+    .hoverEffect(HoverEffect.Highlight)
     .onClick(() => {
       this.onGroupClick(group);
     })
@@ -670,6 +758,7 @@ struct ContactPage {
     }
     .width('100%')
     .margin({ top: 12 })
+    .hoverEffect(HoverEffect.Highlight)
     .onClick(() => {
       this.onGroupClick(group);
     })
@@ -732,6 +821,7 @@ struct ContactPage {
       }
     }
     .width('100%')
+    .hoverEffect(HoverEffect.Highlight)
     .onClick(() => {
       this.onChildClick(group, childIdx);
     })
@@ -792,6 +882,7 @@ struct ContactPage {
             .width(18)
             .height(18)
             .opacity(this.phoneOf(group, childIdx) === '' ? 0 : 1)
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               this.onPhoneTap(this.phoneOf(group, childIdx), this.ghOf(group, childIdx), 1);
             })
@@ -800,6 +891,7 @@ struct ContactPage {
             .height(18)
             .margin({ left: 15 })
             .opacity(this.phoneOf(group, childIdx) === '' ? 0 : 1)
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               this.onPhoneTap(this.phoneOf(group, childIdx), this.ghOf(group, childIdx), 0);
             })
@@ -810,7 +902,9 @@ struct ContactPage {
       .width('100%')
       .padding({ left: 12, top: 10, bottom: 10 })
       .alignItems(VerticalAlign.Center)
-      .backgroundColor($r('app.color.white'))
+      .backgroundColor(this.selectedPersonGh !== '' && this.selectedPersonGh === this.ghOf(group, childIdx)
+        ? '#EEF5FC' : $r('app.color.white'))
+      .hoverEffect(HoverEffect.Highlight)
       .onClick(() => {
         this.onChildClick(group, childIdx);
       })
@@ -828,5 +922,162 @@ struct ContactPage {
     }
     .width('100%')
     .backgroundColor($r('app.color.white'))
+  }
+
+  /** 双栏右侧联系人详情预览面板 */
+  @Builder
+  contactDetailPane() {
+    Column() {
+      if (this.selectedPersonGh === '') {
+        Column() {
+          EmptyView({ tipText: '请选择左侧联系人查看详情' })
+        }
+        .width('100%')
+        .height('100%')
+      } else if (this.detailLoading) {
+        Column() {
+          LoadingView()
+        }
+        .width('100%')
+        .height('100%')
+      } else if (this.detailError !== '' || this.selectedPersonDetail === null) {
+        Column({ space: 12 }) {
+          Text(this.detailError !== '' ? this.detailError : '暂无联系人详情')
+            .fontSize(14)
+            .fontColor($r('app.color.common_color_3'))
+          Text('打开完整页面')
+            .fontSize(15)
+            .fontColor($r('app.color.white'))
+            .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+            .borderRadius(6)
+            .backgroundColor('#3A92ED')
+            .hoverEffect(HoverEffect.Highlight)
+            .onClick(() => {
+              this.openPersonalDetailFullPage(this.selectedPersonGh);
+            })
+        }
+        .width('100%')
+        .height('100%')
+        .justifyContent(FlexAlign.Center)
+        .alignItems(HorizontalAlign.Center)
+      } else {
+        Scroll() {
+          Column({ space: 12 }) {
+            Column({ space: 10 }) {
+              if (this.selectedPersonDetail.userInfo.TX !== '') {
+                Image(Constants.SOCKET_HOST + this.selectedPersonDetail.userInfo.TX)
+                  .width(64)
+                  .height(64)
+                  .borderRadius(32)
+              } else {
+                Text(this.selectedPersonDetail.name === '' ? ' ' : this.selectedPersonDetail.name.substring(0, 1))
+                  .fontSize(26)
+                  .fontColor($r('app.color.ybg_white'))
+                  .width(64)
+                  .height(64)
+                  .textAlign(TextAlign.Center)
+                  .backgroundColor('#3A92ED')
+                  .borderRadius(32)
+              }
+              Text(this.selectedPersonDetail.name)
+                .fontSize(18)
+                .fontWeight(FontWeight.Medium)
+                .fontColor($r('app.color.common_color_1'))
+              if (this.selectedPersonDetail.userInfo.BMMC !== '') {
+                Text(this.selectedPersonDetail.userInfo.BMMC)
+                  .fontSize(13)
+                  .fontColor($r('app.color.common_color_3'))
+              }
+            }
+            .width('100%')
+            .padding(18)
+            .borderRadius(8)
+            .backgroundColor($r('app.color.white'))
+            .alignItems(HorizontalAlign.Center)
+
+            Row({ space: 10 }) {
+              if (this.selectedPersonDetail.userInfo.SJHM !== '') {
+                Text('拨打手机')
+                  .fontSize(14)
+                  .fontColor('#3A92ED')
+                  .padding({ left: 16, right: 16, top: 9, bottom: 9 })
+                  .borderRadius(6)
+                  .backgroundColor('#EEF5FC')
+                  .hoverEffect(HoverEffect.Highlight)
+                  .onClick(() => {
+                    if (this.selectedPersonDetail !== null) {
+                      this.onPhoneTap(this.selectedPersonDetail.userInfo.SJHM,
+                        this.selectedPersonDetail.userInfo.GH, 1);
+                    }
+                  })
+              }
+              Text('打开完整页面')
+                .fontSize(14)
+                .fontColor($r('app.color.white'))
+                .padding({ left: 18, right: 18, top: 9, bottom: 9 })
+                .borderRadius(6)
+                .backgroundColor('#3A92ED')
+                .hoverEffect(HoverEffect.Highlight)
+                .onClick(() => {
+                  this.openPersonalDetailFullPage(this.selectedPersonGh);
+                })
+            }
+            .width('100%')
+            .justifyContent(FlexAlign.End)
+
+            Column({ space: 8 }) {
+              this.contactMetaRow(
+                this.selectedPersonDetail.userInfo.userType === '1' ? '学号' : '工号',
+                this.selectedPersonDetail.userInfo.userType === '1'
+                  ? this.selectedPersonDetail.userInfo.XH
+                  : this.selectedPersonDetail.userInfo.GH
+              )
+              this.contactMetaRow('手机', this.selectedPersonDetail.userInfo.SJHM)
+              this.contactMetaRow('办公电话', this.selectedPersonDetail.userInfo.BGDH)
+              this.contactMetaRow('短号', this.selectedPersonDetail.userInfo.SJDH)
+              this.contactMetaRow('邮箱', this.selectedPersonDetail.userInfo.DZYJ)
+              this.contactMetaRow('地址', this.selectedPersonDetail.userInfo.BGDZ)
+              if (this.selectedPersonDetail.userInfo.ZW !== '') {
+                this.contactMetaRow('职位', this.selectedPersonDetail.userInfo.ZW)
+              }
+              if (this.selectedPersonDetail.userInfo.GW !== '') {
+                this.contactMetaRow('职称', this.selectedPersonDetail.userInfo.GW)
+              }
+            }
+            .width('100%')
+            .padding(16)
+            .borderRadius(8)
+            .backgroundColor($r('app.color.white'))
+            .alignItems(HorizontalAlign.Start)
+          }
+          .width('100%')
+          .padding({ left: 16, right: 16, top: 16, bottom: Math.max(16, this.avoidAreaBottomVp) })
+        }
+        .width('100%')
+        .height('100%')
+        .scrollBar(BarState.Off)
+        .align(Alignment.Top)
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor($r('app.color.mobile_campus_bg_color'))
+  }
+
+  @Builder
+  contactMetaRow(label: string, value: string) {
+    Row() {
+      Text(label)
+        .fontSize(14)
+        .fontColor($r('app.color.common_color_3'))
+        .width(84)
+        .flexShrink(0)
+      Text(value === '' ? '--' : value)
+        .fontSize(14)
+        .fontColor($r('app.color.common_color_1'))
+        .layoutWeight(1)
+    }
+    .width('100%')
+    .alignItems(VerticalAlign.Top)
   }
 }

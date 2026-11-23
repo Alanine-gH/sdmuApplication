@@ -2,6 +2,8 @@ import { router } from '@kit.ArkUI';
 import { HttpClient } from '../network/HttpClient';
 import { ApiResponse } from '../model/ResponseModel';
 import { Constants } from '../data/Constants';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 添加常用应用页 — 源码级复刻 EditCommonAppActivity（newUI 包，ARouter /app/EditCommonAppActivity）。
@@ -51,6 +53,11 @@ struct EditCommonAppPage {
   @State loading: boolean = false;
   /** Refresh 容器刷新态（SmartRefreshLayout 等价） */
   @State isRefreshing: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaTopVp') avoidAreaTopVp: number = 0;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
 
   aboutToAppear(): void {
     this.loadApps();
@@ -136,23 +143,6 @@ struct EditCommonAppPage {
                 bean.yytb = pick('YYTB');
                 apps.push(bean);
               }
-              // 补位 AppBean(true)：size%4 为 1/2/3 时补 4-size 个
-              const remainder: number = apps.length % 4;
-              if (remainder === 1 || remainder === 2 || remainder === 3) {
-                for (let i = 0; i < 4 - remainder; i++) {
-                  const pad = new EditAppBean();
-                  pad.isNull = true;
-                  apps.push(pad);
-                }
-              }
-              // type_round：倒数第 4 位=1（左上圆角）、末位=2（右上圆角）
-              for (let i = 0; i < apps.length; i++) {
-                if (i === apps.length - 4) {
-                  apps[i].typeRound = 1;
-                } else if (i === apps.length - 1) {
-                  apps[i].typeRound = 2;
-                }
-              }
               const group = new EditAppGroup(yyfl);
               group.isFirst = first;
               group.apps = apps;
@@ -204,6 +194,48 @@ struct EditCommonAppPage {
       return '';
     }
     return Constants.SOCKET_HOST + '/mobileapi_ydxy/open/image/' + app.yytb;
+  }
+
+  private getGridCols(): number {
+    return BreakpointSystem.getGridColumns(this.currentBreakpoint, 4);
+  }
+
+  /** 按当前断点动态补位尾行并计算圆角，避免固定 4 列残留空白格 */
+  private buildGridApps(group: EditAppGroup): EditAppBean[] {
+    if (group.isCommon || group.apps.length === 0) {
+      return group.apps;
+    }
+    const cols: number = this.getGridCols();
+    const list: EditAppBean[] = [];
+    for (const item of group.apps) {
+      if (!item.isNull) {
+        const copy = new EditAppBean();
+        copy.yyid = item.yyid;
+        copy.yymc = item.yymc;
+        copy.lx = item.lx;
+        copy.url = item.url;
+        copy.yytb = item.yytb;
+        copy.isNull = false;
+        copy.typeRound = 0;
+        list.push(copy);
+      }
+    }
+    const remainder: number = list.length % cols;
+    if (remainder > 0) {
+      for (let i = 0; i < cols - remainder; i++) {
+        const pad = new EditAppBean();
+        pad.isNull = true;
+        list.push(pad);
+      }
+    }
+    for (let i = 0; i < list.length; i++) {
+      if (i === list.length - cols) {
+        list[i].typeRound = 1;
+      } else if (i === list.length - 1) {
+        list[i].typeRound = 2;
+      }
+    }
+    return list;
   }
 
   /** type_round → 各角圆角 vp（e=左上 8 / f=右上 8 / 其余直角） */
@@ -296,6 +328,7 @@ struct EditCommonAppPage {
     .alignItems(HorizontalAlign.Center)
     .backgroundColor(Color.White)
     .borderRadius(this.cellRadius(app))
+    .hoverEffect(app.isNull ? HoverEffect.None : HoverEffect.Highlight)
     .onClick(() => {
       if (app.isNull) {
         return;
@@ -308,36 +341,45 @@ struct EditCommonAppPage {
     Column() {
       // MToolBar：标题"添加常用应用" + 右 icon_work_search(padding 3)
       Row() {
-        Text('＜')
-          .fontSize(17)
-          .fontColor($r('app.color.common_color_1'))
-          .width(40)
-          .height('100%')
-          .textAlign(TextAlign.Center)
-          .margin({ left: 15 })
-          .onClick(() => {
-            router.back();
-          })
-        Text('添加常用应用')
-          .fontSize(17)
-          .fontColor($r('app.color.common_color_1'))
-          .layoutWeight(1)
-          .textAlign(TextAlign.Center)
-          .maxLines(1)
-        Image($r('app.media.icon_work_search'))
-          .width(35)
-          .height(35)
-          .objectFit(ImageFit.Contain)
-          .padding(3)
-          .margin({ right: 12 })
-          .onClick(() => {
-            // f.c(imageView)：→ e.a.y 搜索页
-            router.pushUrl({ url: 'pages/EditCommonAppSearchPage' });
-          })
+        Row() {
+          Text('＜')
+            .fontSize(17)
+            .fontColor($r('app.color.common_color_1'))
+            .width(40)
+            .height('100%')
+            .textAlign(TextAlign.Center)
+            .margin({ left: 15 })
+            .hoverEffect(HoverEffect.Highlight)
+            .onClick(() => {
+              router.back();
+            })
+          Text('添加常用应用')
+            .fontSize(17)
+            .fontColor($r('app.color.common_color_1'))
+            .layoutWeight(1)
+            .textAlign(TextAlign.Center)
+            .maxLines(1)
+          Image($r('app.media.icon_work_search'))
+            .width(35)
+            .height(35)
+            .objectFit(ImageFit.Contain)
+            .padding(3)
+            .margin({ right: 12 })
+            .hoverEffect(HoverEffect.Highlight)
+            .onClick(() => {
+              // f.c(imageView)：→ e.a.y 搜索页
+              router.pushUrl({ url: 'pages/EditCommonAppSearchPage' });
+            })
+        }
+        .width('100%')
+        .height(44)
+        .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignItems(VerticalAlign.Center)
       }
       .width('100%')
       .height(44)
-      .alignItems(VerticalAlign.Center)
+      .justifyContent(FlexAlign.Center)
       .backgroundColor($r('app.color.main_bg'))
       .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
 
@@ -345,67 +387,79 @@ struct EditCommonAppPage {
       Refresh({ refreshing: this.isRefreshing }) {
         Scroll() {
           Column() {
-          ForEach(this.groups, (group: EditAppGroup, gIndex: number) => {
-            if (group.isFooter) {
-              // YDAPPInfo(true) footer：vLine 15dip
-              Row()
-                .width('100%')
-                .height(15)
-            } else {
-              // vLine：首组 15dip 其余 12dip（组头 item_header_edit_common_app）
-              Row()
-                .width('100%')
-                .height(group.isFirst ? 15 : 12)
-              Column() {
-                // tvTitle YYFL 18sp bold #333 padH14 高 60dip（footer 组不渲染 tvTitle）
-                Text(group.yyfl)
-                  .fontSize(18)
-                  .fontWeight(FontWeight.Bold)
-                  .fontColor('#333333')
-                  .maxLines(1)
-                  .padding({ left: 14, right: 14 })
+            ForEach(this.groups, (group: EditAppGroup) => {
+              if (group.isFooter) {
+                // YDAPPInfo(true) footer：vLine 15dip
+                Row()
                   .width('100%')
-                  .height(60)
-                  .textAlign(TextAlign.Start)
-                  .backgroundColor(Color.White)
-                  .borderRadius(this.headerRadius(group.apps.length > 0))
-
-                if (group.apps.length === 0 && group.isCommon) {
-                  // layout_header_edit_common_app_empty："暂无应用~" 120dip
-                  Text('暂无应用~')
-                    .fontSize(14)
-                    .fontColor('#555555')
-                    .textAlign(TextAlign.Center)
+                  .height(15)
+              } else {
+                // vLine：首组 15dip 其余 12dip（组头 item_header_edit_common_app）
+                Row()
+                  .width('100%')
+                  .height(group.isFirst ? 15 : 12)
+                Column() {
+                  // tvTitle YYFL 18sp bold #333 padH14 高 60dip（footer 组不渲染 tvTitle）
+                  Text(group.yyfl)
+                    .fontSize(18)
+                    .fontWeight(FontWeight.Bold)
+                    .fontColor('#333333')
+                    .maxLines(1)
+                    .padding({ left: 14, right: 14 })
                     .width('100%')
-                    .height(120)
+                    .height(60)
+                    .textAlign(TextAlign.Start)
                     .backgroundColor(Color.White)
-                } else if (group.apps.length > 0) {
-                  Grid() {
-                    ForEach(group.apps, (app: EditAppBean) => {
-                      GridItem() {
-                        this.appCell(app, group.isCommon)
-                      }
-                    }, (app: EditAppBean) => 'cell_' + app.yyid + '_' + app.yymc + '_' + String(app.isNull))
+                    .borderRadius(this.headerRadius(group.apps.length > 0))
+
+                  if (group.apps.length === 0 && group.isCommon) {
+                    // layout_header_edit_common_app_empty："暂无应用~" 120dip
+                    Text('暂无应用~')
+                      .fontSize(14)
+                      .fontColor('#555555')
+                      .textAlign(TextAlign.Center)
+                      .width('100%')
+                      .height(120)
+                      .backgroundColor(Color.White)
+                  } else if (group.apps.length > 0) {
+                    Grid() {
+                      ForEach(this.buildGridApps(group), (app: EditAppBean, idx: number) => {
+                        GridItem() {
+                          this.appCell(app, group.isCommon)
+                        }
+                      }, (app: EditAppBean, idx: number) => 'cell_' + idx + '_' + app.yyid + '_' + app.yymc + '_' + String(app.isNull) + '_' + this.currentBreakpoint)
+                    }
+                    .columnsTemplate(AdaptiveLayoutHelper.buildColumnsTemplate(this.getGridCols()))
+                    .width('100%')
+                    .height(AdaptiveLayoutHelper.computeGridHeightVp(
+                      this.buildGridApps(group).length,
+                      this.getGridCols(),
+                      92,
+                      0,
+                      0
+                    ))
+                    .backgroundColor(Color.White)
+                    .borderRadius({ bottomLeft: 8, bottomRight: 8 })
                   }
-                  .columnsTemplate('1fr 1fr 1fr 1fr')
-                  .width('100%')
-                  .height(Math.ceil(group.apps.length / 4) * 92)
-                  .backgroundColor(Color.White)
-                  .borderRadius({ bottomLeft: 8, bottomRight: 8 })
                 }
+                .width('100%')
               }
-              .width('100%')
-            }
-          }, (group: EditAppGroup) => 'grp_' + group.yyfl + '_' + String(group.isFooter) + '_' + String(group.isCommon))
+            }, (group: EditAppGroup) => 'grp_' + group.yyfl + '_' + String(group.isFooter) + '_' + String(group.isCommon))
+          }
+          .width('100%')
+          .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+          .alignSelf(ItemAlign.Center)
+          .padding({
+            left: Math.max(15, this.avoidAreaLeftVp),
+            right: Math.max(15, this.avoidAreaRightVp),
+            bottom: this.avoidAreaBottomVp
+          })
         }
+        .scrollable(ScrollDirection.Vertical)
+        .scrollBar(BarState.Off)
         .width('100%')
-        .padding({ left: 15, right: 15 })
-      }
-      .scrollable(ScrollDirection.Vertical)
-      .scrollBar(BarState.Off)
-      .width('100%')
-      .height('100%')
-      .backgroundColor('#f8f8f8')
+        .height('100%')
+        .backgroundColor('#f8f8f8')
       }
       .onRefreshing(() => {
         // RefreshActivity.L2 → T2（SmartRefreshLayout 下拉刷新等价）
@@ -418,5 +472,6 @@ struct EditCommonAppPage {
     .width('100%')
     .height('100%')
     .backgroundColor('#f8f8f8')
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
   }
 }

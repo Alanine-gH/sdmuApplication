@@ -2,14 +2,14 @@ import { AddFormMenuItem, router, SymbolGlyphModifier } from '@kit.ArkUI';
 import { formBindingData } from '@kit.FormKit';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
-import { CourseItem, ScheduleTermParams, SCHEDULE_FALLBACK_START, SCHEDULE_FALLBACK_END,
-  parseYmdMs, apkCurrentWeek, apkTotalWeeks } from '../model/CourseModel';
+import { CourseItem, ScheduleTermParams, CourseDetailEntry, SCHEDULE_FALLBACK_START,
+  SCHEDULE_FALLBACK_END, parseYmdMs, apkCurrentWeek, apkTotalWeeks } from '../model/CourseModel';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { common } from '@kit.AbilityKit';
 import { WidgetDataHelper, WidgetCourseSummary } from '../common/WidgetDataHelper';
 import { ImmersiveLightHelper } from '../common/ImmersiveLightHelper';
-import { BreakpointSystem } from '../common/BreakpointSystem';
-import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
+import { BreakpointSystem, CreaseRegionVp } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper, SplitPaneConfig } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 课表页 — 源码级对齐 TimetableActivity + WeekCourseFragment + CourseBox + ChooseWeeksPopup + ChooseTermDialog
@@ -128,10 +128,16 @@ struct SchedulePage {
   @State pinTrigger: number = -1;
   @State prevWeekTrigger: number = -1;
   @State nextWeekTrigger: number = -1;
+  @State selectedCourse: CourseItem | null = null;
+  @State selectedCourseColorIdx: number = 0;
+  @State selectedCourseDetail: CourseDetailEntry | null = null;
+  @State detailLoading: boolean = false;
   @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
   @StorageProp('windowWidthVp') windowWidthVp: number = 360;
   @StorageProp('windowHeightVp') windowHeightVp: number = 780;
   @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
+  @StorageProp('foldStatus') foldStatus: number = 0;
+  @StorageProp('creaseRegionVp') creaseRegionVp: CreaseRegionVp | null = null;
   @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
   @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
   @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
@@ -462,6 +468,16 @@ struct SchedulePage {
   }
 
   private openDetail(course: CourseItem): void {
+    const splitCfg: SplitPaneConfig = AdaptiveLayoutHelper.getSplitPaneConfigWithRatio(
+      this.currentBreakpoint, this.windowWidthVp, 3, 2);
+    if (!splitCfg.useTwoPane) {
+      this.openCourseFullPage(course);
+      return;
+    }
+    this.selectCourseForPreview(course);
+  }
+
+  private openCourseFullPage(course: CourseItem): void {
     // WeekCourseFragment.a 回调：putExtra bean/term/xlh；HAP 传 xlh/djz/xqj 三元组
     router.pushUrl({
       url: 'pages/CourseDetailPage',
@@ -470,6 +486,49 @@ struct SchedulePage {
         course.xlh, course.djz > 0 ? String(course.djz) : String(this.weekNumber),
         String(course.dayOfWeek))
     });
+  }
+
+  private selectCourseForPreview(course: CourseItem): void {
+    this.selectedCourse = course;
+    this.selectedCourseColorIdx = this.colorIndexOf(course);
+    this.selectedCourseDetail = null;
+    if (course.xlh === '') {
+      this.detailLoading = false;
+      return;
+    }
+    this.detailLoading = true;
+    const djz: string = course.djz > 0 ? String(course.djz) : String(this.weekNumber);
+    const xqj: string = String(course.dayOfWeek);
+    ApiService.getCourseDetail(course.xlh, djz, xqj)
+      .then((resp: ApiResponse<CourseDetailEntry>) => {
+        if (resp.code === 1000) {
+          this.detailLoading = false;
+          return;
+        }
+        if (this.selectedCourse === null || this.selectedCourse.id !== course.id) {
+          return;
+        }
+        this.detailLoading = false;
+        if (resp.code === 0) {
+          this.selectedCourseDetail = resp.data;
+        }
+      })
+      .catch(() => {
+        if (this.selectedCourse !== null && this.selectedCourse.id === course.id) {
+          this.detailLoading = false;
+        }
+      });
+  }
+
+  private creaseExtraBottomVp(): number {
+    const splitCfg: SplitPaneConfig = AdaptiveLayoutHelper.getSplitPaneConfigWithRatio(
+      this.currentBreakpoint, this.windowWidthVp, 3, 2);
+    if (splitCfg.useTwoPane) {
+      return 0;
+    }
+    return AdaptiveLayoutHelper.shouldAvoidCrease(this.creaseRegionVp, this.foldStatus)
+      ? AdaptiveLayoutHelper.getCreaseAvoidHeightVp(this.creaseRegionVp, this.foldStatus) + 12
+      : 0;
   }
 
   private openMulti(group: CourseFoldGroup): void {
@@ -498,6 +557,7 @@ struct SchedulePage {
       .maxLines(1)
       .textOverflow({ overflow: TextOverflow.Ellipsis })
       .padding({ left: 15, right: 15 })
+      .hoverEffect(HoverEffect.Highlight)
       .onClick(() => {
         this.showWeekPopup = false;
         this.applyWeek(num);
@@ -600,6 +660,7 @@ struct SchedulePage {
             .fontColor($r('app.color.mobile_campus_primary_color'))
             .padding(10)
             .backgroundColor($r('app.color.hover_grey'))
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               // d.java a()：滚轮停止→回调当前项→H3(xn,xq) 重载
               const options: TermOption[] = this.termOptions();
@@ -670,6 +731,7 @@ struct SchedulePage {
         .margin({ left: 15 })
         .systemMaterial(ImmersiveLightHelper.pillMaterial())
         .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.94 })
+        .hoverEffect(HoverEffect.Highlight)
         .onClick(() => {
           router.back();
         })
@@ -688,6 +750,7 @@ struct SchedulePage {
           .borderRadius(16)
           .systemMaterial(ImmersiveLightHelper.pillMaterial())
           .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.96 })
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             this.showWeekPopup = !this.showWeekPopup;
             if (this.showWeekPopup) {
@@ -712,6 +775,7 @@ struct SchedulePage {
         .margin({ right: 8 })
         .systemMaterial(ImmersiveLightHelper.pillMaterial())
         .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.94 })
+        .hoverEffect(HoverEffect.Highlight)
         .bindMenu(this.scheduleWidgetMenu())
         .onClick(() => {
           this.pinTrigger = this.pinTrigger < 0 ? 1 : this.pinTrigger + 1;
@@ -721,6 +785,7 @@ struct SchedulePage {
           .height(14)
           .margin({ right: 15 })
           .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.94 })
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             this.termWheelIndex = 0;
             this.showTermDialog = true;
@@ -794,6 +859,7 @@ struct SchedulePage {
         }
         .width(24)
         .height(22)
+        .hoverEffect(HoverEffect.Highlight)
         .onClick(() => {
           this.shiftWeek(-1);
         })
@@ -808,6 +874,7 @@ struct SchedulePage {
         }
         .width(24)
         .height(22)
+        .hoverEffect(HoverEffect.Highlight)
         .onClick(() => {
           this.shiftWeek(1);
         })
@@ -874,6 +941,7 @@ struct SchedulePage {
     .width('100%')
     .height((group.end - group.start + 1) * SECTION_HEIGHT)
     .backgroundColor(this.colorPool[this.colorOfGroup(group)])
+    .hoverEffect(HoverEffect.Highlight)
     .onClick(() => {
       if (group.items.length > 1) {
         this.openMulti(group);
@@ -916,6 +984,7 @@ struct SchedulePage {
       .height(this.sectionTimes.length * SECTION_HEIGHT)
     }
     .width('100%')
+    .padding({ bottom: this.creaseExtraBottomVp() })
     .opacity(this.gridShown ? 1 : 0.01)
     .animation({ duration: 500, curve: Curve.EaseOut })
   }
@@ -950,11 +1019,12 @@ struct SchedulePage {
       .height(71.5)
       .margin({
         right: Math.max(10, this.avoidAreaRightVp + 10),
-        bottom: Math.max(15, this.avoidAreaBottomVp + 10) + 71.5
+        bottom: Math.max(15, this.avoidAreaBottomVp + 10) + this.creaseExtraBottomVp() + 71.5
       })
       .opacity(this.fabExpanded ? 1 : 0)
       .translate({ y: this.fabExpanded ? 0 : 71.5 })
       .enabled(this.fabExpanded)
+      .hoverEffect(HoverEffect.Highlight)
       .onClick(() => {
         this.fabExpanded = false;
         router.pushUrl({ url: 'pages/AddCoursePage' });
@@ -964,11 +1034,12 @@ struct SchedulePage {
       .height(71.5)
       .margin({
         right: Math.max(10, this.avoidAreaRightVp + 10),
-        bottom: Math.max(15, this.avoidAreaBottomVp + 10) + 143
+        bottom: Math.max(15, this.avoidAreaBottomVp + 10) + this.creaseExtraBottomVp() + 143
       })
       .opacity(this.fabExpanded ? 1 : 0)
       .translate({ y: this.fabExpanded ? 0 : 143 })
       .enabled(this.fabExpanded)
+      .hoverEffect(HoverEffect.Highlight)
       .onClick(() => {
         this.fabExpanded = false;
         router.pushUrl({ url: 'pages/ChooseAcademyPage' });
@@ -978,9 +1049,10 @@ struct SchedulePage {
       .height(71.5)
       .margin({
         right: Math.max(10, this.avoidAreaRightVp + 10),
-        bottom: Math.max(15, this.avoidAreaBottomVp + 10)
+        bottom: Math.max(15, this.avoidAreaBottomVp + 10) + this.creaseExtraBottomVp()
       })
       .rotate({ angle: this.fabExpanded ? 45 : 0 })
+      .hoverEffect(HoverEffect.Highlight)
       .onClick(() => {
         this.getUIContext().animateTo({ duration: 500, curve: Curve.EaseOut }, () => {
           this.fabExpanded = !this.fabExpanded;
@@ -1013,6 +1085,7 @@ struct SchedulePage {
     .justifyContent(FlexAlign.Center)
     .borderRadius(8)
     .backgroundColor(this.colorPool[this.colorIndexOf(course)])
+    .hoverEffect(HoverEffect.Highlight)
     .onClick(() => {
       this.showMultiDialog = false;
       this.openDetail(course);
@@ -1059,47 +1132,34 @@ struct SchedulePage {
 
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
-      Column() {
-        this.topToolbar()
-        this.weekHeader()
-        Row()
-          .width('100%')
-          .height(0.3)
-          .backgroundColor($r('app.color.common_color_4'))
-        Stack({ alignContent: Alignment.BottomEnd }) {
-          if (this.courseList.length === 0) {
-            Column() {
-              this.emptyCourseView()
-            }
-            .width('100%')
-            .height('100%')
-            .justifyContent(FlexAlign.Center)
-          } else {
-            Scroll() {
-              this.courseGrid()
-            }
-            .width('100%')
-            .height('100%')
-            .align(Alignment.Top)
-            .scrollBar(BarState.Off)
+      if (AdaptiveLayoutHelper.getSplitPaneConfigWithRatio(
+        this.currentBreakpoint, this.windowWidthVp, 3, 2).useTwoPane) {
+        Row() {
+          Column() {
+            this.scheduleMasterPane()
           }
-          // G2() 脚注
-          Text('*课表数据以教务单位提供为准')
-            .fontSize(12)
-            .fontColor($r('app.color.common_color_3'))
-            .width('100%')
-            .textAlign(TextAlign.Center)
-            .padding({ left: 10, right: 10, top: 10, bottom: Math.max(10, this.avoidAreaBottomVp + 6) })
-          this.fabCluster()
+          .layoutWeight(AdaptiveLayoutHelper.getSplitPaneConfigWithRatio(
+            this.currentBreakpoint, this.windowWidthVp, 3, 2).masterRatio)
+          .height('100%')
+
+          Divider()
+            .vertical(true)
+            .width(0.5)
+            .height('100%')
+            .color($r('app.color.common_color_5'))
+
+          Column() {
+            this.scheduleDetailPane()
+          }
+          .layoutWeight(AdaptiveLayoutHelper.getSplitPaneConfigWithRatio(
+            this.currentBreakpoint, this.windowWidthVp, 3, 2).detailRatio)
+          .height('100%')
         }
         .width('100%')
-        .layoutWeight(1)
-        .backgroundColor($r('app.color.white'))
+        .height('100%')
+      } else {
+        this.scheduleMasterPane()
       }
-      .id('schedule_pin_snapshot_anchor')
-      .width('100%')
-      .height('100%')
-      .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
       if (this.showWeekPopup) {
         this.weekPopup()
       }
@@ -1113,5 +1173,173 @@ struct SchedulePage {
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.white'))
+  }
+
+  @Builder
+  scheduleMasterPane() {
+    Column() {
+      this.topToolbar()
+      this.weekHeader()
+      Row()
+        .width('100%')
+        .height(0.3)
+        .backgroundColor($r('app.color.common_color_4'))
+      Stack({ alignContent: Alignment.BottomEnd }) {
+        if (this.courseList.length === 0) {
+          Column() {
+            this.emptyCourseView()
+          }
+          .width('100%')
+          .height('100%')
+          .justifyContent(FlexAlign.Center)
+        } else {
+          Scroll() {
+            this.courseGrid()
+          }
+          .width('100%')
+          .height('100%')
+          .align(Alignment.Top)
+          .scrollBar(BarState.Off)
+        }
+        // G2() 脚注
+        Text('*课表数据以教务单位提供为准')
+          .fontSize(12)
+          .fontColor($r('app.color.common_color_3'))
+          .width('100%')
+          .textAlign(TextAlign.Center)
+          .padding({
+            left: 10,
+            right: 10,
+            top: 10,
+            bottom: Math.max(10, this.avoidAreaBottomVp + 6) + this.creaseExtraBottomVp()
+          })
+        this.fabCluster()
+      }
+      .width('100%')
+      .layoutWeight(1)
+      .backgroundColor($r('app.color.white'))
+    }
+    .id('schedule_pin_snapshot_anchor')
+    .width('100%')
+    .height('100%')
+    .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
+  }
+
+  /** 双栏右侧课程详情预览面板 */
+  @Builder
+  scheduleDetailPane() {
+    Column() {
+      if (this.selectedCourse === null) {
+        Column() {
+          Text('点击左侧课表中的课程查看详情')
+            .fontSize(14)
+            .fontColor($r('app.color.common_color_3'))
+        }
+        .width('100%')
+        .height('100%')
+        .justifyContent(FlexAlign.Center)
+        .alignItems(HorizontalAlign.Center)
+      } else {
+        Scroll() {
+          Column({ space: 12 }) {
+            Column({ space: 8 }) {
+              Text(this.selectedCourse.name)
+                .fontSize(19)
+                .fontWeight(FontWeight.Medium)
+                .fontColor($r('app.color.ybg_white'))
+                .width('100%')
+              Text('第' + this.selectedCourse.sectionStart + '-' + this.selectedCourse.sectionEnd + '节' +
+                (this.selectedCourse.location !== '' ? ' · ' + this.selectedCourse.location : ''))
+                .fontSize(13)
+                .fontColor($r('app.color.ybg_white'))
+                .opacity(0.9)
+            }
+            .width('100%')
+            .padding(16)
+            .borderRadius(8)
+            .backgroundColor(this.colorPool[this.selectedCourseColorIdx])
+            .alignItems(HorizontalAlign.Start)
+
+            Row() {
+              Text('打开完整页面')
+                .fontSize(15)
+                .fontColor($r('app.color.white'))
+                .fontWeight(FontWeight.Medium)
+                .textAlign(TextAlign.Center)
+                .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+                .borderRadius(6)
+                .backgroundColor($r('app.color.mobile_campus_primary_color_default'))
+                .hoverEffect(HoverEffect.Highlight)
+                .onClick(() => {
+                  if (this.selectedCourse !== null) {
+                    this.openCourseFullPage(this.selectedCourse);
+                  }
+                })
+            }
+            .width('100%')
+            .justifyContent(FlexAlign.End)
+
+            Column({ space: 8 }) {
+              this.courseMetaRow('周次', this.selectedCourseDetail !== null && this.selectedCourseDetail.qsjsz !== ''
+                ? this.selectedCourseDetail.qsjsz : this.selectedCourse.week)
+              this.courseMetaRow('节次', '周' + this.selectedCourse.dayOfWeek + ' 第' +
+                this.selectedCourse.sectionStart + '-' + this.selectedCourse.sectionEnd + '节')
+              this.courseMetaRow('地点', this.selectedCourseDetail !== null && this.selectedCourseDetail.skdd !== ''
+                ? this.selectedCourseDetail.skdd : this.selectedCourse.location)
+              this.courseMetaRow('授课教师', this.selectedCourseDetail !== null && this.selectedCourseDetail.skls !== ''
+                ? this.selectedCourseDetail.skls : this.selectedCourse.teacher)
+              if (this.selectedCourseDetail !== null) {
+                if (this.selectedCourseDetail.sksj !== '') {
+                  this.courseMetaRow('上课时间', this.selectedCourseDetail.sksj)
+                }
+                if (this.selectedCourseDetail.skbj !== '' && this.selectedCourseDetail.skbj !== 'null') {
+                  this.courseMetaRow('上课班级', this.selectedCourseDetail.skbj)
+                }
+                if (this.selectedCourseDetail.skrs !== '') {
+                  this.courseMetaRow('上课人数', this.selectedCourseDetail.skrs + '人')
+                }
+                if (this.selectedCourseDetail.pjf !== '') {
+                  this.courseMetaRow('平均分', this.selectedCourseDetail.pjf)
+                }
+                if (this.selectedCourseDetail.lszgf !== '') {
+                  this.courseMetaRow('历史最高分', this.selectedCourseDetail.lszgf)
+                }
+              }
+            }
+            .width('100%')
+            .padding(16)
+            .borderRadius(8)
+            .backgroundColor($r('app.color.white'))
+            .alignItems(HorizontalAlign.Start)
+          }
+          .width('100%')
+          .padding({ left: 16, right: 16, top: 16, bottom: Math.max(16, this.avoidAreaBottomVp) })
+        }
+        .width('100%')
+        .height('100%')
+        .scrollBar(BarState.Off)
+        .align(Alignment.Top)
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor($r('app.color.common_color_6'))
+  }
+
+  @Builder
+  courseMetaRow(label: string, value: string) {
+    Row() {
+      Text(label)
+        .fontSize(13)
+        .fontColor($r('app.color.common_color_3'))
+        .width(84)
+        .flexShrink(0)
+      Text(value === '' ? '--' : value)
+        .fontSize(13)
+        .fontColor($r('app.color.common_color_1'))
+        .layoutWeight(1)
+    }
+    .width('100%')
+    .alignItems(VerticalAlign.Top)
   }
 }

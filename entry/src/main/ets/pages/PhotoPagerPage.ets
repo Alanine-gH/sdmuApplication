@@ -1,5 +1,6 @@
 import { router } from '@kit.ArkUI';
-import { BreakpointSystem } from '../common/BreakpointSystem';
+import { CreaseRegionVp } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 图片翻页选择页 — 源码级复刻 PhotoPagerActivity（baselibrary PhotoPicker 包）。
@@ -28,12 +29,14 @@ struct PhotoPagerPage {
   @State selectedUrls: string[] = [];
   @State currentIndex: number = 0;
   @State barsVisible: boolean = true;
+  @State barsAnim: number = 1;
   @StorageProp('avoidAreaTopVp') avoidAreaTopVp: number = 0;
   @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
   @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
+  @StorageProp('foldStatus') foldStatus: number = 0;
+  @StorageProp('creaseRegionVp') creaseRegionVp: CreaseRegionVp | null = null;
   private maxCount: number = 9;
-  private barsAnim: number = 0;
 
   aboutToAppear(): void {
     const params: object | undefined = router.getParams() as object | undefined;
@@ -123,132 +126,149 @@ struct PhotoPagerPage {
   }
 
   build() {
-    Stack() {
-      // ImagePagerFragment：全屏 PhotoView 翻页
-      if (this.photos.length > 0) {
-        Swiper() {
-          ForEach(this.photos, (item: PagerPhotoItem) => {
-            Image(item.url)
-              .width('100%')
-              .height('100%')
-              .objectFit(ImageFit.Contain)
-              .alt($r('app.media.no_pic'))
-              .onClick(() => {
-                this.toggleBars();
-              })
-          }, (item: PagerPhotoItem) => 'pp_' + item.url)
-        }
-        .index(this.currentIndex)
-        .indicator(false)
-        .loop(false)
-        .width('100%')
-        .height('100%')
-        .backgroundColor($r('app.color.black'))
-        .onChange((index: number) => {
-          this.currentIndex = index;
-        })
-      } else {
-        Scroll() {
-          Column() {
-            Text('暂无图片')
-              .fontSize(14)
-              .fontColor($r('app.color.white'))
+    FolderStack({ upperItems: ['photo_pager_stage'] }) {
+      // ImagePagerFragment：全屏 PhotoView 翻页（标记为 upperItems 悬停上半区）
+      Stack() {
+        if (this.photos.length > 0) {
+          Swiper() {
+            ForEach(this.photos, (item: PagerPhotoItem) => {
+              Image(item.url)
+                .width('100%')
+                .height('100%')
+                .objectFit(ImageFit.Contain)
+                .alt($r('app.media.no_pic'))
+                .onClick(() => {
+                  this.toggleBars();
+                })
+            }, (item: PagerPhotoItem) => 'pp_' + item.url)
+          }
+          .index(this.currentIndex)
+          .indicator(false)
+          .loop(false)
+          .width('100%')
+          .height('100%')
+          .backgroundColor($r('app.color.black'))
+          .onChange((index: number) => {
+            this.currentIndex = index;
+          })
+        } else {
+          Scroll() {
+            Column() {
+              Text('暂无图片')
+                .fontSize(14)
+                .fontColor($r('app.color.white'))
+            }
+            .width('100%')
+            .padding({ top: 120, bottom: 24 })
+            .alignItems(HorizontalAlign.Center)
           }
           .width('100%')
-          .padding({ top: 120, bottom: 24 })
-          .alignItems(HorizontalAlign.Center)
+          .height('100%')
+          .scrollBar(BarState.Off)
         }
-        .width('100%')
-        .height('100%')
-        .scrollBar(BarState.Off)
       }
-
-      // photo_pager_navigation_bar：#99000000 + 白返回 + N/total + 完成(N/M)
-      Row() {
-        Image($r('app.media.nav_back_btn_white'))
-          .objectFit(ImageFit.Contain)
-          .width(24)
-          .height(24)
-          .padding({ left: 10, right: 5 })
-          .onClick(() => {
-            // b：H2(false)
-            this.finishPage(false);
-          })
-
-        Text(this.indexText())
-          .fontSize(15)
-          .fontColor($r('app.color.common_color_6'))
-          .margin({ left: 5 })
-
-        Blank()
-
-        Text(this.doneText())
-          .fontSize(15)
-          .fontColor($r('app.color.common_color_6'))
-          .padding({ left: 10, right: 10 })
-          .onClick(() => {
-            // c：H2(true)
-            this.finishPage(true);
-          })
-      }
+      .id('photo_pager_stage')
       .width('100%')
-      .height(48 + this.avoidAreaTopVp)
-      .padding({
-        top: this.avoidAreaTopVp,
-        left: this.avoidAreaLeftVp,
-        right: this.avoidAreaRightVp
-      })
-      .alignItems(VerticalAlign.Center)
-      .backgroundColor('#99000000')
-      .margin({ top: 0 })
-      .opacity(this.barsAnim)
-      .visibility(this.barsVisible ? Visibility.Visible : Visibility.Hidden)
-      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
+      .height('100%')
 
-      // photo_pager_bottom_bar：#99000000 + 右"选择"圆点
-      Row() {
-        Blank()
-
+      // 顶部与底部栏分离锚定，避免 Stack 默认居中重叠，并支持折痕避让
+      Column() {
+        // photo_pager_navigation_bar：#99000000 + 白返回 + N/total + 完成(N/M)
         Row() {
-          Stack({ alignContent: Alignment.Center }) {
-            Circle()
-              .width(16)
-              .height(16)
-              .fill(Color.Transparent)
-              .stroke(Color.White)
-              .strokeWidth(1.5)
-            if (this.photos[this.currentIndex] !== undefined && this.photos[this.currentIndex].selected) {
-              Circle()
-                .width(9)
-                .height(9)
-                .fill(Color.White)
-            }
-          }
-          .width(16)
-          .height(16)
-          .margin({ right: 4 })
+          Image($r('app.media.nav_back_btn_white'))
+            .objectFit(ImageFit.Contain)
+            .width(24)
+            .height(24)
+            .padding({ left: 10, right: 5 })
+            .hoverEffect(HoverEffect.Highlight)
+            .onClick(() => {
+              // b：H2(false)
+              this.finishPage(false);
+            })
 
-          Text('选择')
+          Text(this.indexText())
             .fontSize(15)
             .fontColor($r('app.color.common_color_6'))
+            .margin({ left: 5 })
+
+          Blank()
+
+          Text(this.doneText())
+            .fontSize(15)
+            .fontColor($r('app.color.common_color_6'))
+            .padding({ left: 10, right: 10 })
+            .hoverEffect(HoverEffect.Highlight)
+            .onClick(() => {
+              // c：H2(true)
+              this.finishPage(true);
+            })
         }
-        .padding(10)
-        .onClick(() => {
-          this.toggleSelected();
+        .width('100%')
+        .height(48 + this.avoidAreaTopVp)
+        .padding({
+          top: this.avoidAreaTopVp,
+          left: this.avoidAreaLeftVp,
+          right: this.avoidAreaRightVp
         })
+        .alignItems(VerticalAlign.Center)
+        .backgroundColor('#99000000')
+        .opacity(this.barsAnim)
+        .visibility(this.barsVisible ? Visibility.Visible : Visibility.Hidden)
+        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
+
+        // photo_pager_bottom_bar：#99000000 + 右"选择"圆点
+        Row() {
+          Blank()
+
+          Row() {
+            Stack({ alignContent: Alignment.Center }) {
+              Circle()
+                .width(16)
+                .height(16)
+                .fill(Color.Transparent)
+                .stroke(Color.White)
+                .strokeWidth(1.5)
+              if (this.photos[this.currentIndex] !== undefined && this.photos[this.currentIndex].selected) {
+                Circle()
+                  .width(9)
+                  .height(9)
+                  .fill(Color.White)
+              }
+            }
+            .width(16)
+            .height(16)
+            .margin({ right: 4 })
+
+            Text('选择')
+              .fontSize(15)
+              .fontColor($r('app.color.common_color_6'))
+          }
+          .padding(10)
+          .hoverEffect(HoverEffect.Highlight)
+          .onClick(() => {
+            this.toggleSelected();
+          })
+        }
+        .width('100%')
+        .padding({
+          top: AdaptiveLayoutHelper.getCreaseAvoidHeightVp(this.creaseRegionVp, this.foldStatus),
+          left: this.avoidAreaLeftVp,
+          right: this.avoidAreaRightVp,
+          bottom: this.avoidAreaBottomVp
+        })
+        .alignItems(VerticalAlign.Center)
+        .backgroundColor('#99000000')
+        .opacity(this.barsAnim)
+        .visibility(this.barsVisible ? Visibility.Visible : Visibility.Hidden)
+        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
       }
       .width('100%')
-      .padding({
-        left: this.avoidAreaLeftVp,
-        right: this.avoidAreaRightVp,
-        bottom: this.avoidAreaBottomVp
-      })
-      .alignItems(VerticalAlign.Center)
-      .backgroundColor('#99000000')
-      .opacity(this.barsAnim)
-      .visibility(this.barsVisible ? Visibility.Visible : Visibility.Hidden)
-      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+      .height('100%')
+      .justifyContent(FlexAlign.SpaceBetween)
+      .hitTestBehavior(HitTestMode.Transparent)
     }
+    .enableAnimation(true)
+    .autoHalfFold(true)
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.black'))

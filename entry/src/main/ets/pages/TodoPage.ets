@@ -1,11 +1,14 @@
 import { router } from '@kit.ArkUI';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
-import { TodoTabOA, OaTodoRow, OaTodoList, OaChannel } from '../model/OaTodoModel';
+import { TodoTabOA, OaTodoRow, OaTodoList, OaChannel, OaTodoDetail, OaFormField,
+  OaWorkApplyFlowNode } from '../model/OaTodoModel';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { LoadingView } from '../components/LoadingView';
 import { EmptyView } from '../components/EmptyView';
 import { LoginSession } from '../network/LoginSession';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper, SplitPaneConfig } from '../common/AdaptiveLayoutHelper';
 
 /**
  * OA 待办页 — 1:1 翻译原 APK TodoMainActivity.java(233行) + TodoFragment.java(391行)：
@@ -68,6 +71,17 @@ struct TodoPage {
   @State tabsFailed: boolean = false;
   @State channels: OaChannel[] = [];
   @State showChannelDialog: boolean = false;
+  @State selectedTodo: OaTodoRow | null = null;
+  @State selectedTodoType: string = '';
+  @State selectedTodoDetail: OaTodoDetail | null = null;
+  @State detailLoading: boolean = false;
+  @State detailError: string = '';
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 780;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   /** 关注弹窗待操作 docUnid（C0205a.f12352b） */
   private pendingDocUnid: string = '';
 
@@ -265,6 +279,16 @@ struct TodoPage {
       this.toast('移动端暂不支持该流程，请移动到电脑端进行操作');
       return;
     }
+    const splitCfg: SplitPaneConfig =
+      AdaptiveLayoutHelper.getSplitPaneConfig(this.currentBreakpoint, this.windowWidthVp);
+    if (!splitCfg.useTwoPane) {
+      this.openTodoFullPage(row, type);
+      return;
+    }
+    this.selectTodoForPreview(row, type);
+  }
+
+  private openTodoFullPage(row: OaTodoRow, type: string): void {
     const params: TodoNavParams = {
       type: type,
       docUnid: row.orUnid,
@@ -280,6 +304,37 @@ struct TodoPage {
     // [W14 todo-series] 路由补全：源码 TodoFragment.d → e.a.J(/todo/detail) → 编辑子页 /todo/edit；
     // HAP 精简为直达表单编辑页 EditTodoDetailPage（transactionDetails 管道拉 TodoDetail）
     router.pushUrl({ url: 'pages/EditTodoDetailPage', params: params });
+  }
+
+  private selectTodoForPreview(row: OaTodoRow, type: string): void {
+    this.selectedTodo = row;
+    this.selectedTodoType = type;
+    this.selectedTodoDetail = null;
+    this.detailError = '';
+    this.detailLoading = true;
+    ApiService.getOaTodoDetail(row.orUnid, type, row.currentnodeid)
+      .then((response: ApiResponse<OaTodoDetail>) => {
+        if (response.code === 1000) {
+          this.detailLoading = false;
+          return;
+        }
+        if (this.selectedTodo === null || this.selectedTodo.orUnid !== row.orUnid) {
+          return;
+        }
+        this.detailLoading = false;
+        if (response.code === 0) {
+          this.selectedTodoDetail = response.data;
+        } else {
+          this.detailError = response.message === '' ? '获取待办详情失败' : response.message;
+        }
+      })
+      .catch((error: BusinessError) => {
+        ApiService.logError('Todo inline detail fail: ' + error.message);
+        if (this.selectedTodo !== null && this.selectedTodo.orUnid === row.orUnid) {
+          this.detailLoading = false;
+          this.detailError = '网络异常，请稍后重试';
+        }
+      });
   }
 
   // ===== 源码 a.a(int)→g 确认框："是否取消关注？/是否添加关注？" =====
@@ -406,12 +461,40 @@ struct TodoPage {
             this.loadTabs();
           })
         } else {
-          Column() {
-            this.tabBar()
-            this.swiperArea()
+          if (AdaptiveLayoutHelper.getSplitPaneConfig(this.currentBreakpoint, this.windowWidthVp).useTwoPane) {
+            Row() {
+              Column() {
+                this.tabBar()
+                this.swiperArea()
+              }
+              .layoutWeight(AdaptiveLayoutHelper.getSplitPaneConfig(
+                this.currentBreakpoint, this.windowWidthVp).masterRatio)
+              .height('100%')
+
+              Divider()
+                .vertical(true)
+                .width(0.5)
+                .height('100%')
+                .color($r('app.color.common_color_5'))
+
+              Column() {
+                this.todoDetailPane()
+              }
+              .layoutWeight(AdaptiveLayoutHelper.getSplitPaneConfig(
+                this.currentBreakpoint, this.windowWidthVp).detailRatio)
+              .height('100%')
+            }
+            .width('100%')
+            .layoutWeight(1)
+            .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
+          } else {
+            Column() {
+              this.tabBar()
+              this.swiperArea()
+            }
+            .width('100%')
+            .layoutWeight(1)
           }
-          .width('100%')
-          .layoutWeight(1)
         }
       }
       .width('100%')
@@ -443,6 +526,7 @@ struct TodoPage {
           .width(25)
           .height(25)
           .margin({ right: 15 })
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             // 源码 c.onClick → g2(activity, e.a.C) = TodoSearchActivity
             router.pushUrl({ url: 'pages/TodoSearchPage' });
@@ -497,6 +581,7 @@ struct TodoPage {
         .alignItems(HorizontalAlign.Center)
         .justifyContent(FlexAlign.Center)
         .layoutWeight(1)
+        .hoverEffect(HoverEffect.Highlight)
         .onClick(() => {
           this.currentTab = idx;
         })
@@ -632,7 +717,9 @@ struct TodoPage {
     .width('100%')
     .height(72)
     .padding({ left: 11.5 })
-    .backgroundColor($r('app.color.white'))
+    .backgroundColor(this.selectedTodo !== null && this.selectedTodo.orUnid === row.orUnid
+      ? '#EEF5FC' : $r('app.color.white'))
+    .hoverEffect(HoverEffect.Highlight)
     .onClick(() => {
       this.onRowClick(row, type);
     })
@@ -676,16 +763,175 @@ struct TodoPage {
     return '#FF6C6C';
   }
 
+  /** 双栏右侧详情预览面板 */
+  @Builder
+  todoDetailPane() {
+    Column() {
+      if (this.selectedTodo === null) {
+        Column() {
+          EmptyView({ tipText: '请选择左侧待办事项查看详情' })
+        }
+        .width('100%')
+        .height('100%')
+      } else {
+        Scroll() {
+          Column({ space: 12 }) {
+            Column({ space: 8 }) {
+              Row({ space: 8 }) {
+                this.hjBadge(this.selectedTodo.hj)
+                Text(this.selectedTodo.subject)
+                  .fontSize(18)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor($r('app.color.common_color_1'))
+                  .layoutWeight(1)
+              }
+              .width('100%')
+              .alignItems(VerticalAlign.Center)
+
+              this.previewMetaRow('申请人', this.selectedTodo.addName_cn)
+              this.previewMetaRow('当前节点', this.selectedTodo.currentnodename)
+              this.previewMetaRow('流程名称', this.selectedTodo.processName)
+              this.previewMetaRow('发起时间', this.selectedTodo.startTime)
+            }
+            .width('100%')
+            .padding(16)
+            .borderRadius(8)
+            .backgroundColor($r('app.color.white'))
+            .alignItems(HorizontalAlign.Start)
+
+            Row() {
+              Text('打开完整页面')
+                .fontSize(15)
+                .fontColor($r('app.color.white'))
+                .fontWeight(FontWeight.Medium)
+                .textAlign(TextAlign.Center)
+                .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+                .borderRadius(6)
+                .backgroundColor($r('app.color.mobile_campus_primary_color_default'))
+                .hoverEffect(HoverEffect.Highlight)
+                .onClick(() => {
+                  if (this.selectedTodo !== null) {
+                    this.openTodoFullPage(this.selectedTodo, this.selectedTodoType);
+                  }
+                })
+            }
+            .width('100%')
+            .justifyContent(FlexAlign.End)
+
+            if (this.detailLoading) {
+              Column() {
+                LoadingView()
+              }
+              .width('100%')
+              .height(160)
+              .backgroundColor($r('app.color.white'))
+              .borderRadius(8)
+            } else if (this.detailError !== '') {
+              Column() {
+                Text(this.detailError)
+                  .fontSize(14)
+                  .fontColor($r('app.color.common_color_3'))
+              }
+              .width('100%')
+              .padding(16)
+              .backgroundColor($r('app.color.white'))
+              .borderRadius(8)
+              .alignItems(HorizontalAlign.Center)
+            } else if (this.selectedTodoDetail !== null) {
+              if (this.selectedTodoDetail.formFieldConfigList.length > 0) {
+                Column({ space: 8 }) {
+                  Text('表单摘要')
+                    .fontSize(15)
+                    .fontWeight(FontWeight.Medium)
+                    .fontColor($r('app.color.common_color_1'))
+                  ForEach(this.selectedTodoDetail.formFieldConfigList, (field: OaFormField, fi: number) => {
+                    if (field.fieldScreenName !== '') {
+                      this.previewMetaRow(
+                        field.fieldScreenName,
+                        field.fieldAnotherValue !== '' ? field.fieldAnotherValue : field.fieldValue
+                      )
+                    }
+                  }, (field: OaFormField, fi: number) => 'tf_' + fi + '_' + field.fieldName)
+                }
+                .width('100%')
+                .padding(16)
+                .borderRadius(8)
+                .backgroundColor($r('app.color.white'))
+                .alignItems(HorizontalAlign.Start)
+              }
+
+              if (this.selectedTodoDetail.processFlowDocList.length > 0) {
+                Column({ space: 8 }) {
+                  Text('流转记录')
+                    .fontSize(15)
+                    .fontWeight(FontWeight.Medium)
+                    .fontColor($r('app.color.common_color_1'))
+                  ForEach(this.selectedTodoDetail.processFlowDocList, (node: OaWorkApplyFlowNode, ni: number) => {
+                    Column({ space: 2 }) {
+                      Text((node.nodeName !== '' ? node.nodeName : '处理节点') +
+                        (node.userName !== '' ? ' · ' + node.userName : ''))
+                        .fontSize(14)
+                        .fontColor($r('app.color.common_color_1'))
+                      if (node.actionName !== '' || node.endTime !== '') {
+                        Text((node.actionName !== '' ? node.actionName + ' ' : '') + node.endTime)
+                          .fontSize(12)
+                          .fontColor($r('app.color.common_color_3'))
+                      }
+                    }
+                    .width('100%')
+                    .padding({ top: 4, bottom: 4 })
+                    .alignItems(HorizontalAlign.Start)
+                  }, (node: OaWorkApplyFlowNode, ni: number) => 'fn_' + ni + '_' + node.nodeName)
+                }
+                .width('100%')
+                .padding(16)
+                .borderRadius(8)
+                .backgroundColor($r('app.color.white'))
+                .alignItems(HorizontalAlign.Start)
+              }
+            }
+          }
+          .width('100%')
+          .padding({ left: 16, right: 16, top: 16, bottom: Math.max(16, this.avoidAreaBottomVp) })
+        }
+        .width('100%')
+        .height('100%')
+        .scrollBar(BarState.Off)
+        .align(Alignment.Top)
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor($r('app.color.common_color_6'))
+  }
+
+  @Builder
+  previewMetaRow(label: string, value: string) {
+    Row() {
+      Text(label)
+        .fontSize(13)
+        .fontColor($r('app.color.common_color_3'))
+        .width(88)
+        .flexShrink(0)
+      Text(value === '' ? '--' : value)
+        .fontSize(13)
+        .fontColor($r('app.color.common_color_1'))
+        .layoutWeight(1)
+    }
+    .width('100%')
+    .alignItems(VerticalAlign.Top)
+  }
+
   /** MessageChannelSelectDialog 复刻（全屏遮罩 + 白色面板 + 渠道复选 + 取消/确认） */
   @Builder
   channelDialogOverlay() {
     Column() {
-      Column({ space: 12 }) {
-        Text('请选择关注渠道')
-          .fontSize(16)
-          .fontColor($r('app.color.common_color_1'))
-          .fontWeight(FontWeight.Bold)
-        Scroll() {
+      Scroll() {
+        Column({ space: 12 }) {
+          Text('请选择关注渠道')
+            .fontSize(16)
+            .fontColor($r('app.color.common_color_1'))
+            .fontWeight(FontWeight.Bold)
           Column({ space: 8 }) {
             ForEach(this.channels, (ch: OaChannel, idx: number) => {
               Row() {
@@ -701,51 +947,61 @@ struct TodoPage {
               }
               .width('100%')
               .padding({ top: 6, bottom: 6 })
+              .hoverEffect(HoverEffect.Highlight)
               .onClick(() => {
                 this.toggleChannel(idx);
               })
             }, (ch: OaChannel, idx: number) => idx.toString() + ch.terminalId)
           }
           .width('100%')
+          Row({ space: 12 }) {
+            Text('取消')
+              .fontSize(15)
+              .fontColor($r('app.color.common_color_3'))
+              .textAlign(TextAlign.Center)
+              .layoutWeight(1)
+              .padding({ top: 10, bottom: 10 })
+              .borderRadius(4)
+              .backgroundColor($r('app.color.common_color_6'))
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick(() => {
+                this.showChannelDialog = false;
+              })
+            Text('确定')
+              .fontSize(15)
+              .fontColor($r('app.color.white'))
+              .textAlign(TextAlign.Center)
+              .layoutWeight(1)
+              .padding({ top: 10, bottom: 10 })
+              .borderRadius(4)
+              .backgroundColor($r('app.color.mobile_campus_primary_color_default'))
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick(() => {
+                this.onChannelsConfirmed();
+              })
+          }
+          .width('100%')
         }
-        .layoutWeight(1)
-        .align(Alignment.Top)
-        Row({ space: 12 }) {
-          Text('取消')
-            .fontSize(15)
-            .fontColor($r('app.color.common_color_3'))
-            .textAlign(TextAlign.Center)
-            .layoutWeight(1)
-            .padding({ top: 10, bottom: 10 })
-            .borderRadius(4)
-            .backgroundColor($r('app.color.common_color_6'))
-            .onClick(() => {
-              this.showChannelDialog = false;
-            })
-          Text('确定')
-            .fontSize(15)
-            .fontColor($r('app.color.white'))
-            .textAlign(TextAlign.Center)
-            .layoutWeight(1)
-            .padding({ top: 10, bottom: 10 })
-            .borderRadius(4)
-            .backgroundColor($r('app.color.mobile_campus_primary_color_default'))
-            .onClick(() => {
-              this.onChannelsConfirmed();
-            })
-        }
+        .padding(16)
         .width('100%')
       }
-      .padding(16)
+      .scrollBar(BarState.Off)
       .backgroundColor($r('app.color.white'))
       .borderRadius(8)
-      .width('80%')
-      .height(320)
+      .width(BreakpointSystem.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp))
+      .constraintSize({ maxHeight: BreakpointSystem.getDialogMaxHeight(this.windowHeightVp) })
+      .onClick(() => {
+        // 拦截弹窗内点击
+      })
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#80000000')
+    .padding({ left: 16, right: 16 })
+    .backgroundColor('#66000000')
     .justifyContent(FlexAlign.Center)
     .alignItems(HorizontalAlign.Center)
+    .onClick(() => {
+      this.showChannelDialog = false;
+    })
   }
 }

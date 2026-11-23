@@ -95,6 +95,7 @@ struct WorkApplyDetailPage {
   @State downloadingAttach: boolean = false;
   @State showPdfModal: boolean = false;
   @State pdfTitle: string = '';
+  @State pendingPdfPath: string = '';
   @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
   @StorageProp('windowWidthVp') windowWidthVp: number = 360;
   @StorageProp('windowHeightVp') windowHeightVp: number = 780;
@@ -109,6 +110,7 @@ struct WorkApplyDetailPage {
   }
 
   private closePdfModal(): void {
+    this.pendingPdfPath = '';
     if (this.showPdfModal) {
       this.showPdfModal = false;
       try {
@@ -116,6 +118,21 @@ struct WorkApplyDetailPage {
       } catch {
         // 忽略释放异常
       }
+    }
+  }
+
+  private async loadPendingPdf(): Promise<void> {
+    const path: string = this.pendingPdfPath;
+    if (path === '') {
+      return;
+    }
+    try {
+      const parseRes = await this.pdfController.loadDocument(path);
+      if (parseRes !== pdfService.ParseResult.PARSE_SUCCESS) {
+        this.toast('PDF 文档解析失败');
+      }
+    } catch {
+      this.toast('PDF 文档加载失败');
     }
   }
 
@@ -236,16 +253,10 @@ struct WorkApplyDetailPage {
         return;
       }
       if (res.method === 'pdfView' && res.localPath !== '') {
-        try {
-          const parseRes = await this.pdfController.loadDocument(res.localPath);
-          if (parseRes === pdfService.ParseResult.PARSE_SUCCESS) {
-            this.pdfTitle = attach.realFileName;
-            this.showPdfModal = true;
-            return;
-          }
-        } catch {
-          // 降级提示
-        }
+        this.pendingPdfPath = res.localPath;
+        this.pdfTitle = attach.realFileName;
+        this.showPdfModal = true;
+        return;
       }
       if (res.message !== '') {
         this.toast(res.message);
@@ -331,6 +342,7 @@ struct WorkApplyDetailPage {
             .fontSize(14)
             .fontColor('#3A92ED')
             .padding({ left: 10, right: 4, top: 4, bottom: 4 })
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               this.closePdfModal();
             })
@@ -349,6 +361,9 @@ struct WorkApplyDetailPage {
         })
           .width('100%')
           .layoutWeight(1)
+          .onAppear(() => {
+            this.loadPendingPdf();
+          })
       }
       .width(AdaptiveLayoutHelper.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp))
       .height(AdaptiveLayoutHelper.getDialogMaxHeight(this.windowHeightVp))
@@ -379,6 +394,7 @@ struct WorkApplyDetailPage {
         .height(28)
         .padding(5)
         .margin({ left: 10 })
+        .hoverEffect(HoverEffect.Highlight)
         .onClick(() => {
           router.back();
         })
@@ -421,6 +437,7 @@ struct WorkApplyDetailPage {
         .padding({ top: 10, bottom: 10 })
         .border({ width: 0.5, color: $r('app.color.mobile_campus_primary_color_default') })
         .opacity(this.urged ? 0.5 : 1)
+        .hoverEffect(HoverEffect.Highlight)
         .onClick(() => {
           this.urgeClick();
         })
@@ -648,6 +665,7 @@ struct WorkApplyDetailPage {
     }
     .width('100%')
     .padding({ left: 12, right: 12, top: 12, bottom: 12 })
+    .hoverEffect(HoverEffect.Highlight)
     .onClick(() => {
       this.openAttach(attach);
     })

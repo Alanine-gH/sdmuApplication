@@ -1,10 +1,15 @@
 import { router } from '@kit.ArkUI';
-import { common } from '@kit.AbilityKit';
+import { common, Want } from '@kit.AbilityKit';
+import { BusinessError, pasteboard } from '@kit.BasicServicesKit';
+import { call } from '@kit.TelephonyKit';
 import { BreakpointSystem } from '../common/BreakpointSystem';
 import { ApiService } from '../network/ApiService';
 import { NewsItem } from '../model/NewsModel';
 import { EmptyView } from '../components/EmptyView';
 import { ShareHelper } from '../common/ShareHelper';
+import { NluEntityHelper, NluEntityChip } from '../common/NluEntityHelper';
+import { TtsReaderController, TtsStateSnapshot } from '../common/TtsReaderHelper';
+import { ReminderCalendarHelper } from '../common/ReminderCalendarHelper';
 
 /**
  * 新闻详情页 — 按源布局 1:1 复刻 mobile_campus_fragment_news.xml（资讯页）：
@@ -18,14 +23,26 @@ import { ShareHelper } from '../common/ShareHelper';
 struct NewsDetailPage {
   @State news: NewsItem = new NewsItem('', '', '', '', '', '', '', '', '');
   @State isLoading: boolean = true;
+  @State nluEntities: NluEntityChip[] = [];
+  @State ttsSnapshot: TtsStateSnapshot = {
+    state: 'idle',
+    currentIndex: 0,
+    totalChunks: 0,
+    errorMessage: ''
+  };
   @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
   @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
   @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
   @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
   @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   private newsId: string = '';
+  private nluRequestToken: number = 0;
+  private ttsController: TtsReaderController = new TtsReaderController();
 
   aboutToAppear(): void {
+    this.ttsController.setOnStateChange((snapshot: TtsStateSnapshot) => {
+      this.ttsSnapshot = snapshot;
+    });
     const params: object = router.getParams();
     if (params !== null && params !== undefined) {
       const record = params as Record<string, Object>;
@@ -37,16 +54,153 @@ struct NewsDetailPage {
     this.loadDetail();
   }
 
+  onPageHide(): void {
+    this.ttsController.shutdown();
+  }
+
+  aboutToDisappear(): void {
+    this.ttsController.shutdown();
+  }
+
   loadDetail(): void {
     this.isLoading = true;
+    this.nluEntities = [];
+    this.ttsController.stop();
     ApiService.getNewsDetail(this.newsId)
       .then((response) => {
         this.news = response.data;
         this.isLoading = false;
+        if (this.news.id !== '') {
+          this.extractNewsEntities(this.news.title + '\n' + this.news.content);
+        }
       })
       .catch(() => {
         this.isLoading = false;
       });
+  }
+
+  private async extractNewsEntities(sourceText: string): Promise<void> {
+    this.nluRequestToken += 1;
+    const token: number = this.nluRequestToken;
+    const result = await NluEntityHelper.extractEntities(sourceText);
+    if (token !== this.nluRequestToken) {
+      return;
+    }
+    this.nluEntities = result.entities;
+  }
+
+  private toast(msg: string): void {
+    if (msg !== '') {
+      this.getUIContext().getPromptAction().showToast({ message: msg });
+    }
+  }
+
+  private async onEntityChipTap(chip: NluEntityChip): Promise<void> {
+    if (chip.action === 'calendar') {
+      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      const startMs: number = chip.timestampMs !== null ? chip.timestampMs : Date.now() + 3600000;
+      const endMs: number = startMs + 3600000;
+      const calRes = await ReminderCalendarHelper.addCalendarEventWithResult(
+        ctx,
+        this.news.title !== '' ? this.news.title : '校园资讯日程',
+        chip.text,
+        startMs,
+        endMs
+      );
+      if (calRes.success) {
+        this.toast(calRes.message);
+        return;
+      }
+      if (startMs > Date.now()) {
+        const remRes = await ReminderCalendarHelper.publishCalendarReminderWithResult(
+          this.news.title !== '' ? this.news.title : '校园资讯提醒',
+          chip.text,
+          new Date(startMs),
+          ctx
+        );
+        this.toast(remRes.success ? remRes.message : (remRes.message || calRes.message));
+        return;
+      }
+      this.toast(calRes.message);
+      return;
+    }
+    if (chip.action === 'dial') {
+      try {
+        call.makeCall(chip.text, () => {
+        });
+      } catch {
+        this.toast('无法拉起拨号');
+      }
+      return;
+    }
+    if (chip.action === 'email') {
+      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      try {
+        ctx.startAbility({
+          action: 'mailto:' + chip.text,
+          entities: ['entity.system.default'],
+          parameters: { 'email': [chip.text] }
+        } as Want).catch(() => {
+          this.toast('请安装邮箱应用');
+        });
+      } catch {
+        this.toast('请安装邮箱应用');
+      }
+      return;
+    }
+    if (chip.action === 'url') {
+      const lower: string = chip.text.toLowerCase();
+      const targetUrl: string = (lower.startsWith('http://') || lower.startsWith('https://'))
+        ? chip.text
+        : 'https://' + chip.text;
+      router.pushUrl({
+        url: 'pages/WebViewPage',
+        params: { url: targetUrl, title: '网页详情' }
+      });
+      return;
+    }
+    if (chip.action === 'location') {
+      try {
+        const data: pasteboard.PasteData = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, chip.text);
+        await pasteboard.getSystemPasteboard().setData(data);
+        this.toast('已复制地点：' + chip.text);
+      } catch {
+        this.toast('复制地点失败');
+      }
+    }
+  }
+
+  private async startTtsRead(): Promise<void> {
+    const text: string = this.news.title + '。' + this.news.content;
+    const ok: boolean = await this.ttsController.speak(text);
+    if (!ok) {
+      const msg: string = this.ttsSnapshot.errorMessage !== ''
+        ? this.ttsSnapshot.errorMessage
+        : '当前设备暂不支持语音朗读';
+      this.toast(msg);
+    }
+  }
+
+  private async resumeTtsRead(): Promise<void> {
+    const ok: boolean = await this.ttsController.resume();
+    if (!ok && this.ttsSnapshot.errorMessage !== '') {
+      this.toast(this.ttsSnapshot.errorMessage);
+    }
+  }
+
+  private ttsStatusLabel(): string {
+    const total: number = Math.max(1, this.ttsSnapshot.totalChunks);
+    const cur: number = Math.min(total, this.ttsSnapshot.currentIndex + 1);
+    if (this.ttsSnapshot.state === 'playing') {
+      return `朗读中 · 第 ${cur}/${total} 段`;
+    }
+    if (this.ttsSnapshot.state === 'paused') {
+      return `已暂停 · 第 ${cur}/${total} 段`;
+    }
+    if (this.ttsSnapshot.state === 'error') {
+      return this.ttsSnapshot.errorMessage !== '' ? this.ttsSnapshot.errorMessage : '语音朗读暂不可用';
+    }
+    return '资讯语音朗读';
   }
 
   /**
@@ -69,6 +223,7 @@ struct NewsDetailPage {
         .height(this.isCompactHeight ? 38 : 45)
         .padding({ top: 12, bottom: 12 })
         .alignItems(VerticalAlign.Center)
+        .hoverEffect(HoverEffect.Highlight)
         .onClick(() => {
           router.back();
         })
@@ -89,6 +244,7 @@ struct NewsDetailPage {
         .height(this.isCompactHeight ? 38 : 45)
         .padding({ left: 10, right: 8 })
         .alignItems(VerticalAlign.Center)
+        .hoverEffect(HoverEffect.Highlight)
         .onClick(() => {
           const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
           ShareHelper.shareText(ctx, this.news.title || '校园资讯', this.news.summary || this.news.content || '山东管理学院资讯', this.news.url || undefined);
@@ -103,6 +259,7 @@ struct NewsDetailPage {
         .height(this.isCompactHeight ? 38 : 45)
         .padding({ left: 15, right: 15, top: 12, bottom: 12 })
         .alignItems(VerticalAlign.Center)
+        .hoverEffect(HoverEffect.Highlight)
         .onClick(() => {
           this.loadDetail();
         })
@@ -168,6 +325,13 @@ struct NewsDetailPage {
               }
               .width('100%')
               .margin({ top: 10, bottom: 10 })
+
+              this.ttsControlBar()
+
+              if (this.nluEntities.length > 0) {
+                this.nluEntitySection()
+              }
+
               Divider()
                 .color($r('app.color.common_color_6'))
                 .strokeWidth(1)
@@ -200,5 +364,123 @@ struct NewsDetailPage {
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.mobile_campus_bg_color'))
+  }
+
+  @Builder
+  ttsControlBar() {
+    Row({ space: 8 }) {
+      Text(this.ttsStatusLabel())
+        .fontSize(13)
+        .fontColor(this.ttsSnapshot.state === 'error' ? '#E5484D' : $r('app.color.common_color_2'))
+        .layoutWeight(1)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+      if (this.ttsSnapshot.state === 'playing') {
+        Text('暂停')
+          .fontSize(12)
+          .fontColor('#1B68B7')
+          .padding({ left: 10, right: 10, top: 5, bottom: 5 })
+          .borderRadius(14)
+          .backgroundColor('#EBF4FF')
+          .hoverEffect(HoverEffect.Highlight)
+          .onClick(() => {
+            this.ttsController.pause();
+          })
+        Text('停止')
+          .fontSize(12)
+          .fontColor($r('app.color.common_color_2'))
+          .padding({ left: 10, right: 10, top: 5, bottom: 5 })
+          .borderRadius(14)
+          .backgroundColor('#F2F4F7')
+          .hoverEffect(HoverEffect.Highlight)
+          .onClick(() => {
+            this.ttsController.stop();
+          })
+      } else if (this.ttsSnapshot.state === 'paused') {
+        Text('继续')
+          .fontSize(12)
+          .fontColor($r('app.color.white'))
+          .padding({ left: 10, right: 10, top: 5, bottom: 5 })
+          .borderRadius(14)
+          .backgroundColor('#1B68B7')
+          .hoverEffect(HoverEffect.Highlight)
+          .onClick(() => {
+            this.resumeTtsRead();
+          })
+        Text('停止')
+          .fontSize(12)
+          .fontColor($r('app.color.common_color_2'))
+          .padding({ left: 10, right: 10, top: 5, bottom: 5 })
+          .borderRadius(14)
+          .backgroundColor('#F2F4F7')
+          .hoverEffect(HoverEffect.Highlight)
+          .onClick(() => {
+            this.ttsController.stop();
+          })
+      } else {
+        Text('语音朗读')
+          .fontSize(12)
+          .fontColor($r('app.color.white'))
+          .padding({ left: 12, right: 12, top: 5, bottom: 5 })
+          .borderRadius(14)
+          .backgroundColor('#1B68B7')
+          .hoverEffect(HoverEffect.Highlight)
+          .onClick(() => {
+            this.startTtsRead();
+          })
+      }
+    }
+    .width('100%')
+    .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+    .margin({ bottom: 10 })
+    .borderRadius(8)
+    .backgroundColor('#F7F9FC')
+    .alignItems(VerticalAlign.Center)
+  }
+
+  @Builder
+  nluEntitySection() {
+    Column() {
+      Text('智能识别与快捷操作')
+        .fontSize(12)
+        .fontColor($r('app.color.common_color_3'))
+        .margin({ bottom: 6 })
+      Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Start }) {
+        ForEach(this.nluEntities, (chip: NluEntityChip, idx: number) => {
+          Row({ space: 4 }) {
+            Text(chip.typeLabel)
+              .fontSize(11)
+              .fontColor('#1B68B7')
+              .padding({ left: 5, right: 5, top: 1, bottom: 1 })
+              .borderRadius(4)
+              .backgroundColor('#EBF4FF')
+            Text(chip.text)
+              .fontSize(12)
+              .fontColor($r('app.color.common_color_1'))
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+              .constraintSize({ maxWidth: 180 })
+            Text(chip.actionLabel)
+              .fontSize(11)
+              .fontColor('#1B68B7')
+          }
+          .padding({ left: 8, right: 8, top: 5, bottom: 5 })
+          .margin({ right: 8, bottom: 8 })
+          .borderRadius(14)
+          .backgroundColor('#F7F9FC')
+          .border({ width: 0.5, color: '#D6E4F5' })
+          .alignItems(VerticalAlign.Center)
+          .hoverEffect(HoverEffect.Highlight)
+          .onClick(() => {
+            this.onEntityChipTap(chip);
+          })
+        }, (chip: NluEntityChip, idx: number) => `${idx}_${chip.type}_${chip.text}`)
+      }
+      .width('100%')
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Start)
+    .margin({ bottom: 8 })
   }
 }

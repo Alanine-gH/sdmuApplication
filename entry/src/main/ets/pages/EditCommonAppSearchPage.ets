@@ -214,6 +214,7 @@ struct EditCommonAppSearchPage {
       .borderRadius(8)
       .backgroundColor('#f2f2f2')
       .margin({ left: 0, right: 16, top: 8, bottom: 8 })
+      .hoverEffect(HoverEffect.Highlight)
       .onClick(() => {
         this.searchText = keyword;
         this.doSearch();
@@ -286,6 +287,7 @@ struct EditCommonAppSearchPage {
       .borderRadius(8)
       .backgroundColor($r('app.color.white'))
       .alignItems(VerticalAlign.Center)
+      .hoverEffect(HoverEffect.Highlight)
       .onClick(() => {
         this.toggleCommon(app, index);
       })
@@ -341,6 +343,7 @@ struct EditCommonAppSearchPage {
                 .layoutWeight(1)
                 .height(34)
                 .enterKeyType(EnterKeyType.Search)
+                .defaultFocus(true)
                 .onChange((value: string) => {
                   this.searchText = value;
                   if (value === '') {
@@ -348,10 +351,8 @@ struct EditCommonAppSearchPage {
                     this.searched = false;
                   }
                 })
-                .onSubmit((enterKey: EnterKeyType) => {
-                  if (enterKey === EnterKeyType.Search) {
-                    this.doSearch();
-                  }
+                .onSubmit(() => {
+                  this.doSearch();
                 })
             }
             .width('100%')
@@ -365,6 +366,7 @@ struct EditCommonAppSearchPage {
                 .width(40)
                 .height(40)
                 .objectFit(ImageFit.None)
+                .hoverEffect(HoverEffect.Highlight)
                 .onClick(() => {
                   this.searchText = '';
                   this.searched = false;
@@ -380,6 +382,7 @@ struct EditCommonAppSearchPage {
             .fontColor($r('app.color.sdmu_primary'))
             .padding({ left: 16, right: 20 })
             .height('100%')
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               router.back();
             })
@@ -409,6 +412,7 @@ struct EditCommonAppSearchPage {
                 .height(20)
                 .objectFit(ImageFit.Contain)
                 .padding({ left: 16, right: 16 })
+                .hoverEffect(HoverEffect.Highlight)
                 .onClick(() => {
                   this.getUIContext().showAlertDialog({
                     title: '',

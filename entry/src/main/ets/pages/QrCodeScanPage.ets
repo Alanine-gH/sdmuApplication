@@ -3,7 +3,8 @@ import { common, Want } from '@kit.AbilityKit';
 import { scanBarcode, scanCore } from '@kit.ScanKit';
 import { geoLocationManager } from '@kit.LocationKit';
 import { BusinessError } from '@kit.BasicServicesKit';
-import { BreakpointSystem } from '../common/BreakpointSystem';
+import { BreakpointSystem, CreaseRegionVp } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 import { HttpClient } from '../network/HttpClient';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
@@ -54,11 +55,14 @@ interface HttpHeader {
 struct QrCodeScanPage {
   @State scanLineOffset: number = 0;
   @State flashHint: string = '扫二维码/条码';
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
   @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
   @StorageProp('avoidAreaTopVp') avoidAreaTopVp: number = 0;
   @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
   @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
+  @StorageProp('foldStatus') foldStatus: number = 0;
+  @StorageProp('creaseRegionVp') creaseRegionVp: CreaseRegionVp | null = null;
   private scanAreaHeight: number = 0;
   private timerId: number = -1;
   /** 防重入：扫码中不再触发（源码连续扫码由 zxing 循环承担，HAP 每次 startScan 一次会话） */
@@ -371,13 +375,7 @@ struct QrCodeScanPage {
   }
 
   build() {
-    Stack() {
-      Column()
-        .width('100%')
-        .height('100%')
-        .backgroundColor(Color.Black)
-        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
-
+    FolderStack({ upperItems: ['qr_scan_upper'] }) {
       Column() {
         Row() {
           Image($r('app.media.icon_scan_back'))
@@ -385,6 +383,7 @@ struct QrCodeScanPage {
             .height(24)
             .padding(16)
             .objectFit(ImageFit.Contain)
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               router.back();
             })
@@ -406,13 +405,25 @@ struct QrCodeScanPage {
         .width('100%')
         .layoutWeight(1)
         .clip(true)
-        .onAreaChange((oldArea: Area, newArea: Area) => {
+        .onAreaChange((_oldArea: Area, newArea: Area) => {
           this.scanAreaHeight = Number(newArea.height);
         })
+      }
+      .id('qr_scan_upper')
+      .width('100%')
+      .height('100%')
+      .padding({
+        bottom: (this.isCompactHeight ? 72 : 104) + this.avoidAreaBottomVp +
+          AdaptiveLayoutHelper.getCreaseAvoidHeightVp(this.creaseRegionVp, this.foldStatus)
+      })
+      .backgroundColor(Color.Black)
 
-        // 源码 llLight：闪光灯提示（ScanKit 系统 UI 内置闪光灯，壳上文案保真）
+      // 统一非重叠底栏：扫码提示 + 相册入口并排居中/靠右展示，避免双栏叠压并避让折痕
+      Column() {
         Scroll() {
-          Column() {
+          Row() {
+            Blank().layoutWeight(1)
+
             Column() {
               Image($r('app.media.icon_scan_light_close'))
                 .width(19)
@@ -424,61 +435,59 @@ struct QrCodeScanPage {
                 .fontColor($r('app.color.white'))
                 .margin({ top: 8 })
             }
-            .padding({ left: 20, right: 20 })
+            .padding({ left: 20, right: 20, top: 8, bottom: 8 })
             .alignItems(HorizontalAlign.Center)
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               this.startScan();
             })
+
+            Row() {
+              Column() {
+                Image($r('app.media.icon_scan_album'))
+                  .width(23)
+                  .height(23)
+                  .objectFit(ImageFit.Contain)
+
+                Text('相册')
+                  .fontSize(12)
+                  .fontColor($r('app.color.white'))
+                  .margin({ top: 8 })
+              }
+              .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+              .alignItems(HorizontalAlign.Center)
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick(() => {
+                // 源码 llAlbum：PICK→CROP→decodeWithBitmap(photoMode)；ScanKit 系统 UI
+                // 内置相册入口（通道等价，无编造解码）→ 复起扫
+                this.startScan();
+              })
+            }
+            .layoutWeight(1)
+            .justifyContent(FlexAlign.End)
           }
           .width('100%')
-          .justifyContent(FlexAlign.Start)
-          .alignItems(HorizontalAlign.Center)
+          .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+          .alignItems(VerticalAlign.Center)
         }
         .width('100%')
-        .height(this.isCompactHeight ? 64 : 100)
         .scrollBar(BarState.Off)
-      }
-      .width('100%')
-      .height('100%')
-
-      Column() {
-        Row() {
-          Column() {
-            Image($r('app.media.icon_scan_album'))
-              .width(23)
-              .height(23)
-              .objectFit(ImageFit.Contain)
-
-            Text('相册')
-              .fontSize(12)
-              .fontColor($r('app.color.white'))
-              .margin({ top: 8 })
-          }
-          .padding({ left: 20, right: 20, top: 15, bottom: 15 })
-          .margin({ right: 21 })
-          .alignItems(HorizontalAlign.Center)
-          .onClick(() => {
-            // 源码 llAlbum：PICK→CROP→decodeWithBitmap(photoMode)；ScanKit 系统 UI
-            // 内置相册入口（通道等价，无编造解码）→ 复起扫
-            this.startScan();
-          })
-        }
-        .width('100%')
-        .height((this.isCompactHeight ? 64 : 100) + this.avoidAreaBottomVp)
         .padding({
+          top: 8 + AdaptiveLayoutHelper.getCreaseAvoidHeightVp(this.creaseRegionVp, this.foldStatus),
           left: this.avoidAreaLeftVp,
           right: this.avoidAreaRightVp,
-          bottom: this.avoidAreaBottomVp
+          bottom: Math.max(12, this.avoidAreaBottomVp + 8)
         })
         .backgroundColor(Color.Black)
-        .justifyContent(FlexAlign.End)
-        .alignItems(VerticalAlign.Center)
         .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
       }
       .width('100%')
       .height('100%')
       .justifyContent(FlexAlign.End)
+      .hitTestBehavior(HitTestMode.Transparent)
     }
+    .enableAnimation(true)
+    .autoHalfFold(true)
     .width('100%')
     .height('100%')
     .backgroundColor(Color.Black)

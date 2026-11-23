@@ -9,9 +9,11 @@ import { ApiResponse } from '../model/ResponseModel';
 import { UserInfo } from '../model/UserModel';
 import { Constants } from '../data/Constants';
 import { ApiService } from './ApiService';
+import { LoginSecretBundle, SecureAssetHelper } from '../common/SecureAssetHelper';
 
 const TAG = 0x0000;
 const DOMAIN = 'SDMU';
+const LOGIN_SECRET_ALIAS: string = 'sdmu_login_secrets';
 
 /**
  * 登录会话管理 — 复刻原生 GetKeyUtil + LoginModel（服务器实测协议，2026-11-17 全链路打通）：
@@ -63,19 +65,35 @@ export class LoginSession {
       hex.slice(10, 16).join('');
   }
 
-  /** 会话持久化：UC/aesKey/sessionKey/userId/userType/schoolId/用户全字段 写入 preferences */
+  /** 会话持久化：UC/userId/userType/schoolId/用户全字段写入 preferences，敏感密钥优先存入 AssetStoreKit TEE */
   static async persistSession(): Promise<void> {
     try {
       const ctx = LoginSession.uiContext ?? LoginSession.fallbackContext();
       if (ctx === null || ctx === undefined) {
         return;
       }
+      const hasSecrets: boolean = LoginSession.aesKey !== '' ||
+        LoginSession.onlyCode !== '' ||
+        LoginSession.sessionKey !== '';
+      let storedInTee: boolean = false;
+      if (hasSecrets) {
+        const bundleJson: string = SecureAssetHelper.packLoginSecretBundle({
+          aesKey: LoginSession.aesKey,
+          onlyCode: LoginSession.onlyCode,
+          sessionKey: LoginSession.sessionKey
+        });
+        const assetRes = await SecureAssetHelper.putSecret(LOGIN_SECRET_ALIAS, bundleJson);
+        storedInTee = assetRes.storedInTee;
+      } else {
+        await SecureAssetHelper.removeSecret(LOGIN_SECRET_ALIAS);
+      }
+
       const store: preferences.Preferences =
         await preferences.getPreferences(ctx, Constants.PREF_NAME);
       await store.put('deviceCode', LoginSession.deviceCode);
-      await store.put('aesKey', LoginSession.aesKey);
-      await store.put('onlyCode', LoginSession.onlyCode);
-      await store.put('sessionKey', LoginSession.sessionKey);
+      await store.put('aesKey', storedInTee ? '' : LoginSession.aesKey);
+      await store.put('onlyCode', storedInTee ? '' : LoginSession.onlyCode);
+      await store.put('sessionKey', storedInTee ? '' : LoginSession.sessionKey);
       await store.put('sessionUserId', LoginSession.userId);
       await store.put('sessionUserType', LoginSession.userType);
       await store.put('sessionSchoolId', LoginSession.schoolId);
@@ -92,7 +110,7 @@ export class LoginSession {
     }
   }
 
-  /** 恢复持久化会话（应用启动时调用；有UC+aesKey则免协商） */
+  /** 恢复持久化会话（应用启动时调用；先校验 deviceCode 非空以保持退出登录语义，再从 TEE/preferences 恢复密钥） */
   static async restoreSession(): Promise<boolean> {
     try {
       const ctx = LoginSession.uiContext ?? LoginSession.fallbackContext();
@@ -102,13 +120,47 @@ export class LoginSession {
       const store: preferences.Preferences =
         await preferences.getPreferences(ctx, Constants.PREF_NAME);
       const uc: preferences.ValueType = await store.get('deviceCode', '');
-      const key: preferences.ValueType = await store.get('aesKey', '');
-      if (typeof uc === 'string' && typeof key === 'string' && uc !== '' && key !== '') {
+      if (typeof uc !== 'string' || uc === '') {
+        return false;
+      }
+
+      const rawSecret: string = await SecureAssetHelper.getSecret(LOGIN_SECRET_ALIAS);
+      const bundle: LoginSecretBundle | null = rawSecret !== ''
+        ? SecureAssetHelper.unpackLoginSecretBundle(rawSecret)
+        : null;
+
+      const legacyKey: preferences.ValueType = await store.get('aesKey', '');
+      const legacySk: preferences.ValueType = await store.get('sessionKey', '');
+      const legacyOc: preferences.ValueType = await store.get('onlyCode', '');
+
+      const resolvedAesKey: string = (bundle !== null && bundle.aesKey !== '')
+        ? bundle.aesKey
+        : (typeof legacyKey === 'string' ? legacyKey : '');
+      const resolvedOnlyCode: string = bundle !== null
+        ? bundle.onlyCode
+        : (typeof legacyOc === 'string' ? legacyOc : '');
+      const resolvedSessionKey: string = bundle !== null
+        ? bundle.sessionKey
+        : (typeof legacySk === 'string' ? legacySk : '');
+
+      if (resolvedAesKey !== '') {
         LoginSession.deviceCode = uc;
-        LoginSession.aesKey = key;
-        const sk: preferences.ValueType = await store.get('sessionKey', '');
-        if (typeof sk === 'string') {
-          LoginSession.sessionKey = sk;
+        LoginSession.aesKey = resolvedAesKey;
+        LoginSession.sessionKey = resolvedSessionKey;
+        LoginSession.onlyCode = resolvedOnlyCode;
+        if (bundle === null) {
+          const bundleJson: string = SecureAssetHelper.packLoginSecretBundle({
+            aesKey: resolvedAesKey,
+            onlyCode: resolvedOnlyCode,
+            sessionKey: resolvedSessionKey
+          });
+          const migrateRes = await SecureAssetHelper.putSecret(LOGIN_SECRET_ALIAS, bundleJson);
+          if (migrateRes.storedInTee) {
+            await store.put('aesKey', '');
+            await store.put('onlyCode', '');
+            await store.put('sessionKey', '');
+            await store.flush();
+          }
         }
         const uid: preferences.ValueType = await store.get('sessionUserId', '');
         if (typeof uid === 'string') {
@@ -146,10 +198,6 @@ export class LoginSession {
         const n6: preferences.ValueType = await store.get('sessionPhone', '');
         if (typeof n6 === 'string') {
           LoginSession.sessionPhone = n6;
-        }
-        const oc: preferences.ValueType = await store.get('onlyCode', '');
-        if (typeof oc === 'string') {
-          LoginSession.onlyCode = oc;
         }
         LoginSession.log('会话恢复成功 UC=' + uc);
         return true;

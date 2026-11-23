@@ -6,6 +6,7 @@ import { SuperviseCourseDetail } from '../model/SuperviseModel';
 import { TitleBar } from '../components/TitleBar';
 import { EmptyView } from '../components/EmptyView';
 import { LoadingView } from '../components/LoadingView';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 新增督导/课程详情页 — 源码级翻译 [P-C placeholder]（SuperviseLectureAddActivity.java 逐行 → ArkTS）：
@@ -82,6 +83,8 @@ struct SuperviseAddPage {
   @State pickDay: number = 0;
   @State pickHour: number = 8;
   @State pickMinute: number = 0;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
 
   aboutToAppear(): void {
     const params: object | undefined = router.getParams() as object | undefined;
@@ -299,54 +302,62 @@ struct SuperviseAddPage {
   /** 源码 SuperviseDateDialog：WheelView visibleItems7 + tvFinish"完成"（itemList 选项） */
   @Builder
   dateWheelBuilder() {
-    Column() {
-      Row() {
-        Blank()
-        Text('完成').fontSize(15).fontColor($r('app.color.common_color_1'))
-          .padding(10).onClick(() => { this.onDatePicked(); })
+    Scroll() {
+      Column() {
+        Row() {
+          Blank()
+          Text('完成').fontSize(15).fontColor($r('app.color.common_color_1'))
+            .padding(10).hoverEffect(HoverEffect.Highlight).onClick(() => { this.onDatePicked(); })
+        }
+        .width('100%')
+        if (this.detail !== null && this.detail.itemList.length > 0) {
+          TextPicker({ range: this.detail.itemList, selected: this.dateIndex })
+            .width('100%').height(200).canLoop(false)
+            .onChange((value: string | string[], index: number | number[]) => {
+              this.dateIndex = Array.isArray(index) ? Number((index as number[])[0]) : Number(index);
+            })
+        } else {
+          Text('暂无可选听课时间').fontSize(15).fontColor($r('app.color.common_color_3')).height(200)
+        }
       }
       .width('100%')
-      if (this.detail !== null && this.detail.itemList.length > 0) {
-        TextPicker({ range: this.detail.itemList, selected: this.dateIndex })
-          .width('100%').layoutWeight(1).canLoop(false)
-          .onChange((value: string | string[], index: number | number[]) => {
-            this.dateIndex = Array.isArray(index) ? Number((index as number[])[0]) : Number(index);
-          })
-      } else {
-        Text('暂无可选听课时间').fontSize(15).fontColor($r('app.color.common_color_3')).layoutWeight(1)
-      }
     }
-    .width('100%').height('100%')
+    .width('100%')
+    .scrollBar(BarState.Off)
   }
 
   /** 源码 ChooseTimeDialog：day/hour/minute 三滚轮 + tv_setexamtimetitle + 确定 */
   @Builder
   timeWheelBuilder() {
-    Column() {
-      Text(this.specificTime === '' ? 'yyyy-MM-dd HH:mm' : this.specificTime)
-        .fontSize(17).fontColor($r('app.color.common_color_1')).height(44)
-        .textAlign(TextAlign.Center).width('100%')
-      Row() {
-        TextPicker({ range: this.dayLabels, selected: this.pickDay }).layoutWeight(3)
-          .onChange((value: string | string[], index: number | number[]) => {
-            this.pickDay = Array.isArray(index) ? Number((index as number[])[0]) : Number(index);
-          })
-        TextPicker({ range: this.hourLabels, selected: this.pickHour }).layoutWeight(1)
-          .onChange((value: string | string[], index: number | number[]) => {
-            this.pickHour = Array.isArray(index) ? Number((index as number[])[0]) : Number(index);
-          })
-        TextPicker({ range: this.minuteLabels, selected: this.pickMinute }).layoutWeight(1)
-          .onChange((value: string | string[], index: number | number[]) => {
-            this.pickMinute = Array.isArray(index) ? Number((index as number[])[0]) : Number(index);
-          })
+    Scroll() {
+      Column() {
+        Text(this.specificTime === '' ? 'yyyy-MM-dd HH:mm' : this.specificTime)
+          .fontSize(17).fontColor($r('app.color.common_color_1')).height(44)
+          .textAlign(TextAlign.Center).width('100%')
+        Row() {
+          TextPicker({ range: this.dayLabels, selected: this.pickDay }).layoutWeight(3)
+            .onChange((value: string | string[], index: number | number[]) => {
+              this.pickDay = Array.isArray(index) ? Number((index as number[])[0]) : Number(index);
+            })
+          TextPicker({ range: this.hourLabels, selected: this.pickHour }).layoutWeight(1)
+            .onChange((value: string | string[], index: number | number[]) => {
+              this.pickHour = Array.isArray(index) ? Number((index as number[])[0]) : Number(index);
+            })
+          TextPicker({ range: this.minuteLabels, selected: this.pickMinute }).layoutWeight(1)
+            .onChange((value: string | string[], index: number | number[]) => {
+              this.pickMinute = Array.isArray(index) ? Number((index as number[])[0]) : Number(index);
+            })
+        }
+        .width('100%').height(200)
+        Text('确定').fontSize(17).fontColor($r('app.color.white')).textAlign(TextAlign.Center)
+          .width('80%').height(44).borderRadius(4)
+          .backgroundColor($r('app.color.mobile_campus_primary_color_default'))
+          .margin({ top: 12, bottom: 16 }).hoverEffect(HoverEffect.Highlight).onClick(() => { this.onTimePicked(); })
       }
-      .width('100%').height(200)
-      Text('确定').fontSize(17).fontColor($r('app.color.white')).textAlign(TextAlign.Center)
-        .width('80%').height(44).borderRadius(4)
-        .backgroundColor($r('app.color.mobile_campus_primary_color_default'))
-        .margin({ top: 12, bottom: 16 }).onClick(() => { this.onTimePicked(); })
+      .width('100%')
     }
     .width('100%')
+    .scrollBar(BarState.Off)
   }
 
   build() {
@@ -374,10 +385,18 @@ struct SuperviseAddPage {
     .width('100%').height('100%')
     .backgroundColor($r('app.color.common_color_6'))
     .bindSheet($$this.dateWheelVisible, this.dateWheelBuilder(), {
-      height: 280, dragBar: false, showClose: false, backgroundColor: $r('app.color.ybg_white')
+      height: 280,
+      preferType: AdaptiveLayoutHelper.getSheetPreferType(this.currentBreakpoint, this.isCompactHeight),
+      dragBar: false,
+      showClose: false,
+      backgroundColor: $r('app.color.ybg_white')
     } as SheetOptions)
     .bindSheet($$this.timeWheelVisible, this.timeWheelBuilder(), {
-      height: 380, dragBar: false, showClose: false, backgroundColor: $r('app.color.ybg_white')
+      height: 380,
+      preferType: AdaptiveLayoutHelper.getSheetPreferType(this.currentBreakpoint, this.isCompactHeight),
+      dragBar: false,
+      showClose: false,
+      backgroundColor: $r('app.color.ybg_white')
     } as SheetOptions)
   }
 }

@@ -7,7 +7,9 @@ import { EmptyView } from '../components/EmptyView';
 import { LoadingView } from '../components/LoadingView';
 import { LoginSession } from '../network/LoginSession';
 import { MeetingTabEntity, JoinListEntity, JoinListItem, WeekPlanEntity,
-  CurrentDayEntity, TermParamsEntity, CalendarItemEntity } from '../model/MeetingApiModel';
+  CurrentDayEntity, TermParamsEntity, CalendarItemEntity, MeetingObjEntity,
+  MeetingWeekDetailEntity } from '../model/MeetingApiModel';
+import { AdaptiveLayoutHelper, SplitPaneConfig } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 会议页 — 源码逐行翻译（禁止看图猜；每个 UI 结构标注来源 XML）
@@ -93,6 +95,17 @@ struct MeetingPage {
   @State weekPages: CalendarItemEntity[][] = [];
   @State weekPagerIndex: number = 0;
   @State weekSelectedDate: string = ''; // WeekPagerAdapter.f（选中日期，仅视觉）
+  @State selectedMeetingItem: JoinListItem | null = null;
+  @State selectedWeekPlan: WeekPlanEntity | null = null;
+  @State selectedMeetingObj: MeetingObjEntity | null = null;
+  @State selectedWeekDetail: MeetingWeekDetailEntity | null = null;
+  @State detailLoading: boolean = false;
+  @State detailError: string = '';
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   private weekDisplayWeek: number = 0;  // 源码 l（当前展示周）
   private weekCurrentWeek: number = 0;  // 源码 o（当前周）
 
@@ -270,6 +283,16 @@ struct MeetingPage {
 
   /** 源码 d.onChildClick：weekPlan → 周程详情 a0；否则会议详情 b0（bundle 携带 xlh/TASK_TYPE） */
   private openMeetingDetail(item: JoinListItem): void {
+    const splitCfg: SplitPaneConfig =
+      AdaptiveLayoutHelper.getSplitPaneConfig(this.currentBreakpoint, this.windowWidthVp);
+    if (!splitCfg.useTwoPane) {
+      this.openMeetingFullPage(item);
+      return;
+    }
+    this.selectMeetingForPreview(item);
+  }
+
+  private openMeetingFullPage(item: JoinListItem): void {
     const params: Record<string, Object> = {
       'xlh': item.XLH, 'TASK_TYPE': item.TASK_TYPE, 'id': item.XLH
     };
@@ -283,6 +306,65 @@ struct MeetingPage {
     }
   }
 
+  private selectMeetingForPreview(item: JoinListItem): void {
+    this.selectedMeetingItem = item;
+    this.selectedWeekPlan = null;
+    this.selectedMeetingObj = null;
+    this.selectedWeekDetail = null;
+    this.detailError = '';
+    this.detailLoading = true;
+    const xlh: string = item.XLH;
+    if (item.TASK_TYPE === 'weekPlan') {
+      ApiService.getMeetingWeekPlanDetails(xlh)
+        .then((response: ApiResponse<MeetingWeekDetailEntity>) => {
+          if (response.code === 1000) {
+            this.detailLoading = false;
+            return;
+          }
+          if (this.selectedMeetingItem === null || this.selectedMeetingItem.XLH !== xlh) {
+            return;
+          }
+          this.detailLoading = false;
+          if (response.code === 0 && response.data.ZT !== '') {
+            this.selectedWeekDetail = response.data;
+          } else {
+            this.detailError = response.message === '' ? '获取周程详情失败' : response.message;
+          }
+        })
+        .catch((error: BusinessError) => {
+          ApiService.logError('MeetingPage inline weekDetail fail: ' + error.message);
+          if (this.selectedMeetingItem !== null && this.selectedMeetingItem.XLH === xlh) {
+            this.detailLoading = false;
+            this.detailError = '网络异常，请稍后重试';
+          }
+        });
+      return;
+    }
+    ApiService.getMeetingObj(xlh)
+      .then((response: ApiResponse<MeetingObjEntity>) => {
+        if (response.code === 1000) {
+          this.detailLoading = false;
+          return;
+        }
+        if (this.selectedMeetingItem === null || this.selectedMeetingItem.XLH !== xlh) {
+          return;
+        }
+        this.detailLoading = false;
+        if (response.code === 0 && response.data.TITLE !== '') {
+          this.selectedMeetingObj = response.data;
+        } else {
+          this.detailError = response.message === '' ? '获取会议详情失败' : response.message;
+        }
+      })
+      .catch((error: BusinessError) => {
+        ApiService.logError('MeetingPage inline detail fail: ' + error.message);
+        if (this.selectedMeetingItem !== null && this.selectedMeetingItem.XLH === xlh) {
+          this.detailLoading = false;
+          this.detailError = '网络异常，请稍后重试';
+        }
+      });
+  }
+
   /** 源码 e.onClick（imgAdd）→ RouteConstant.c0 = mobile_campus_meeting_create */
   private openCreateMeeting(): void {
     this.pushRoute('pages/MeetingAddPage', {});
@@ -292,6 +374,44 @@ struct MeetingPage {
   private openWeekPlanDetail(xlh: string): void {
     // [W18 meeting-remain] 路由目标修正：MeetingWeekDetailActivity 实体 = pages/MeetingWeekPlanPage
     this.pushRoute('pages/MeetingWeekPlanPage', { 'xlh': xlh, 'id': xlh });
+  }
+
+  private onWeekPlanRowTap(plan: WeekPlanEntity): void {
+    const splitCfg: SplitPaneConfig =
+      AdaptiveLayoutHelper.getSplitPaneConfig(this.currentBreakpoint, this.windowWidthVp);
+    if (!splitCfg.useTwoPane) {
+      this.openWeekPlanDetail(plan.XLH);
+      return;
+    }
+    this.selectedWeekPlan = plan;
+    this.selectedMeetingItem = null;
+    this.selectedMeetingObj = null;
+    this.selectedWeekDetail = null;
+    this.detailError = '';
+    this.detailLoading = true;
+    ApiService.getMeetingWeekPlanDetails(plan.XLH)
+      .then((response: ApiResponse<MeetingWeekDetailEntity>) => {
+        if (response.code === 1000) {
+          this.detailLoading = false;
+          return;
+        }
+        if (this.selectedWeekPlan === null || this.selectedWeekPlan.XLH !== plan.XLH) {
+          return;
+        }
+        this.detailLoading = false;
+        if (response.code === 0 && response.data.ZT !== '') {
+          this.selectedWeekDetail = response.data;
+        } else {
+          this.detailError = response.message === '' ? '获取周程详情失败' : response.message;
+        }
+      })
+      .catch((error: BusinessError) => {
+        ApiService.logError('MeetingPage inline weekPlan fail: ' + error.message);
+        if (this.selectedWeekPlan !== null && this.selectedWeekPlan.XLH === plan.XLH) {
+          this.detailLoading = false;
+          this.detailError = '网络异常，请稍后重试';
+        }
+      });
   }
 
   /** 路由跳转（未注册页面仅记录日志，不阻断页面） */
@@ -626,12 +746,45 @@ struct MeetingPage {
       } else if (this.tabEntries.length === 0) {
         EmptyView({ tipText: '暂无会议' })
       } else {
-        this.tabBar()
-        if (this.activeTab === 0 && this.showMyTab) {
-          this.arrangementView()
-        }
-        if (this.activeTab === 1 && this.showWeekTab) {
-          this.weekPlanView()
+        if (AdaptiveLayoutHelper.getSplitPaneConfig(this.currentBreakpoint, this.windowWidthVp).useTwoPane) {
+          Row() {
+            Column() {
+              this.tabBar()
+              if (this.activeTab === 0 && this.showMyTab) {
+                this.arrangementView()
+              }
+              if (this.activeTab === 1 && this.showWeekTab) {
+                this.weekPlanView()
+              }
+            }
+            .layoutWeight(AdaptiveLayoutHelper.getSplitPaneConfig(
+              this.currentBreakpoint, this.windowWidthVp).masterRatio)
+            .height('100%')
+
+            Divider()
+              .vertical(true)
+              .width(0.5)
+              .height('100%')
+              .color($r('app.color.common_color_5'))
+
+            Column() {
+              this.meetingDetailPane()
+            }
+            .layoutWeight(AdaptiveLayoutHelper.getSplitPaneConfig(
+              this.currentBreakpoint, this.windowWidthVp).detailRatio)
+            .height('100%')
+          }
+          .width('100%')
+          .layoutWeight(1)
+          .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
+        } else {
+          this.tabBar()
+          if (this.activeTab === 0 && this.showMyTab) {
+            this.arrangementView()
+          }
+          if (this.activeTab === 1 && this.showWeekTab) {
+            this.weekPlanView()
+          }
         }
       }
     }
@@ -661,6 +814,7 @@ struct MeetingPage {
         .layoutWeight(1)
         .height(48)
         .justifyContent(FlexAlign.End)
+        .hoverEffect(HoverEffect.Highlight)
         .onClick(() => {
           this.activeTab = tab.id;
         })
@@ -706,6 +860,7 @@ struct MeetingPage {
         .width(51)
         .height(51)
         .margin(16)
+        .hoverEffect(HoverEffect.Highlight)
         .onClick(() => {
           this.openCreateMeeting();
         })
@@ -743,6 +898,7 @@ struct MeetingPage {
         .padding({ left: 12, right: 12 })
         .backgroundColor($r('app.color.white'))
         .alignItems(VerticalAlign.Center)
+        .hoverEffect(HoverEffect.Highlight)
         .onClick(() => {
           if (group.TYPE === 'past') {
             this.togglePastGroup();
@@ -790,7 +946,9 @@ struct MeetingPage {
       .width('100%')
       .padding({ left: 8 })
       .alignItems(VerticalAlign.Center)
-      .backgroundColor($r('app.color.white'))
+      .backgroundColor(this.selectedMeetingItem !== null && this.selectedMeetingItem.XLH === item.XLH
+        ? '#EEF5FC' : $r('app.color.white'))
+      .hoverEffect(HoverEffect.Highlight)
       .onClick(() => {
         this.openMeetingDetail(item);
       })
@@ -1056,9 +1214,163 @@ struct MeetingPage {
     .width('100%')
     .padding({ left: 8 })
     .alignItems(VerticalAlign.Center)
-    .backgroundColor($r('app.color.white'))
+    .backgroundColor(this.selectedWeekPlan !== null && this.selectedWeekPlan.XLH === plan.XLH
+      ? '#EEF5FC' : $r('app.color.white'))
+    .hoverEffect(HoverEffect.Highlight)
     .onClick(() => {
-      this.openWeekPlanDetail(plan.XLH);
+      this.onWeekPlanRowTap(plan);
     })
+  }
+
+  /** 双栏右侧会议详情预览面板 */
+  @Builder
+  meetingDetailPane() {
+    Column() {
+      if (this.selectedMeetingItem === null && this.selectedWeekPlan === null) {
+        Column() {
+          EmptyView({ tipText: '请选择左侧会议查看详情' })
+        }
+        .width('100%')
+        .height('100%')
+      } else {
+        Scroll() {
+          Column({ space: 12 }) {
+            Column({ space: 8 }) {
+              Text(this.selectedMeetingItem !== null
+                ? this.selectedMeetingItem.TITLE
+                : (this.selectedWeekPlan !== null ? this.selectedWeekPlan.ZT : ''))
+                .fontSize(18)
+                .fontWeight(FontWeight.Medium)
+                .fontColor($r('app.color.common_color_1'))
+                .width('100%')
+
+              if (this.selectedMeetingItem !== null) {
+                this.meetingMetaRow('地点', this.selectedMeetingItem.ADDRESS)
+                this.meetingMetaRow('时间',
+                  MeetingPage.meetingTimeText(this.selectedMeetingItem.KSSJ, this.selectedMeetingItem.JSSJ))
+                this.meetingMetaRow('状态', this.selectedMeetingItem.STATUS === '0' ? '已取消' : '正常')
+              } else if (this.selectedWeekPlan !== null) {
+                this.meetingMetaRow('地点', this.selectedWeekPlan.DD)
+                this.meetingMetaRow('时间',
+                  MeetingPage.meetingTimeText(this.selectedWeekPlan.KSSJ, this.selectedWeekPlan.JSSJ))
+                this.meetingMetaRow('举办单位', this.selectedWeekPlan.ZBDW)
+                this.meetingMetaRow('主持人', this.selectedWeekPlan.ZCR)
+              }
+            }
+            .width('100%')
+            .padding(16)
+            .borderRadius(8)
+            .backgroundColor($r('app.color.white'))
+            .alignItems(HorizontalAlign.Start)
+
+            Row() {
+              Text('查看完整详情')
+                .fontSize(15)
+                .fontColor($r('app.color.white'))
+                .fontWeight(FontWeight.Medium)
+                .textAlign(TextAlign.Center)
+                .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+                .borderRadius(6)
+                .backgroundColor($r('app.color.mobile_campus_primary_color_default'))
+                .hoverEffect(HoverEffect.Highlight)
+                .onClick(() => {
+                  if (this.selectedMeetingItem !== null) {
+                    this.openMeetingFullPage(this.selectedMeetingItem);
+                  } else if (this.selectedWeekPlan !== null) {
+                    this.openWeekPlanDetail(this.selectedWeekPlan.XLH);
+                  }
+                })
+            }
+            .width('100%')
+            .justifyContent(FlexAlign.End)
+
+            if (this.detailLoading) {
+              Column() {
+                LoadingView()
+              }
+              .width('100%')
+              .height(160)
+              .backgroundColor($r('app.color.white'))
+              .borderRadius(8)
+            } else if (this.detailError !== '') {
+              Column() {
+                Text(this.detailError)
+                  .fontSize(14)
+                  .fontColor($r('app.color.common_color_3'))
+              }
+              .width('100%')
+              .padding(16)
+              .backgroundColor($r('app.color.white'))
+              .borderRadius(8)
+              .alignItems(HorizontalAlign.Center)
+            } else if (this.selectedMeetingObj !== null) {
+              Column({ space: 8 }) {
+                Text('会议详细信息')
+                  .fontSize(15)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor($r('app.color.common_color_1'))
+                this.meetingMetaRow('举办单位', this.selectedMeetingObj.JBDW)
+                this.meetingMetaRow('主持人', this.selectedMeetingObj.ZCR)
+                this.meetingMetaRow('联系人', this.selectedMeetingObj.LXR)
+                this.meetingMetaRow('联系电话', this.selectedMeetingObj.LXRDH)
+                this.meetingMetaRow('参会领导', this.selectedMeetingObj.CHLD)
+                this.meetingMetaRow('参会人员', this.selectedMeetingObj.CHRY)
+                this.meetingMetaRow('参会人数', this.selectedMeetingObj.CHRS > 0
+                  ? String(this.selectedMeetingObj.CHRS) + '人' : '--')
+                this.meetingMetaRow('附件数量', String(this.selectedMeetingObj.ATTACHMENT_LIST.length))
+              }
+              .width('100%')
+              .padding(16)
+              .borderRadius(8)
+              .backgroundColor($r('app.color.white'))
+              .alignItems(HorizontalAlign.Start)
+            } else if (this.selectedWeekDetail !== null) {
+              Column({ space: 8 }) {
+                Text('周程详细信息')
+                  .fontSize(15)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor($r('app.color.common_color_1'))
+                this.meetingMetaRow('举办单位', this.selectedWeekDetail.ZBDW)
+                this.meetingMetaRow('主持人', this.selectedWeekDetail.ZCR)
+                this.meetingMetaRow('联系电话', this.selectedWeekDetail.LXDH)
+                this.meetingMetaRow('参会人员', this.selectedWeekDetail.CYRY)
+                this.meetingMetaRow('备注', this.selectedWeekDetail.BZ)
+              }
+              .width('100%')
+              .padding(16)
+              .borderRadius(8)
+              .backgroundColor($r('app.color.white'))
+              .alignItems(HorizontalAlign.Start)
+            }
+          }
+          .width('100%')
+          .padding({ left: 16, right: 16, top: 16, bottom: Math.max(16, this.avoidAreaBottomVp) })
+        }
+        .width('100%')
+        .height('100%')
+        .scrollBar(BarState.Off)
+        .align(Alignment.Top)
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor($r('app.color.mobile_campus_bg_color'))
+  }
+
+  @Builder
+  meetingMetaRow(label: string, value: string) {
+    Row() {
+      Text(label)
+        .fontSize(13)
+        .fontColor($r('app.color.common_color_3'))
+        .width(84)
+        .flexShrink(0)
+      Text(value === '' ? '--' : value)
+        .fontSize(13)
+        .fontColor($r('app.color.common_color_1'))
+        .layoutWeight(1)
+    }
+    .width('100%')
+    .alignItems(VerticalAlign.Top)
   }
 }

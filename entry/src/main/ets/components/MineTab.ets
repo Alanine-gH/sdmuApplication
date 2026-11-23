@@ -4,6 +4,7 @@ import { Constants } from '../data/Constants';
 import { LoginSession } from '../network/LoginSession';
 import { ThemeConstants } from '../common/ThemeConstants';
 import { ImmersiveLightHelper } from '../common/ImmersiveLightHelper';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 我的 Tab — 1:1 复刻 mobile_campus_fragment_my_page.xml
@@ -22,6 +23,19 @@ export struct MineTab {
   @State userName: string = '';
   @State userDepartment: string = '';
   @State userType: string = '1';
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('heightBreakpoint') heightBreakpoint: string = 'lg';
+  @StorageProp('isLandscape') isLandscape: boolean = false;
+  @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+
+  private useSideRail(): boolean {
+    return BreakpointSystem.shouldUseSideRail(
+      this.currentBreakpoint,
+      this.heightBreakpoint,
+      this.isLandscape
+    );
+  }
 
   aboutToAppear(): void {
     PreferencesUtil.getString(Constants.KEY_USER_NAME, '')
@@ -83,6 +97,8 @@ export struct MineTab {
     .padding({ left: 16, right: 16 })
     .alignItems(VerticalAlign.Center)
     .backgroundColor(Color.Transparent)
+    .borderRadius(12)
+    .hoverEffect(HoverEffect.Highlight)
     .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.98 })
     .onClick(() => {
       router.pushUrl({ url: target });
@@ -162,61 +178,76 @@ export struct MineTab {
         .alignItems(VerticalAlign.Center)
         .backgroundColor(ImmersiveLightHelper.fallbackBg($r('app.color.white')))
         .systemMaterial(ImmersiveLightHelper.cardMaterial())
+        .hoverEffect(HoverEffect.Highlight)
         .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.98 })
         .onClick(() => {
           router.pushUrl({ url: 'pages/PersonalDetailPage' });
         })
 
-        // llLayout1：意见反馈、修改密码
-        Column() {
-          this.menuRow($r('app.media.mobile_campus_opinion'), $r('app.string.opinion_feedback'), 'pages/FeedbackPage')
-          this.menuRow($r('app.media.mobile_campus_question'), $r('app.string.modify_password'), 'pages/ModifyPasswordPage')
-        }
-        .width('100%')
-        .margin({ top: 12 })
-        .borderRadius(16)
-        .backgroundColor(ImmersiveLightHelper.fallbackBg($r('app.color.white')))
-        .systemMaterial(ImmersiveLightHelper.cardMaterial())
+        // 菜单分组：手机/竖屏单列，lg/xl 平板双列排布
+        GridRow({ columns: { xs: 1, sm: 1, md: 1, lg: 2, xl: 2 }, gutter: { x: 12, y: 12 } }) {
+          GridCol({ span: 1 }) {
+            // llLayout1：意见反馈、修改密码
+            Column() {
+              this.menuRow($r('app.media.mobile_campus_opinion'), $r('app.string.opinion_feedback'), 'pages/FeedbackPage')
+              this.menuRow($r('app.media.mobile_campus_question'), $r('app.string.modify_password'), 'pages/ModifyPasswordPage')
+            }
+            .width('100%')
+            .borderRadius(16)
+            .backgroundColor(ImmersiveLightHelper.fallbackBg($r('app.color.white')))
+            .systemMaterial(ImmersiveLightHelper.cardMaterial())
+          }
 
-        // llLayout2：下载地址、下载文件管理
-        Column() {
-          this.menuRow($r('app.media.mobile_campus_download'), $r('app.string.download_address'), 'pages/DownloadAddressPage')
-          this.menuRow($r('app.media.mobile_campus_filemanager'), $r('app.string.mobile_campus_file_manage'), 'pages/FileManagerPage')
-        }
-        .width('100%')
-        .margin({ top: 12 })
-        .borderRadius(16)
-        .backgroundColor(ImmersiveLightHelper.fallbackBg($r('app.color.white')))
-        .systemMaterial(ImmersiveLightHelper.cardMaterial())
+          GridCol({ span: 1 }) {
+            // llLayout2：下载地址、下载文件管理
+            Column() {
+              this.menuRow($r('app.media.mobile_campus_download'), $r('app.string.download_address'), 'pages/DownloadAddressPage')
+              this.menuRow($r('app.media.mobile_campus_filemanager'), $r('app.string.mobile_campus_file_manage'), 'pages/FileManagerPage')
+            }
+            .width('100%')
+            .borderRadius(16)
+            .backgroundColor(ImmersiveLightHelper.fallbackBg($r('app.color.white')))
+            .systemMaterial(ImmersiveLightHelper.cardMaterial())
+          }
 
-        // 设置
-        Column() {
-          this.menuRow($r('app.media.mobile_campus_setting'), $r('app.string.mobile_campus_setting'), 'pages/SettingPage')
+          GridCol({ span: 1 }) {
+            // 设置
+            Column() {
+              this.menuRow($r('app.media.mobile_campus_setting'), $r('app.string.mobile_campus_setting'), 'pages/SettingPage')
+            }
+            .width('100%')
+            .borderRadius(16)
+            .backgroundColor(ImmersiveLightHelper.fallbackBg($r('app.color.white')))
+            .systemMaterial(ImmersiveLightHelper.cardMaterial())
+          }
         }
         .width('100%')
         .margin({ top: 12 })
-        .borderRadius(16)
-        .backgroundColor(ImmersiveLightHelper.fallbackBg($r('app.color.white')))
-        .systemMaterial(ImmersiveLightHelper.cardMaterial())
 
         // tvLogout：退出登录
         Text($r('app.string.logout'))
           .fontSize(17)
           .fontColor($r('app.color.logout_red'))
           .width('100%')
+          .constraintSize({ maxWidth: 480 })
           .height(48)
           .textAlign(TextAlign.Center)
           .margin({ top: 28 })
           .borderRadius(24)
           .backgroundColor(ImmersiveLightHelper.fallbackBg($r('app.color.white')))
           .systemMaterial(ImmersiveLightHelper.secondaryButtonMaterial())
+          .hoverEffect(HoverEffect.Highlight)
           .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
           .onClick(() => {
             this.showLogoutConfirm();
           })
       }
       .width('100%')
-      .padding({ left: 12, right: 12, bottom: 92 })
+      .padding({
+        left: 12,
+        right: 12,
+        bottom: this.useSideRail() ? Math.max(20, this.avoidAreaBottomVp + 16) : Math.max(92, this.avoidAreaBottomVp + 76)
+      })
     }
     .width('100%')
     .height('100%')

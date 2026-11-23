@@ -5,7 +5,8 @@ import { LoginSession } from '../network/LoginSession';
 import { PreferencesUtil } from '../data/PreferencesUtil';
 import { Constants } from '../data/Constants';
 import { ImmersiveLightHelper } from '../common/ImmersiveLightHelper';
-import { BreakpointSystem } from '../common/BreakpointSystem';
+import { BreakpointSystem, CreaseRegionVp } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 import { PrivacyWindowHelper } from '../common/PrivacyWindowHelper';
 
 /**
@@ -30,6 +31,23 @@ struct LoginPage {
   @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
   @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   @StorageProp('keyboardHeightVp') keyboardHeightVp: number = 0;
+  @StorageProp('foldStatus') foldStatus: number = 0;
+  @StorageProp('creaseRegionVp') creaseRegionVp: CreaseRegionVp | null = null;
+
+  private bannerHeightVp(): number {
+    const baseHeight: number = this.isCompactHeight ? 210 : 310;
+    if (AdaptiveLayoutHelper.shouldAvoidCrease(this.creaseRegionVp, this.foldStatus)) {
+      return AdaptiveLayoutHelper.computeCreaseUpperHeightVp(this.creaseRegionVp, this.foldStatus, 210);
+    }
+    return baseHeight;
+  }
+
+  private formCreaseTopMarginVp(): number {
+    if (!AdaptiveLayoutHelper.shouldAvoidCrease(this.creaseRegionVp, this.foldStatus)) {
+      return 0;
+    }
+    return AdaptiveLayoutHelper.getCreaseAvoidHeightVp(this.creaseRegionVp, this.foldStatus) + 12;
+  }
 
   onPageShow(): void {
     const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
@@ -90,10 +108,10 @@ struct LoginPage {
         Column() {
           // ===== 1. 顶部航拍背景 + 白椭圆弧 + 圆校徽 =====
           Stack({ alignContent: Alignment.Bottom }) {
-            // ivBg：航拍图 centerCrop（紧凑高屏自适应缩减高度）
+            // ivBg：航拍图 centerCrop（紧凑高屏与半折叠态自适应缩减高度）
             Image($r('app.media.mobile_campus_login_bg'))
               .width('100%')
-              .height(this.isCompactHeight ? 210 : 310)
+              .height(this.bannerHeightVp())
               .objectFit(ImageFit.Cover)
               .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
 
@@ -115,7 +133,7 @@ struct LoginPage {
               .margin({ bottom: 2 })
           }
           .width('100%')
-          .height(this.isCompactHeight ? 210 : 310)
+          .height(this.bannerHeightVp())
 
           Column() {
             // ===== 2. 账号行 =====
@@ -125,6 +143,7 @@ struct LoginPage {
                 .height(24)
               TextInput({ placeholder: '请输入您的账号', text: this.account })
                 .type(InputType.USER_NAME)
+                .enterKeyType(EnterKeyType.Next)
                 .fontSize(17)
                 .fontColor($r('app.color.common_color_1'))
                 .placeholderColor($r('app.color.common_color_3'))
@@ -134,6 +153,9 @@ struct LoginPage {
                 .backgroundColor(Color.Transparent)
                 .caretColor($r('app.color.mobile_campus_primary_color'))
                 .layoutWeight(1)
+                .onSubmit(() => {
+                  this.getUIContext().getFocusController().requestFocus('login_password_input');
+                })
                 .onChange((value: string) => {
                   this.account = value;
                 })
@@ -149,6 +171,7 @@ struct LoginPage {
                 .height(16)
                 .borderRadius(8)
                 .backgroundColor($r('app.color.common_color_4'))
+                .hoverEffect(HoverEffect.Highlight)
                 .onClick(() => {
                   this.account = '';
                 })
@@ -174,7 +197,9 @@ struct LoginPage {
                 .width(24)
                 .height(24)
               TextInput({ placeholder: '请输入您的密码', text: this.password })
+                .id('login_password_input')
                 .type(this.passwordVisible ? InputType.Normal : InputType.Password)
+                .enterKeyType(EnterKeyType.Done)
                 .showPasswordIcon(false)
                 .fontSize(17)
                 .fontColor($r('app.color.common_color_1'))
@@ -185,6 +210,9 @@ struct LoginPage {
                 .backgroundColor(Color.Transparent)
                 .caretColor($r('app.color.mobile_campus_primary_color'))
                 .layoutWeight(1)
+                .onSubmit(() => {
+                  this.doLogin();
+                })
                 .onChange((value: string) => {
                   this.password = value;
                 })
@@ -194,6 +222,7 @@ struct LoginPage {
                 .width(20)
                 .height(20)
                 .margin({ left: 12 })
+                .hoverEffect(HoverEffect.Highlight)
                 .onClick(() => {
                   this.passwordVisible = !this.passwordVisible;
                 })
@@ -223,6 +252,7 @@ struct LoginPage {
             .padding({ left: 24, right: 24, top: 14, bottom: 6 })
           }
           .width('100%')
+          .margin({ top: this.formCreaseTopMarginVp() })
           .constraintSize({ maxWidth: BreakpointSystem.isCompactWidth(this.currentBreakpoint) ? '100%' : 560 })
 
           // ===== 5. 登录胶囊按钮（外层 padding 控制左右 33dp，APK 同款） =====
@@ -237,6 +267,7 @@ struct LoginPage {
               .borderRadius(23)
               .systemMaterial(ImmersiveLightHelper.primaryButtonMaterial())
               .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
+              .hoverEffect(HoverEffect.Highlight)
               .onClick(() => {
                 this.doLogin();
               })
@@ -262,6 +293,7 @@ struct LoginPage {
               })
               .systemMaterial(ImmersiveLightHelper.secondaryButtonMaterial())
               .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
+              .hoverEffect(HoverEffect.Highlight)
               .onClick(() => {
                 // [W4 sms-login] 跳转手机号登录页（InputIdentifyCodeActivity 链路复刻）
                 router.pushUrl({ url: 'pages/PhoneLoginPage' });
@@ -291,6 +323,7 @@ struct LoginPage {
                   .fill($r('app.color.mobile_campus_primary_color'))
               }
             }
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               this.privacyAgreed = !this.privacyAgreed;
             })
@@ -303,6 +336,7 @@ struct LoginPage {
             Text('《隐私政策》')
               .fontSize(15)
               .fontColor($r('app.color.mobile_campus_primary_color'))
+              .hoverEffect(HoverEffect.Highlight)
               .onClick(() => {
                 router.pushUrl({
                   url: 'pages/WebViewPage',
@@ -317,6 +351,7 @@ struct LoginPage {
             Text('《服务协议》')
               .fontSize(15)
               .fontColor($r('app.color.mobile_campus_primary_color'))
+              .hoverEffect(HoverEffect.Highlight)
               .onClick(() => {
                 router.pushUrl({
                   url: 'pages/WebViewPage',

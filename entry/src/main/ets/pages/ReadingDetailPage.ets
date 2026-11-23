@@ -5,6 +5,7 @@ import { ApiResponse } from '../model/ResponseModel';
 import { ReadingBookEntry } from '../model/ContactModel';
 import { LoadingView } from '../components/LoadingView';
 import { Constants } from '../data/Constants';
+import { TtsReaderController, TtsStateSnapshot } from '../common/TtsReaderHelper';
 
 /**
  * 图书详情页 — 源码级翻译（MobileCampusReadingDetailActivity.java 逐行 → ArkTS，[W25 misc-b]）：
@@ -39,12 +40,19 @@ struct ReadingDetailPage {
   @State book: ReadingBookEntry = new ReadingBookEntry();
   @State pageTab: number = 0;
   @State isBusy: boolean = false;
+  @State ttsSnapshot: TtsStateSnapshot = {
+    state: 'idle',
+    currentIndex: 0,
+    totalChunks: 0,
+    errorMessage: ''
+  };
   @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
   @StorageProp('avoidAreaTopVp') avoidAreaTopVp: number = 0;
   @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
   @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
   private posName: string = '';
+  private ttsController: TtsReaderController = new TtsReaderController();
   private readonly tabs: ReadingTab[] = [
     { name: '寻书', icon: $r('app.media.mobile_campus_reading_icon_xunshu_default'),
       iconSelected: $r('app.media.mobile_campus_reading_icon_xunshu_selected') },
@@ -53,6 +61,9 @@ struct ReadingDetailPage {
   ];
 
   aboutToAppear(): void {
+    this.ttsController.setOnStateChange((snapshot: TtsStateSnapshot) => {
+      this.ttsSnapshot = snapshot;
+    });
     const params = router.getParams() as Record<string, string>;
     if (params !== null && params !== undefined) {
       const dataJson: string = params['data'] !== undefined && params['data'] !== null ? params['data'] : '';
@@ -82,6 +93,71 @@ struct ReadingDetailPage {
         }
       }
     }
+  }
+
+  onPageHide(): void {
+    this.ttsController.shutdown();
+  }
+
+  aboutToDisappear(): void {
+    this.ttsController.shutdown();
+  }
+
+  private toast(msg: string): void {
+    if (msg !== '') {
+      this.getUIContext().getPromptAction().showToast({ message: msg });
+    }
+  }
+
+  private buildTtsSourceText(): string {
+    const introText: string = '暂无简介。阅读的最大理由是想摆脱平庸，早一天就多一份人生的精彩；迟一天就多一天平庸的困扰。余秋雨。';
+    const parts: string[] = [];
+    if (this.book.SJMC !== '') {
+      parts.push(this.book.SJMC);
+    }
+    if (this.book.ZZ !== '') {
+      parts.push('作者：' + this.book.ZZ);
+    }
+    if (this.book.CBS !== '') {
+      parts.push('出版社：' + this.book.CBS);
+    }
+    if (this.book.GCD !== '') {
+      parts.push('馆藏地：' + this.book.GCD);
+    }
+    const meta: string = parts.join('，');
+    return meta !== '' ? `${meta}。${introText}` : introText;
+  }
+
+  private async startTtsRead(): Promise<void> {
+    const ok: boolean = await this.ttsController.speak(this.buildTtsSourceText());
+    if (!ok) {
+      const msg: string = this.ttsSnapshot.errorMessage !== ''
+        ? this.ttsSnapshot.errorMessage
+        : '当前设备暂不支持语音朗读';
+      this.toast(msg);
+    }
+  }
+
+  private async resumeTtsRead(): Promise<void> {
+    const ok: boolean = await this.ttsController.resume();
+    if (!ok && this.ttsSnapshot.errorMessage !== '') {
+      this.toast(this.ttsSnapshot.errorMessage);
+    }
+  }
+
+  private ttsStatusLabel(): string {
+    const total: number = Math.max(1, this.ttsSnapshot.totalChunks);
+    const cur: number = Math.min(total, this.ttsSnapshot.currentIndex + 1);
+    if (this.ttsSnapshot.state === 'playing') {
+      return `朗读中 · 第 ${cur}/${total} 段`;
+    }
+    if (this.ttsSnapshot.state === 'paused') {
+      return `已暂停 · 第 ${cur}/${total} 段`;
+    }
+    if (this.ttsSnapshot.state === 'error') {
+      return this.ttsSnapshot.errorMessage !== '' ? this.ttsSnapshot.errorMessage : '语音朗读暂不可用';
+    }
+    return '图书信息语音朗读';
   }
 
   /** 书封 URL（源码 i.e(0, netconstant.d.c()+TP)） */
@@ -224,6 +300,7 @@ struct ReadingDetailPage {
                 .width(32)
                 .height(32)
                 .margin({ top: 69, right: 12 })
+                .hoverEffect(HoverEffect.Highlight)
                 .onClick(() => {
                   this.onHeartTap();
                 })
@@ -232,6 +309,8 @@ struct ReadingDetailPage {
           }
           .width('100%')
           .height(380)
+
+          this.ttsControlBar()
 
           // 指示条 bg#f2f2f2 mt8：tab 高 44(px_to_dip_88)
           Row() {
@@ -248,6 +327,7 @@ struct ReadingDetailPage {
               .padding({ left: 14, right: 14 })
               .height(44)
               .alignItems(VerticalAlign.Center)
+              .hoverEffect(HoverEffect.Highlight)
               .onClick(() => {
                 // 源码 a 类：onTabSelected → setCurrentItem + 双向联动
                 this.pageTab = idx;
@@ -351,5 +431,77 @@ struct ReadingDetailPage {
     .scrollBar(BarState.Off)
     .backgroundColor($r('app.color.white'))
     .align(Alignment.Top)
+  }
+
+  @Builder
+  ttsControlBar() {
+    Row({ space: 8 }) {
+      Text(this.ttsStatusLabel())
+        .fontSize(13)
+        .fontColor(this.ttsSnapshot.state === 'error' ? '#E5484D' : $r('app.color.common_color_2'))
+        .layoutWeight(1)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+      if (this.ttsSnapshot.state === 'playing') {
+        Text('暂停')
+          .fontSize(12)
+          .fontColor('#1B68B7')
+          .padding({ left: 10, right: 10, top: 5, bottom: 5 })
+          .borderRadius(14)
+          .backgroundColor('#EBF4FF')
+          .hoverEffect(HoverEffect.Highlight)
+          .onClick(() => {
+            this.ttsController.pause();
+          })
+        Text('停止')
+          .fontSize(12)
+          .fontColor($r('app.color.common_color_2'))
+          .padding({ left: 10, right: 10, top: 5, bottom: 5 })
+          .borderRadius(14)
+          .backgroundColor('#F2F4F7')
+          .hoverEffect(HoverEffect.Highlight)
+          .onClick(() => {
+            this.ttsController.stop();
+          })
+      } else if (this.ttsSnapshot.state === 'paused') {
+        Text('继续')
+          .fontSize(12)
+          .fontColor($r('app.color.white'))
+          .padding({ left: 10, right: 10, top: 5, bottom: 5 })
+          .borderRadius(14)
+          .backgroundColor('#1B68B7')
+          .hoverEffect(HoverEffect.Highlight)
+          .onClick(() => {
+            this.resumeTtsRead();
+          })
+        Text('停止')
+          .fontSize(12)
+          .fontColor($r('app.color.common_color_2'))
+          .padding({ left: 10, right: 10, top: 5, bottom: 5 })
+          .borderRadius(14)
+          .backgroundColor('#F2F4F7')
+          .hoverEffect(HoverEffect.Highlight)
+          .onClick(() => {
+            this.ttsController.stop();
+          })
+      } else {
+        Text('语音朗读')
+          .fontSize(12)
+          .fontColor($r('app.color.white'))
+          .padding({ left: 12, right: 12, top: 5, bottom: 5 })
+          .borderRadius(14)
+          .backgroundColor('#1B68B7')
+          .hoverEffect(HoverEffect.Highlight)
+          .onClick(() => {
+            this.startTtsRead();
+          })
+      }
+    }
+    .width('100%')
+    .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+    .margin({ top: 8 })
+    .backgroundColor('#F7F9FC')
+    .alignItems(VerticalAlign.Center)
   }
 }

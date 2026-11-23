@@ -4,6 +4,8 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { TitleBar } from '../components/TitleBar';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 发布帖子页 — 1:1 复刻 PostPublishActivity（social_post_publish.xml）+ PostPublicPresenter。
@@ -26,6 +28,9 @@ struct PostPublishPage {
   @State photos: string[] = [];
   @State showEmoji: boolean = false;
   @State submitting: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('keyboardHeightVp') keyboardHeightVp: number = 0;
   private postType: string = '1';
 
   aboutToAppear(): void {
@@ -141,39 +146,55 @@ struct PostPublishPage {
       }, (uri: string) => uri)
       if (this.photos.length < 9) {
         GridItem() {
-          Image($r('app.media.up_photo_bg'))
-            .width('100%')
-            .height('100%')
-            .objectFit(ImageFit.Cover)
-            .borderRadius(3)
-            .onClick(() => {
-              this.pickPhotos();
-            })
+            Image($r('app.media.up_photo_bg'))
+              .width('100%')
+              .height('100%')
+              .objectFit(ImageFit.Cover)
+              .borderRadius(3)
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick(() => {
+                this.pickPhotos();
+              })
+          }
         }
       }
-    }
-    .columnsTemplate('1fr 1fr 1fr')
-    .columnsGap(5)
-    .rowsGap(5)
-    .height(this.photos.length === 0 ? 90 : (Math.floor((this.photos.length - 1) / 3) + 1) * 95 + 5)
-    .width('100%')
+      .columnsTemplate(AdaptiveLayoutHelper.buildColumnsTemplate(
+        BreakpointSystem.getGridColumns(this.currentBreakpoint, 3)
+      ))
+      .columnsGap(5)
+      .rowsGap(5)
+      .height(AdaptiveLayoutHelper.computeGridHeightVp(
+        this.photos.length + (this.photos.length < 9 ? 1 : 0),
+        BreakpointSystem.getGridColumns(this.currentBreakpoint, 3),
+        90,
+        5,
+        5
+      ))
+      .width('100%')
   }
 
   /** 源码 EmoticonsKeyBoardLayout：表情条插入文本（HAP 等价实现） */
   @Builder
   emojiBar() {
-    Row({ space: 12 }) {
-      ForEach(['😀', '😁', '😂', '🤣', '😊', '😍', '🤔', '👍', '🙏', '🎉', '❤️', '🌹'],
-        (emoji: string) => {
-          Text(emoji)
-            .fontSize(24)
-            .onClick(() => {
-              this.content += emoji;
-            })
-        }, (emoji: string) => emoji)
+    Scroll() {
+      Row({ space: 12 }) {
+        ForEach(['😀', '😁', '😂', '🤣', '😊', '😍', '🤔', '👍', '🙏', '🎉', '❤️', '🌹'],
+          (emoji: string) => {
+            Text(emoji)
+              .fontSize(24)
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick(() => {
+                this.content += emoji;
+              })
+          }, (emoji: string) => emoji)
+      }
+      .padding({ left: 15, right: 15, top: 8, bottom: Math.max(8, this.avoidAreaBottomVp) })
     }
+    .scrollable(ScrollDirection.Horizontal)
+    .scrollBar(BarState.Off)
     .width('100%')
-    .padding({ left: 15, right: 15, top: 8, bottom: 8 })
+    .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+    .alignSelf(ItemAlign.Center)
     .backgroundColor($r('app.color.common_color_6'))
   }
 
@@ -215,6 +236,7 @@ struct PostPublishPage {
             Image($r('app.media.social_comment'))
               .width(22)
               .height(22)
+              .hoverEffect(HoverEffect.Highlight)
               .onClick(() => {
                 this.showEmoji = !this.showEmoji;
               })
@@ -224,6 +246,9 @@ struct PostPublishPage {
           .padding({ left: 15, right: 15, top: 10 })
         }
         .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
+        .padding({ bottom: this.avoidAreaBottomVp + this.keyboardHeightVp })
       }
       .width('100%')
       .layoutWeight(1)
@@ -235,5 +260,6 @@ struct PostPublishPage {
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.white'))
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
   }
 }

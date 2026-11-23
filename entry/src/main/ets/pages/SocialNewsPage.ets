@@ -5,6 +5,7 @@ import { LoadingView } from '../components/LoadingView';
 import { ApiService, BizJsonResult } from '../network/ApiService';
 import { SocialPost } from '../model/SocialModels';
 import { Constants } from '../data/Constants';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 校园动态页（新鲜事）— 源码级翻译 NewNewsActivity（common_refresh_lv_rl_toolbar，[P-B placeholder]）：
@@ -37,7 +38,11 @@ struct SocialNewsPage {
   @State refreshing: boolean = false;
   @State loadingMore: boolean = false;
   @State showTop: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   private page: number = 1;
+  private listScroller: ListScroller = new ListScroller();
 
   aboutToAppear(): void {
     this.load(true);
@@ -253,53 +258,83 @@ struct SocialNewsPage {
       .width('100%').margin({ top: 10 })
     }
     .width('100%').padding(15).backgroundColor($r('app.color.white'))
+    .hoverEffect(HoverEffect.Highlight)
     .onClick(() => { this.onPostTap(post); })
   }
 
   build() {
-    Stack() {
+    Stack({ alignContent: Alignment.BottomEnd }) {
       Column() {
         TitleBar({ title: '新鲜事', showBack: true, rightIcon: $r('app.media.nav_plus_btn'),
           onRightClick: (): void => { this.toPublish(); } })
         if (this.viewState === 'loading') {
           LoadingView()
         } else if (this.viewState === 'empty') {
-          Column() {
-            Image($r('app.media.mobile_campus_page_develop')).width(160).objectFit(ImageFit.Contain)
-            Text('暂无校园动态').fontSize(14).fontColor($r('app.color.sdmu_text_hint')).margin({ top: 16 })
-          }
-          .width('100%').layoutWeight(1).justifyContent(FlexAlign.Center)
-        } else if (this.viewState === 'error') {
-          Column() {
-            Image($r('app.media.mobile_campus_page_internet')).width(120).objectFit(ImageFit.Contain)
-            Text('网络好像有点问题，过一会再试吧').fontSize(14)
-              .fontColor($r('app.color.sdmu_text_hint')).margin({ top: 16 })
-            Text('重试').fontSize(15).fontColor($r('app.color.white'))
-              .padding({ left: 17, right: 17, top: 4, bottom: 4 })
-              .backgroundColor($r('app.color.blue_default')).margin({ top: 16 })
-              .onClick(() => { this.viewState = 'loading'; this.load(true); })
-          }
-          .width('100%').layoutWeight(1).justifyContent(FlexAlign.Center)
-        } else {
-          List() {
-            ListItem() { this.newsHeadView() }
-            ForEach(this.posts, (post: SocialPost) => { ListItem() { this.postItem(post); } },
-              (post: SocialPost) => post.id)
-            if (this.loadingMore) {
-              ListItem() { LoadingView() }
+          Scroll() {
+            Column() {
+              Image($r('app.media.mobile_campus_page_develop')).width(160).objectFit(ImageFit.Contain)
+              Text('暂无校园动态').fontSize(14).fontColor($r('app.color.sdmu_text_hint')).margin({ top: 16 })
             }
+            .width('100%').constraintSize({ minHeight: 320 }).justifyContent(FlexAlign.Center)
           }
           .width('100%').layoutWeight(1)
-          .onReachEnd(() => { if (!this.loadingMore && !this.refreshing) { this.load(false); } })
+        } else if (this.viewState === 'error') {
+          Scroll() {
+            Column() {
+              Image($r('app.media.mobile_campus_page_internet')).width(120).objectFit(ImageFit.Contain)
+              Text('网络好像有点问题，过一会再试吧').fontSize(14)
+                .fontColor($r('app.color.sdmu_text_hint')).margin({ top: 16 })
+              Text('重试').fontSize(15).fontColor($r('app.color.white'))
+                .padding({ left: 17, right: 17, top: 4, bottom: 4 })
+                .backgroundColor($r('app.color.blue_default')).margin({ top: 16 })
+                .hoverEffect(HoverEffect.Highlight)
+                .onClick(() => { this.viewState = 'loading'; this.load(true); })
+            }
+            .width('100%').constraintSize({ minHeight: 320 }).justifyContent(FlexAlign.Center)
+          }
+          .width('100%').layoutWeight(1)
+        } else {
+          Row() {
+            List({ scroller: this.listScroller }) {
+              ListItem() { this.newsHeadView() }
+              ForEach(this.posts, (post: SocialPost) => { ListItem() { this.postItem(post); } },
+                (post: SocialPost) => post.id)
+              if (this.loadingMore) {
+                ListItem() { LoadingView() }
+              }
+            }
+            .width('100%')
+            .height('100%')
+            .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+            .contentEndOffset(this.avoidAreaBottomVp > 0 ? this.avoidAreaBottomVp : 0)
+            .onReachEnd(() => { if (!this.loadingMore && !this.refreshing) { this.load(false); } })
+          }
+          .width('100%')
+          .layoutWeight(1)
+          .justifyContent(FlexAlign.Center)
         }
       }
       .width('100%').height('100%')
       if (this.showTop) {
-        Image($r('app.media.nav_plus_btn')).width(40).height(40)
-          .position({ x: '82%', y: '82%' })
-          .onClick(() => { /* 源码 a()：topBtn 点击 setAdapter + 隐藏（回顶语义） */ this.showTop = false; })
+        Image($r('app.media.nav_plus_btn'))
+          .width(40)
+          .height(40)
+          .borderRadius(20)
+          .hoverEffect(HoverEffect.Highlight)
+          .margin({
+            right: Math.max(16, this.avoidAreaRightVp + 16),
+            bottom: Math.max(24, this.avoidAreaBottomVp + 24)
+          })
+          .onClick(() => {
+            /* 源码 a()：topBtn 点击 setAdapter + 隐藏（回顶语义） */
+            this.listScroller.scrollToIndex(0);
+            this.showTop = false;
+          })
       }
     }
-    .width('100%').height('100%').backgroundColor($r('app.color.main_bg'))
+    .width('100%')
+    .height('100%')
+    .backgroundColor($r('app.color.main_bg'))
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
   }
 }

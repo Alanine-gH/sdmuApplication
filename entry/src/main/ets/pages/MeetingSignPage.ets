@@ -9,6 +9,8 @@ import { TitleBar } from '../components/TitleBar';
 import { LoadingView } from '../components/LoadingView';
 import { EmptyView } from '../components/EmptyView';
 import { SignUserEntity } from '../model/MeetingApiModel';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 会议签到管理页 — MeetingSignActivity.java(350行) 源码级翻译
@@ -42,6 +44,8 @@ struct MeetingSignPage {
   @State qrPixelMap: image.PixelMap | undefined = undefined;
   @State loading: boolean = true;
   @State loadFail: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
 
   aboutToAppear(): void {
     // 源码 y(intent)：r = intent "HYID"
@@ -232,6 +236,9 @@ struct MeetingSignPage {
             this.signGrid(false)
           }
           .width('100%')
+          .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+          .alignSelf(ItemAlign.Center)
+          .padding({ bottom: this.avoidAreaBottomVp })
           .alignItems(HorizontalAlign.Start)
         }
         .width('100%')
@@ -244,6 +251,7 @@ struct MeetingSignPage {
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.mobile_campus_bg_color'))
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
   }
 
   /** activity_sign 顶部 QR 区：白底 + imgQRCode 200×200(mt23) + "扫描二维码签到"（长按自签） */
@@ -297,8 +305,17 @@ struct MeetingSignPage {
             }, (user: SignUserEntity) => 'nosign_' + user.YHID)
           }
         }
-        .columnsTemplate('1fr 1fr 1fr 1fr 1fr')
+        .columnsTemplate(AdaptiveLayoutHelper.buildColumnsTemplate(
+          BreakpointSystem.getGridColumns(this.currentBreakpoint, 5)
+        ))
         .width('100%')
+        .height(AdaptiveLayoutHelper.computeGridHeightVp(
+          isSign ? this.signUsers.length : this.noSignUsers.length,
+          BreakpointSystem.getGridColumns(this.currentBreakpoint, 5),
+          92,
+          0,
+          8
+        ))
         .padding({ left: 12, right: 12 })
         .backgroundColor($r('app.color.white'))
       }
@@ -340,6 +357,7 @@ struct MeetingSignPage {
     }
     .alignItems(HorizontalAlign.Center)
     .padding({ left: 11, right: 11 })
+    .hoverEffect(HoverEffect.Highlight)
     .onClick(() => {
       if (isSign) {
         this.unSignOneUser(user.YHID);

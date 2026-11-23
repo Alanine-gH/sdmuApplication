@@ -5,6 +5,8 @@ import { ApiResponse } from '../model/ResponseModel';
 import { CourseItem, ScheduleTermParams, CourseSectionsEntry, ClassEntry,
   ScheduleWeekCourse, parseYmdMs, apkCurrentWeek, apkTotalWeeks } from '../model/CourseModel';
 import { PreferencesUtil } from '../data/PreferencesUtil';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 自定义课表页 — 1:1 复刻 timetable/view/CustomTimetableActivity.java（页名 course）
@@ -113,6 +115,11 @@ struct CustomTimetablePage {
   @State multiColorIdx: number = 0;
   @State showMultiDialog: boolean = false;
   @State loading: boolean = true;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 640;
+  @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   private weekScroller: Scroller = new Scroller();
   private classScroller: Scroller = new Scroller();
   private termXn: string = '';
@@ -377,6 +384,7 @@ struct CustomTimetablePage {
       .maxLines(1)
       .textOverflow({ overflow: TextOverflow.Ellipsis })
       .padding({ left: 15, right: 15 })
+      .hoverEffect(HoverEffect.Highlight)
       .onClick(() => {
         this.showWeekPopup = false;
         if (num !== this.weekNumber) {
@@ -390,28 +398,38 @@ struct CustomTimetablePage {
   @Builder
   weekPopup() {
     Column() {
-      Column() {
-        List({ scroller: this.weekScroller, space: 0 }) {
-          ForEach(this.weekNumbers(), (num: number) => {
-            ListItem() {
-              this.weekPopupRow(num)
-            }
-          }, (num: number) => 'wk' + num)
+      Scroll() {
+        Column() {
+          List({ scroller: this.weekScroller, space: 0 }) {
+            ForEach(this.weekNumbers(), (num: number) => {
+              ListItem() {
+                this.weekPopupRow(num)
+              }
+            }, (num: number) => 'wk' + num)
+          }
+          .scrollBar(BarState.Off)
+          .width('100%')
+          .height(Math.min(POPUP_ITEM_HEIGHT * POPUP_VISIBLE, BreakpointSystem.getDialogMaxHeight(this.windowHeightVp)))
+          .backgroundColor($r('app.color.white'))
         }
-        .scrollBar(BarState.Off)
         .width('100%')
-        .height(POPUP_ITEM_HEIGHT * POPUP_VISIBLE)
-        .backgroundColor($r('app.color.white'))
       }
-      .margin({ top: 83 })
+      .width('100%')
+      .constraintSize({
+        maxWidth: AdaptiveLayoutHelper.getSheetMaxWidth(this.currentBreakpoint, this.windowWidthVp),
+        maxHeight: BreakpointSystem.getDialogMaxHeight(this.windowHeightVp)
+      })
+      .margin({ top: this.isCompactHeight ? 75 : 83 })
+      .borderRadius(this.currentBreakpoint === 'xs' || this.currentBreakpoint === 'sm' ? 0 : 12)
+      .clip(true)
       .onClick(() => {
         // 拦截面板内点击
       })
     }
     .width('100%')
     .height('100%')
-    .alignItems(HorizontalAlign.Start)
-    .backgroundColor('#77000000')
+    .alignItems(HorizontalAlign.Center)
+    .backgroundColor('#66000000')
     .onClick(() => {
       this.showWeekPopup = false;
     })
@@ -438,6 +456,7 @@ struct CustomTimetablePage {
       .maxLines(1)
       .textOverflow({ overflow: TextOverflow.Ellipsis })
       .padding({ left: 15, right: 15 })
+      .hoverEffect(HoverEffect.Highlight)
       .onClick(() => {
         this.showClassPopup = false;
         if (index !== this.curClassIndex) {
@@ -451,28 +470,38 @@ struct CustomTimetablePage {
   @Builder
   classPopup() {
     Column() {
-      Column() {
-        List({ scroller: this.classScroller, space: 0 }) {
-          ForEach(this.classes, (cls: ClassEntry, index: number) => {
-            ListItem() {
-              this.classPopupRow(cls.bjmc, index)
-            }
-          }, (cls: ClassEntry) => 'cls' + cls.bjmc)
+      Scroll() {
+        Column() {
+          List({ scroller: this.classScroller, space: 0 }) {
+            ForEach(this.classes, (cls: ClassEntry, index: number) => {
+              ListItem() {
+                this.classPopupRow(cls.bjmc, index)
+              }
+            }, (cls: ClassEntry) => 'cls' + cls.bjmc)
+          }
+          .scrollBar(BarState.Off)
+          .width('100%')
+          .height(Math.min(POPUP_ITEM_HEIGHT * POPUP_VISIBLE, BreakpointSystem.getDialogMaxHeight(this.windowHeightVp)))
+          .backgroundColor($r('app.color.white'))
         }
-        .scrollBar(BarState.Off)
         .width('100%')
-        .height(POPUP_ITEM_HEIGHT * POPUP_VISIBLE)
-        .backgroundColor($r('app.color.white'))
       }
-      .margin({ top: 83 })
+      .width('100%')
+      .constraintSize({
+        maxWidth: AdaptiveLayoutHelper.getSheetMaxWidth(this.currentBreakpoint, this.windowWidthVp),
+        maxHeight: BreakpointSystem.getDialogMaxHeight(this.windowHeightVp)
+      })
+      .margin({ top: this.isCompactHeight ? 75 : 83 })
+      .borderRadius(this.currentBreakpoint === 'xs' || this.currentBreakpoint === 'sm' ? 0 : 12)
+      .clip(true)
       .onClick(() => {
         // 拦截面板内点击
       })
     }
     .width('100%')
     .height('100%')
-    .alignItems(HorizontalAlign.Start)
-    .backgroundColor('#77000000')
+    .alignItems(HorizontalAlign.Center)
+    .backgroundColor('#66000000')
     .onClick(() => {
       this.showClassPopup = false;
     })
@@ -710,8 +739,10 @@ struct CustomTimetablePage {
     }
     .width('100%')
     .height(140)
+    .borderRadius(8)
     .justifyContent(FlexAlign.Center)
     .backgroundColor(this.colorPool[this.colorIndexOf(course)])
+    .hoverEffect(HoverEffect.Highlight)
     .onClick(() => {
       this.showMultiDialog = false;
       this.openDetail(course);
@@ -721,22 +752,50 @@ struct CustomTimetablePage {
   @Builder
   multiDialog() {
     Column() {
-      Grid() {
-        ForEach(this.multiCourses, (course: CourseItem) => {
-          GridItem() {
-            this.multiDialogCell(course)
+      Scroll() {
+        Column() {
+          Grid() {
+            ForEach(this.multiCourses, (course: CourseItem) => {
+              GridItem() {
+                this.multiDialogCell(course)
+              }
+            }, (course: CourseItem) => 'multi' + course.xlh + course.dayOfWeek)
           }
-        }, (course: CourseItem) => 'multi' + course.xlh + course.dayOfWeek)
+          .columnsTemplate(AdaptiveLayoutHelper.buildColumnsTemplate(
+            BreakpointSystem.getGridColumns(this.currentBreakpoint, 3)
+          ))
+          .columnsGap(13)
+          .rowsGap(13)
+          .width('100%')
+          .height(AdaptiveLayoutHelper.computeGridHeightVp(
+            this.multiCourses.length,
+            BreakpointSystem.getGridColumns(this.currentBreakpoint, 3),
+            140,
+            13,
+            32
+          ))
+          .padding(16)
+        }
+        .width('100%')
       }
-      .columnsTemplate('1fr 1fr 1fr')
-      .columnsGap(13)
-      .rowsGap(13)
       .width('100%')
-      .padding({ left: 80, right: 80, top: 100, bottom: 100 })
+      .constraintSize({
+        maxWidth: BreakpointSystem.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp),
+        maxHeight: BreakpointSystem.getDialogMaxHeight(this.windowHeightVp)
+      })
+      .backgroundColor($r('app.color.white'))
+      .borderRadius(12)
+      .clip(true)
+      .onClick(() => {
+        // 拦截弹窗内部点击
+      })
     }
     .width('100%')
     .height('100%')
+    .padding({ left: 16, right: 16 })
+    .backgroundColor('#66000000')
     .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
     .onClick(() => {
       this.showMultiDialog = false;
     })
@@ -746,39 +805,53 @@ struct CustomTimetablePage {
     Stack({ alignContent: Alignment.TopStart }) {
       Column() {
         TitleBar({ title: this.termTitle === '' ? '自定义课表' : this.termTitle, showBack: true })
-        this.selectorRow()
-        this.weekHeader()
-        Row()
-          .width('100%')
-          .height(0.3)
-          .backgroundColor($r('app.color.common_color_4'))
-        Stack() {
-          if (this.loading) {
-            Column()
+        Column() {
+          this.selectorRow()
+          this.weekHeader()
+          Row()
+            .width('100%')
+            .height(0.3)
+            .backgroundColor($r('app.color.common_color_4'))
+          Stack() {
+            if (this.loading) {
+              Column()
+                .width('100%')
+                .height('100%')
+            } else if (this.courseList.length === 0) {
+              Scroll() {
+                Column() {
+                  Text($r('app.string.timetable_empty'))
+                    .fontSize(16)
+                    .fontColor($r('app.color.timetable_empty_color'))
+                }
+                .width('100%')
+                .constraintSize({ minHeight: 280 })
+                .justifyContent(FlexAlign.Center)
+              }
               .width('100%')
               .height('100%')
-          } else if (this.courseList.length === 0) {
-            Column() {
-              Text($r('app.string.timetable_empty'))
-                .fontSize(16)
-                .fontColor($r('app.color.timetable_empty_color'))
+            } else {
+              Scroll() {
+                Column() {
+                  this.courseGrid()
+                }
+                .width('100%')
+                .padding({ bottom: this.avoidAreaBottomVp })
+              }
+              .width('100%')
+              .height('100%')
+              .align(Alignment.Top)
+              .scrollBar(BarState.Off)
             }
-            .width('100%')
-            .height('100%')
-            .justifyContent(FlexAlign.Center)
-          } else {
-            Scroll() {
-              this.courseGrid()
-            }
-            .width('100%')
-            .height('100%')
-            .align(Alignment.Top)
-            .scrollBar(BarState.Off)
           }
+          .width('100%')
+          .layoutWeight(1)
+          .backgroundColor($r('app.color.white'))
         }
         .width('100%')
         .layoutWeight(1)
-        .backgroundColor($r('app.color.white'))
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
       }
       .width('100%')
       .height('100%')
@@ -795,5 +868,6 @@ struct CustomTimetablePage {
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.white'))
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
   }
 }

@@ -1,5 +1,7 @@
 import { router } from '@kit.ArkUI';
 import { TitleBar } from '../components/TitleBar';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 class CampusAppEntryInfo {
   appId: string;
@@ -36,6 +38,8 @@ struct CampusAppFragmentPage {
     new CampusAppEntryInfo('a7', '通知消息', 'pages/MessageListPage'),
     new CampusAppEntryInfo('a8', '校园地图', 'pages/SchoolMapPage')
   ];
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
 
   build() {
     // 根 LinearLayout vertical（fill_parent、fitsSystemWindows）
@@ -53,7 +57,7 @@ struct CampusAppFragmentPage {
             .padding(10)
             .width('100%')
             .height(38)
-          // RecyclerView 数据态：4 列应用宫格（示例数据）
+          // RecyclerView 数据态：响应式多列应用宫格（示例数据）
           Grid() {
             ForEach(this.appEntryList, (appEntry: CampusAppEntryInfo) => {
               GridItem() {
@@ -71,20 +75,34 @@ struct CampusAppFragmentPage {
                 .width('100%')
                 .alignItems(HorizontalAlign.Center)
                 .padding({ top: 12, bottom: 12 })
+                .borderRadius(8)
+                .hoverEffect(HoverEffect.Highlight)
                 .onClick(() => {
                   router.pushUrl({ url: appEntry.targetPage });
                 })
               }
             }, (appEntry: CampusAppEntryInfo) => appEntry.appId)
           }
-          .columnsTemplate('1fr 1fr 1fr 1fr')
+          .columnsTemplate(AdaptiveLayoutHelper.buildColumnsTemplate(
+            BreakpointSystem.getGridColumns(this.currentBreakpoint, 4)
+          ))
           .rowsGap(10)
           .width('100%')
+          .height(AdaptiveLayoutHelper.computeGridHeightVp(
+            this.appEntryList.length,
+            BreakpointSystem.getGridColumns(this.currentBreakpoint, 4),
+            76,
+            10,
+            16
+          ))
           .margin({ top: 10 })
           .backgroundColor($r('app.color.white'))
         }
         .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
         .alignItems(HorizontalAlign.Start)
+        .padding({ bottom: this.avoidAreaBottomVp })
       }
       .width('100%')
       .layoutWeight(1)
@@ -94,5 +112,6 @@ struct CampusAppFragmentPage {
     }
     .width('100%')
     .height('100%')
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
   }
 }

@@ -3,6 +3,8 @@ import { ApiResponse } from '../model/ResponseModel';
 import { CourseItem, ScheduleTermParams, SCHEDULE_FALLBACK_START, SCHEDULE_FALLBACK_END,
   parseYmdMs, apkCurrentWeek } from '../model/CourseModel';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { hilog } from '@kit.PerformanceAnalysisKit';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 首页课表子Tab — 1:1 复刻 report_item_indextimetable.xml + report_item_indextimetable_item.xml
@@ -31,8 +33,36 @@ export struct ScheduleGrid {
   @State dateLabel: string = '';
   // 服务器学期参数算出的当前周（timetable_djz 过滤依据）
   @State weekNo: number = 1;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
   private semesterStartMs: number = 0;
   private semesterEndMs: number = 0;
+
+  private getLeftAxisWidth(): number {
+    if (this.currentBreakpoint === 'xs' || (this.windowWidthVp > 0 && this.windowWidthVp < 360)) {
+      return 84;
+    }
+    if (!BreakpointSystem.isCompactWidth(this.currentBreakpoint)) {
+      return 112;
+    }
+    return 100;
+  }
+
+  private getCardWidth(): number {
+    const safeW: number = this.windowWidthVp > 0 ? this.windowWidthVp : 360;
+    if (this.currentBreakpoint === 'xs' || safeW < 360) {
+      return Math.max(116, Math.min(150, safeW - this.getLeftAxisWidth() - 28));
+    }
+    if (!BreakpointSystem.isCompactWidth(this.currentBreakpoint)) {
+      return 176;
+    }
+    return 150;
+  }
+
+  private getCardHeight(): number {
+    return this.isCompactHeight ? 132 : 160;
+  }
 
   aboutToAppear(): void {
     // 学期起始日：termInfo.ksrq（失败兜底 2026-08-24，2026-11-17 服务器实测）→ APK GetTimeTableUtil.e() 当前周
@@ -147,17 +177,19 @@ export struct ScheduleGrid {
       .width('100%')
       .padding({ top: 4, bottom: 4 })
     }
-    .width(150)
-    .height(160)
+    .width(this.getCardWidth())
+    .constraintSize({ minWidth: 116, minHeight: 120 })
+    .height(this.getCardHeight())
     .padding({ left: 8, right: 8 })
     .backgroundColor($r('app.color.ybg_blue'))
     .alignItems(HorizontalAlign.Start)
+    .hoverEffect(HoverEffect.Highlight)
   }
 
   build() {
-    // 根 LinearLayout 高 160vp（首页嵌入时随父容器拉伸）
+    // 根 LinearLayout 高 160vp（首页嵌入时随父容器拉伸，紧凑高屏自动收缩）
     Row() {
-      // 左列 ll_timetable：宽 100vp 白底
+      // 左列 ll_timetable：宽自适应（窄屏 84vp / 标准 100vp / 宽屏 112vp）白底
       Column() {
         // "课表" 15fp common_color_2
         Text($r('app.string.timetable'))
@@ -198,7 +230,8 @@ export struct ScheduleGrid {
           .width('100%')
           .textAlign(TextAlign.Center)
       }
-      .width(100)
+      .width(this.getLeftAxisWidth())
+      .constraintSize({ minWidth: 76 })
       .height('100%')
       .backgroundColor($r('app.color.main_bg'))
 
@@ -207,8 +240,8 @@ export struct ScheduleGrid {
         // fl_nodata：report_nodata 150dip×147dip 水平居中
         Column() {
           Image($r('app.media.report_nodata'))
-            .width(75)
-            .height(73.5)
+            .width(this.isCompactHeight ? 60 : 75)
+            .height(this.isCompactHeight ? 58 : 73.5)
         }
         .layoutWeight(1)
         .height('100%')
@@ -233,6 +266,7 @@ export struct ScheduleGrid {
     }
     .width('100%')
     .height('100%')
+    .constraintSize({ minHeight: this.getCardHeight() })
     .backgroundColor($r('app.color.main_bg'))
   }
 }

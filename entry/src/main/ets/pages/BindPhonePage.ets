@@ -292,6 +292,7 @@ struct BindPhonePage {
               .borderRadius(4)
               .padding(6)
               .margin({ left: 10 })
+              .hoverEffect(HoverEffect.Highlight)
               .onClick(() => {
                 if (this.countdown <= 0) {
                   this.sendCode();
@@ -313,6 +314,7 @@ struct BindPhonePage {
 
             TextInput({ text: this.verifyCode })
               .type(InputType.Number)
+              .enterKeyType(EnterKeyType.Done)
               .maxLength(this.cells)
               .fontSize(20)
               .fontColor(Color.Transparent)
@@ -321,6 +323,9 @@ struct BindPhonePage {
               .width('100%')
               .height(42)
               .defaultFocus(true)
+              .onSubmit(() => {
+                this.submitCode();
+              })
               .onChange((value: string) => {
                 this.onCodeChange(value);
               })
@@ -338,6 +343,7 @@ struct BindPhonePage {
             .fontColor(this.verifyCode.length >= this.cells && !this.submitting ? '#1B68B7' : '#CECECE')
             .padding(10)
             .margin({ top: 48 })
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               this.submitCode();
             })

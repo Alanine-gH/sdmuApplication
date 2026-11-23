@@ -72,7 +72,7 @@ const SINGLE_SECTION_DURATION_MIN: number = 45;
 export class ReminderCalendarHelper {
   /** 纯函数：校验提醒时间是否为有效未来时间 */
   public static validateReminderDate(triggerDate: Date, nowMs: number = Date.now()): ReminderValidationResult {
-    if (!triggerDate || Number.isNaN(triggerDate.getTime())) {
+    if (!triggerDate || !Number.isFinite(triggerDate.getTime()) || !Number.isFinite(nowMs)) {
       return { valid: false, reason: '提醒时间格式无效' };
     }
     if (triggerDate.getTime() <= nowMs) {
@@ -98,10 +98,10 @@ export class ReminderCalendarHelper {
     leadMinutes: number = 60,
     nowMs: number = Date.now()
   ): number {
-    if (!Number.isFinite(examStartMs) || examStartMs <= nowMs) {
+    if (!Number.isFinite(examStartMs) || !Number.isFinite(nowMs) || examStartMs <= nowMs) {
       return -1;
     }
-    const safeLead: number = leadMinutes > 0 ? leadMinutes : 60;
+    const safeLead: number = Number.isFinite(leadMinutes) && leadMinutes > 0 ? leadMinutes : 60;
     const preferredMs: number = examStartMs - safeLead * 60 * 1000;
     if (preferredMs > nowMs) {
       return preferredMs;

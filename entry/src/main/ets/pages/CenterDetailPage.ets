@@ -1,5 +1,7 @@
 import { router } from '@kit.ArkUI';
 import { Constants } from '../data/Constants';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 中心详情页 — 源码级复刻 CenterDetailActivity（main 包，主页中心模块 y(Intent jsonStr) 进入）。
@@ -69,6 +71,10 @@ struct CenterDetailPage {
   @State bgColor: string = '#ffffff';
   /** 每个学生风采 item 宽（px）：size>3 ? (w-10)*5/17 : (w-10)/3 —— vp 化后 /2 */
   @State styleItemWidth: number = 100;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
 
   aboutToAppear(): void {
     const params: object | undefined = router.getParams() as object | undefined;
@@ -255,17 +261,28 @@ struct CenterDetailPage {
             .alignItems(HorizontalAlign.Center)
             .borderRadius(6)
             .backgroundColor(Color.White)
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               this.openHallApp(app);
             })
           }
         }, (app: CenterAllApp) => 'hall_' + app.id + '_' + app.name)
       }
-      .columnsTemplate('1fr 1fr 1fr 1fr')
+      .columnsTemplate(AdaptiveLayoutHelper.buildColumnsTemplate(
+        BreakpointSystem.getGridColumns(this.currentBreakpoint, 4)
+      ))
+      .rowsGap(4)
+      .columnsGap(4)
       .width('100%')
       .padding({ left: 2.5, right: 2.5 })
       .margin({ top: 2.5 })
-      .height(Math.ceil(sub.allApps.length / 4) * 62)
+      .height(AdaptiveLayoutHelper.computeGridHeightVp(
+        sub.allApps.length,
+        BreakpointSystem.getGridColumns(this.currentBreakpoint, 4),
+        62,
+        4,
+        6
+      ))
     }
     .width('100%')
   }
@@ -430,41 +447,53 @@ struct CenterDetailPage {
     Column() {
       // toolbar_normal：title = CenterBean.name（无参缺省"中心详情"）
       Row() {
-        Image($r('app.media.nav_back_btn'))
-          .width(20)
-          .height(20)
-          .objectFit(ImageFit.Contain)
-          .padding({ left: 15, right: 5 })
-          .onClick(() => {
-            router.back();
-          })
-        Text(this.center.name === '' ? '中心详情' : this.center.name)
-          .fontSize(17)
-          .fontColor($r('app.color.common_color_1'))
-          .layoutWeight(1)
-          .textAlign(TextAlign.Center)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-        Blank()
-          .width(30)
+        Row() {
+          Image($r('app.media.nav_back_btn'))
+            .width(20)
+            .height(20)
+            .objectFit(ImageFit.Contain)
+            .padding({ left: 15, right: 5 })
+            .hoverEffect(HoverEffect.Highlight)
+            .onClick(() => {
+              router.back();
+            })
+          Text(this.center.name === '' ? '中心详情' : this.center.name)
+            .fontSize(17)
+            .fontColor($r('app.color.common_color_1'))
+            .layoutWeight(1)
+            .textAlign(TextAlign.Center)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+          Blank()
+            .width(30)
+        }
+        .width('100%')
+        .height(44)
+        .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignItems(VerticalAlign.Center)
       }
       .width('100%')
       .height(44)
-      .alignItems(VerticalAlign.Center)
+      .justifyContent(FlexAlign.Center)
       .backgroundColor($r('app.color.main_bg'))
       .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
 
       if (this.center.subModuleList.length === 0) {
         // 无路由参（y() jsonStr 缺失）→ 空态（禁编造）
-        Column() {
-          Text('暂无内容')
-            .fontSize(14)
-            .fontColor($r('app.color.explain_color'))
+        Scroll() {
+          Column() {
+            Text('暂无内容')
+              .fontSize(14)
+              .fontColor($r('app.color.explain_color'))
+          }
+          .width('100%')
+          .constraintSize({ minHeight: 320 })
+          .justifyContent(FlexAlign.Center)
+          .alignItems(HorizontalAlign.Center)
         }
         .width('100%')
         .layoutWeight(1)
-        .justifyContent(FlexAlign.Center)
-        .alignItems(HorizontalAlign.Center)
         .backgroundColor(this.bgColor)
       } else {
         Scroll() {
@@ -483,9 +512,12 @@ struct CenterDetailPage {
             // CenterBottomAdapter：20dip 底部空白
             Row()
               .width('100%')
-              .height(10)
+              .height(Math.max(10, this.avoidAreaBottomVp))
           }
           .width('100%')
+          .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+          .alignSelf(ItemAlign.Center)
+          .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
         }
         .scrollable(ScrollDirection.Vertical)
         .scrollBar(BarState.Off)
@@ -496,5 +528,6 @@ struct CenterDetailPage {
     }
     .width('100%')
     .height('100%')
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
   }
 }

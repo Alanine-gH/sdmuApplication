@@ -1,9 +1,13 @@
 import { router } from '@kit.ArkUI';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
-import { WorkApplyEntry, OaWorkApplyRow, OaWorkApplyList } from '../model/OaTodoModel';
+import { WorkApplyEntry, OaWorkApplyRow, OaWorkApplyList, OaTodoDetail, OaFormField,
+  OaWorkApplyFlowNode, OaWorkApplyAttach } from '../model/OaTodoModel';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { LoadingView } from '../components/LoadingView';
+import { EmptyView } from '../components/EmptyView';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper, SplitPaneConfig } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 业务申请列表页 — 1:1 翻译原 APK WorkApplyActivity.java(479行)+Launch：
@@ -62,6 +66,15 @@ struct WorkApplyPage {
   @State screenName: string = '';
   @State screenPid: string = '';
   @State screenVisible: boolean = false;
+  @State selectedApplyRow: OaWorkApplyRow | null = null;
+  @State selectedApplyDetail: OaTodoDetail | null = null;
+  @State detailLoading: boolean = false;
+  @State detailError: string = '';
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   /** onPageShow 首次触发跳过（aboutToAppear 已首载） */
   private entered: boolean = false;
   /** 筛选态分页走 screen 接口（源码 s=1 + t 非空） */
@@ -237,8 +250,48 @@ struct WorkApplyPage {
       this.toast('移动端暂不支持该流程，请移动到电脑端进行操作');
       return;
     }
+    const splitCfg: SplitPaneConfig =
+      AdaptiveLayoutHelper.getSplitPaneConfig(this.currentBreakpoint, this.windowWidthVp);
+    if (!splitCfg.useTwoPane) {
+      this.openApplyFullPage(row);
+      return;
+    }
+    this.selectApplyForPreview(row);
+  }
+
+  private openApplyFullPage(row: OaWorkApplyRow): void {
     AppStorage.setOrCreate<string>('workapply_detail_row', JSON.stringify(row));
     router.pushUrl({ url: 'pages/WorkApplyDetailPage' });
+  }
+
+  private selectApplyForPreview(row: OaWorkApplyRow): void {
+    this.selectedApplyRow = row;
+    this.selectedApplyDetail = null;
+    this.detailError = '';
+    this.detailLoading = true;
+    ApiService.getOaTodoDetail(row.orUnid, 'db', row.currentnodeid)
+      .then((response: ApiResponse<OaTodoDetail>) => {
+        if (response.code === 1000) {
+          this.detailLoading = false;
+          return;
+        }
+        if (this.selectedApplyRow === null || this.selectedApplyRow.orUnid !== row.orUnid) {
+          return;
+        }
+        this.detailLoading = false;
+        if (response.code === 0) {
+          this.selectedApplyDetail = response.data;
+        } else {
+          this.detailError = response.message === '' ? '获取申请详情失败' : response.message;
+        }
+      })
+      .catch((error: BusinessError) => {
+        ApiService.logError('WorkApply inline detail fail: ' + error.message);
+        if (this.selectedApplyRow !== null && this.selectedApplyRow.orUnid === row.orUnid) {
+          this.detailLoading = false;
+          this.detailError = '网络异常，请稍后重试';
+        }
+      });
   }
 
   /** WorkApplyExpandAdapter.e(i, folderName)：关键词映射 + i/4 兜底循环 */
@@ -298,6 +351,7 @@ struct WorkApplyPage {
           .height('100%')
           .textAlign(TextAlign.Center)
           .margin({ left: 15 })
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             router.back();
           })
@@ -316,46 +370,78 @@ struct WorkApplyPage {
       .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
       Divider().color($r('app.color.common_color_5')).strokeWidth(0.5).width('100%')
 
-      List() {
-        // AppBarLayout 内 ScrollView[AutoExpandableListView]：分类宫格
-        ForEach(this.groups, (group: ApplyGroup, gi: number) => {
-          ListItem() {
-            this.groupBlock(group, gi)
+      if (AdaptiveLayoutHelper.getSplitPaneConfig(this.currentBreakpoint, this.windowWidthVp).useTwoPane) {
+        Row() {
+          Column() {
+            this.applyMasterList()
           }
-        }, (group: ApplyGroup, gi: number) => gi.toString() + group.groupTitle)
+          .layoutWeight(AdaptiveLayoutHelper.getSplitPaneConfig(
+            this.currentBreakpoint, this.windowWidthVp).masterRatio)
+          .height('100%')
 
-        // 固定头：12vp 灰条 + "我发起的" + 筛选 + 细线 + 筛选条
-        ListItem() {
-          this.myApplyHeader()
-        }
+          Divider()
+            .vertical(true)
+            .width(0.5)
+            .height('100%')
+            .color($r('app.color.common_color_5'))
 
-        if (this.firstLoading) {
-          ListItem() {
-            LoadingView()
+          Column() {
+            this.applyDetailPane()
           }
-        } else {
-          ForEach(this.rows, (row: OaWorkApplyRow, ri: number) => {
-            ListItem() {
-              this.applyRow(row)
-            }
-          }, (row: OaWorkApplyRow, ri: number) => ri.toString() + row.orUnid)
-          // footerview：已显示全部（hasNoMoreData）
-          ListItem() {
-            this.footerRow()
-          }
+          .layoutWeight(AdaptiveLayoutHelper.getSplitPaneConfig(
+            this.currentBreakpoint, this.windowWidthVp).detailRatio)
+          .height('100%')
         }
+        .width('100%')
+        .layoutWeight(1)
+        .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
+      } else {
+        this.applyMasterList()
       }
-      .width('100%')
-      .layoutWeight(1)
-      .scrollBar(BarState.Off)
-      .backgroundColor($r('app.color.ybg_white'))
-      .onReachEnd(() => {
-        this.loadMore();
-      })
     }
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.ybg_white'))
+  }
+
+  @Builder
+  applyMasterList() {
+    List() {
+      // AppBarLayout 内 ScrollView[AutoExpandableListView]：分类宫格
+      ForEach(this.groups, (group: ApplyGroup, gi: number) => {
+        ListItem() {
+          this.groupBlock(group, gi)
+        }
+      }, (group: ApplyGroup, gi: number) => gi.toString() + group.groupTitle)
+
+      // 固定头：12vp 灰条 + "我发起的" + 筛选 + 细线 + 筛选条
+      ListItem() {
+        this.myApplyHeader()
+      }
+
+      if (this.firstLoading) {
+        ListItem() {
+          LoadingView()
+        }
+      } else {
+        ForEach(this.rows, (row: OaWorkApplyRow, ri: number) => {
+          ListItem() {
+            this.applyRow(row)
+          }
+        }, (row: OaWorkApplyRow, ri: number) => ri.toString() + row.orUnid)
+        // footerview：已显示全部（hasNoMoreData）
+        ListItem() {
+          this.footerRow()
+        }
+      }
+    }
+    .width('100%')
+    .layoutWeight(1)
+    .scrollBar(BarState.Off)
+    .backgroundColor($r('app.color.ybg_white'))
+    .onReachEnd(() => {
+      this.loadMore();
+    })
   }
 
   /** 宫格分组块：item_title 组头 + 展开时 item_content 宫格 */
@@ -380,6 +466,7 @@ struct WorkApplyPage {
         }
         .width('100%')
         .alignItems(VerticalAlign.Center)
+        .hoverEffect(HoverEffect.Highlight)
         .onClick(() => {
           this.toggleGroup(gi);
         })
@@ -387,7 +474,7 @@ struct WorkApplyPage {
       }
       .width('100%')
       if (this.expandedIdx === gi && group.workApplyList.length > 0) {
-        // mobile_campus_oa_activity_workapply_item_content.xml：GridLayoutManager 4 列宫格
+        // mobile_campus_oa_activity_workapply_item_content.xml：自适应列数宫格
         Grid() {
           ForEach(group.workApplyList, (item: WorkApplyEntry, ai: number) => {
             GridItem() {
@@ -409,13 +496,15 @@ struct WorkApplyPage {
               }
               .alignItems(HorizontalAlign.Center)
               .width('100%')
+              .hoverEffect(HoverEffect.Highlight)
               .onClick(() => {
                 this.openFormConfig(item);
               })
             }
           }, (item: WorkApplyEntry, ai: number) => ai.toString() + item.processId)
         }
-        .columnsTemplate('1fr 1fr 1fr 1fr')
+        .columnsTemplate(AdaptiveLayoutHelper.buildColumnsTemplate(
+          BreakpointSystem.getGridColumns(this.currentBreakpoint, 4)))
         .width('100%')
         .padding({ left: 7.5, right: 7.5, top: 7.5, bottom: 7.5 })
         Divider().color($r('app.color.common_color_6')).strokeWidth(0.5).width('100%')
@@ -449,6 +538,7 @@ struct WorkApplyPage {
         }
         .alignItems(VerticalAlign.Center)
         .padding({ top: 5, bottom: 5 })
+        .hoverEffect(HoverEffect.Highlight)
         .onClick(() => {
           this.openScreen();
         })
@@ -475,6 +565,7 @@ struct WorkApplyPage {
             .width(16)
             .height(16)
             .padding(5)
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               this.closeScreen();
             })
@@ -536,6 +627,9 @@ struct WorkApplyPage {
       }
       .width('100%')
       .padding(12)
+      .backgroundColor(this.selectedApplyRow !== null && this.selectedApplyRow.orUnid === row.orUnid
+        ? '#EEF5FC' : $r('app.color.ybg_white'))
+      .hoverEffect(HoverEffect.Highlight)
       .onClick(() => {
         this.openDetail(row);
       })
@@ -566,5 +660,178 @@ struct WorkApplyPage {
     .width('100%')
     .padding({ top: 12, bottom: 12 })
     .visibility(this.rows.length === 0 ? Visibility.None : Visibility.Visible)
+  }
+
+  /** 双栏右侧业务申请详情预览面板 */
+  @Builder
+  applyDetailPane() {
+    Column() {
+      if (this.selectedApplyRow === null) {
+        Column() {
+          EmptyView({ tipText: '请选择左侧申请查看详情' })
+        }
+        .width('100%')
+        .height('100%')
+      } else {
+        Scroll() {
+          Column({ space: 12 }) {
+            Column({ space: 8 }) {
+              Text(this.selectedApplyRow.subject)
+                .fontSize(18)
+                .fontWeight(FontWeight.Medium)
+                .fontColor($r('app.color.common_color_1'))
+                .width('100%')
+              this.applyMetaRow('流程类型', this.selectedApplyRow.processName)
+              this.applyMetaRow('当前节点', this.selectedApplyRow.currentNodeName === '结束'
+                ? '审核完成' : this.selectedApplyRow.currentNodeName)
+              this.applyMetaRow('申请时间', this.selectedApplyRow.docCreated)
+              this.applyMetaRow('催办状态', this.selectedApplyRow.bussStatus === '1' ? '已催办' : '未催办')
+            }
+            .width('100%')
+            .padding(16)
+            .borderRadius(8)
+            .backgroundColor($r('app.color.white'))
+            .alignItems(HorizontalAlign.Start)
+
+            Row() {
+              Text('查看完整详情')
+                .fontSize(15)
+                .fontColor($r('app.color.white'))
+                .fontWeight(FontWeight.Medium)
+                .textAlign(TextAlign.Center)
+                .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+                .borderRadius(6)
+                .backgroundColor($r('app.color.mobile_campus_primary_color_default'))
+                .hoverEffect(HoverEffect.Highlight)
+                .onClick(() => {
+                  if (this.selectedApplyRow !== null) {
+                    this.openApplyFullPage(this.selectedApplyRow);
+                  }
+                })
+            }
+            .width('100%')
+            .justifyContent(FlexAlign.End)
+
+            if (this.detailLoading) {
+              Column() {
+                LoadingView()
+              }
+              .width('100%')
+              .height(160)
+              .backgroundColor($r('app.color.white'))
+              .borderRadius(8)
+            } else if (this.detailError !== '') {
+              Column() {
+                Text(this.detailError)
+                  .fontSize(14)
+                  .fontColor($r('app.color.common_color_3'))
+              }
+              .width('100%')
+              .padding(16)
+              .backgroundColor($r('app.color.white'))
+              .borderRadius(8)
+              .alignItems(HorizontalAlign.Center)
+            } else if (this.selectedApplyDetail !== null) {
+              if (this.selectedApplyDetail.formFieldConfigList.length > 0) {
+                Column({ space: 8 }) {
+                  Text('申请表单')
+                    .fontSize(15)
+                    .fontWeight(FontWeight.Medium)
+                    .fontColor($r('app.color.common_color_1'))
+                  ForEach(this.selectedApplyDetail.formFieldConfigList, (field: OaFormField, fi: number) => {
+                    if (field.fieldScreenName !== '') {
+                      this.applyMetaRow(
+                        field.fieldScreenName,
+                        field.fieldAnotherValue !== '' ? field.fieldAnotherValue : field.fieldValue
+                      )
+                    }
+                  }, (field: OaFormField, fi: number) => 'wf_' + fi + '_' + field.fieldName)
+                }
+                .width('100%')
+                .padding(16)
+                .borderRadius(8)
+                .backgroundColor($r('app.color.white'))
+                .alignItems(HorizontalAlign.Start)
+              }
+
+              if (this.selectedApplyDetail.processFlowDocList.length > 0) {
+                Column({ space: 8 }) {
+                  Text('审批进度')
+                    .fontSize(15)
+                    .fontWeight(FontWeight.Medium)
+                    .fontColor($r('app.color.common_color_1'))
+                  ForEach(this.selectedApplyDetail.processFlowDocList, (node: OaWorkApplyFlowNode, ni: number) => {
+                    Column({ space: 2 }) {
+                      Text((node.nodeName !== '' ? node.nodeName : '审批节点') +
+                        (node.userName !== '' ? ' · ' + node.userName : ''))
+                        .fontSize(14)
+                        .fontColor($r('app.color.common_color_1'))
+                      if (node.actionName !== '' || node.endTime !== '') {
+                        Text((node.actionName !== '' ? node.actionName + ' ' : '') + node.endTime)
+                          .fontSize(12)
+                          .fontColor($r('app.color.common_color_3'))
+                      }
+                    }
+                    .width('100%')
+                    .padding({ top: 4, bottom: 4 })
+                    .alignItems(HorizontalAlign.Start)
+                  }, (node: OaWorkApplyFlowNode, ni: number) => 'wn_' + ni + '_' + node.nodeName)
+                }
+                .width('100%')
+                .padding(16)
+                .borderRadius(8)
+                .backgroundColor($r('app.color.white'))
+                .alignItems(HorizontalAlign.Start)
+              }
+
+              if (this.selectedApplyDetail.bpmAttachList.length > 0) {
+                Column({ space: 6 }) {
+                  Text('附件列表 (' + this.selectedApplyDetail.bpmAttachList.length + ')')
+                    .fontSize(15)
+                    .fontWeight(FontWeight.Medium)
+                    .fontColor($r('app.color.common_color_1'))
+                  ForEach(this.selectedApplyDetail.bpmAttachList, (att: OaWorkApplyAttach, ai: number) => {
+                    Text(att.realFileName)
+                      .fontSize(13)
+                      .fontColor($r('app.color.mobile_campus_primary_color_default'))
+                  }, (att: OaWorkApplyAttach, ai: number) => 'wa_' + ai + '_' + att.realFileName)
+                }
+                .width('100%')
+                .padding(16)
+                .borderRadius(8)
+                .backgroundColor($r('app.color.white'))
+                .alignItems(HorizontalAlign.Start)
+              }
+            }
+          }
+          .width('100%')
+          .padding({ left: 16, right: 16, top: 16, bottom: Math.max(16, this.avoidAreaBottomVp) })
+        }
+        .width('100%')
+        .height('100%')
+        .scrollBar(BarState.Off)
+        .align(Alignment.Top)
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor($r('app.color.common_color_6'))
+  }
+
+  @Builder
+  applyMetaRow(label: string, value: string) {
+    Row() {
+      Text(label)
+        .fontSize(13)
+        .fontColor($r('app.color.common_color_3'))
+        .width(88)
+        .flexShrink(0)
+      Text(value === '' ? '--' : value)
+        .fontSize(13)
+        .fontColor($r('app.color.common_color_1'))
+        .layoutWeight(1)
+    }
+    .width('100%')
+    .alignItems(VerticalAlign.Top)
   }
 }

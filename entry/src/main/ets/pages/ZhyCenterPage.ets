@@ -1,5 +1,7 @@
 import { router } from '@kit.ArkUI';
 import { TitleBar } from '../components/TitleBar';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 class ZhyCenterEntryInfo {
   entryId: string;
@@ -36,6 +38,8 @@ struct ZhyCenterPage {
     new ZhyCenterEntryInfo('z3', '缴费指南', 'pages/WebViewPage'),
     new ZhyCenterEntryInfo('z4', '校园导览', 'pages/SchoolMapPage')
   ];
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
 
   /**
    * mobile_campus_view_main_zhy_center_button_item.xml — 四宫格胶囊入口单格。
@@ -68,6 +72,7 @@ struct ZhyCenterPage {
     .width('100%')
     .padding({ left: 2.5, right: 2.5 })
     .alignItems(VerticalAlign.Center)
+    .hoverEffect(HoverEffect.Highlight)
     .onClick(() => {
       router.pushUrl({ url: entry.targetPage });
     })
@@ -80,7 +85,7 @@ struct ZhyCenterPage {
       Scroll() {
         Column() {
           // mobile_campus_view_main_zhy_center_button.xml：RecyclerView 白底、
-          // paddingL/R 2.5vp、paddingT 7.5vp，四宫格（2×2）
+          // paddingL/R 2.5vp、paddingT 7.5vp，响应式多列胶囊宫格
           Grid() {
             ForEach(this.centerEntryList, (entry: ZhyCenterEntryInfo) => {
               GridItem() {
@@ -88,14 +93,26 @@ struct ZhyCenterPage {
               }
             }, (entry: ZhyCenterEntryInfo) => entry.entryId)
           }
-          .columnsTemplate('1fr 1fr')
+          .columnsTemplate(AdaptiveLayoutHelper.buildColumnsTemplate(
+            BreakpointSystem.getGridColumns(this.currentBreakpoint, 2)
+          ))
           .rowsGap(5)
           .width('100%')
+          .height(AdaptiveLayoutHelper.computeGridHeightVp(
+            this.centerEntryList.length,
+            BreakpointSystem.getGridColumns(this.currentBreakpoint, 2),
+            36,
+            5,
+            16
+          ))
           .padding({ left: 2.5, right: 2.5, top: 7.5 })
           .backgroundColor($r('app.color.white'))
         }
         .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
         .alignItems(HorizontalAlign.Start)
+        .padding({ bottom: this.avoidAreaBottomVp })
       }
       .width('100%')
       .layoutWeight(1)
@@ -105,6 +122,7 @@ struct ZhyCenterPage {
     }
     .width('100%')
     .height('100%')
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
   }
 }
 

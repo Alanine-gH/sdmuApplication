@@ -2,6 +2,7 @@ import { preferences } from '@kit.ArkData';
 import { Context } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { Constants } from './Constants';
+import { SecureAssetHelper } from '../common/SecureAssetHelper';
 
 const DOMAIN = 0x0000;
 
@@ -85,6 +86,11 @@ export class PreferencesUtil {
   }
 
   static async clear(): Promise<void> {
+    try {
+      await SecureAssetHelper.removeSecret('sdmu_login_secrets');
+    } catch {
+      // 忽略 TEE 凭据清理异常
+    }
     if (PreferencesUtil.store === null) {
       return;
     }

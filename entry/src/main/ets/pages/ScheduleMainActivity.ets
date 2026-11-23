@@ -5,6 +5,7 @@ import { ApiResponse } from '../model/ResponseModel';
 import { ScheduleDetailRow, ScheduleMonthItem } from '../model/ContactModel';
 import { EmptyView } from '../components/EmptyView';
 import { LoadingView } from '../components/LoadingView';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 今日日程主页 — 源码级翻译（ScheduleMainActivity.java + ScheduleListNewFragment + ScheduleAdapter
@@ -53,6 +54,8 @@ struct ScheduleMainActivity {
   @State weeks: MonthWeek[] = [];
   @State isLoading: boolean = true;
   @State showYearPicker: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
   /** 源码 x：canCreateMeeting（y 入参默认 true） */
   private canCreateMeeting: boolean = true;
   private yearPickValue: string = '';
@@ -351,6 +354,7 @@ struct ScheduleMainActivity {
     .backgroundColor('#F2F2F2')
     .bindSheet(this.showYearPicker, this.yearPickerBuilder(), {
       height: 280,
+      preferType: AdaptiveLayoutHelper.getSheetPreferType(this.currentBreakpoint, this.isCompactHeight),
       showClose: false,
       backgroundColor: '#F2F2F2'
     })
@@ -554,33 +558,38 @@ struct ScheduleMainActivity {
   /** 年份选择 bindSheet（源码 showYearSelectLayout 等价：选择后 o=YYYY年 + p/q gone） */
   @Builder
   yearPickerBuilder() {
-    Column() {
-      TextPicker({ range: ['2020', '2021', '2022', '2023', '2024', '2025', '2026', '2027', '2028', '2029', '2030'],
-        value: this.yearPickValue })
-        .onCancel(() => {
-          this.showYearPicker = false;
-        })
-        .onChange((value: string | string[]) => {
-          // [W23 协作解堵] OnTextPickerChangeCallback 签名：value 为 string|string[]
-          this.yearPickValue = typeof value === 'string' ? value as string : String((value as string[])[0]);
-        })
-      Text('确定')
-        .fontSize(16)
-        .fontColor($r('app.color.ybg_blue'))
-        .width('100%')
-        .height(44)
-        .textAlign(TextAlign.Center)
-        .onClick(() => {
-          this.showYearPicker = false;
-          this.year = Number(this.yearPickValue);
-          this.dayText = `${this.year}年`;
-          this.weekText = '';
-          this.buildGrid();
-          this.loadMonth();
-        })
+    Scroll() {
+      Column() {
+        TextPicker({ range: ['2020', '2021', '2022', '2023', '2024', '2025', '2026', '2027', '2028', '2029', '2030'],
+          value: this.yearPickValue })
+          .onCancel(() => {
+            this.showYearPicker = false;
+          })
+          .onChange((value: string | string[]) => {
+            // [W23 协作解堵] OnTextPickerChangeCallback 签名：value 为 string|string[]
+            this.yearPickValue = typeof value === 'string' ? value as string : String((value as string[])[0]);
+          })
+        Text('确定')
+          .fontSize(16)
+          .fontColor($r('app.color.ybg_blue'))
+          .width('100%')
+          .height(44)
+          .textAlign(TextAlign.Center)
+          .hoverEffect(HoverEffect.Highlight)
+          .onClick(() => {
+            this.showYearPicker = false;
+            this.year = Number(this.yearPickValue);
+            this.dayText = `${this.year}年`;
+            this.weekText = '';
+            this.buildGrid();
+            this.loadMonth();
+          })
+      }
+      .width('100%')
+      .padding({ top: 12, bottom: 12 })
     }
     .width('100%')
-    .padding({ top: 12, bottom: 12 })
+    .scrollBar(BarState.Off)
   }
 }
 

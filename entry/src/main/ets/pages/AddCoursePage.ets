@@ -3,6 +3,8 @@ import { TitleBar } from '../components/TitleBar';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { ScheduleTermParams, CourseSectionsEntry, parseYmdMs, apkTotalWeeks } from '../model/CourseModel';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 自定义课程添加页 — 1:1 复刻 schedule/view/AddCourseActivity.java
@@ -32,7 +34,6 @@ const SECTION_COUNT_FALLBACK: number = 12;
 const WHEEL_ITEM_HEIGHT: number = 53;
 const WHEEL_VISIBLE_ITEMS: number = 7;
 const WHEEL_EDGE_ITEMS: number = 3;
-const WEEK_GRID_COLUMNS: number = 5;
 /** e.h = {'日','一','二','三','四','五','六'}（baselibrary util/e.java:29） */
 const WEEK_CHARS: string[] = ['日', '一', '二', '三', '四', '五', '六'];
 
@@ -85,9 +86,18 @@ struct AddCoursePage {
   @State evenChecked: boolean = false;
   @State allChecked: boolean = false;
   @State submitting: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 640;
+  @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   private startScroller: Scroller = new Scroller();
   private endScroller: Scroller = new Scroller();
   private dayScroller: Scroller = new Scroller();
+
+  private getWeekGridCols(): number {
+    return BreakpointSystem.getGridColumns(this.currentBreakpoint, 5);
+  }
 
   aboutToAppear(): void {
     // f1：x.o() 学期信息（maxWeek）+ x.h() courseSections（节数滚轮上限）
@@ -541,209 +551,246 @@ struct AddCoursePage {
     .backgroundColor($r('app.color.white'))
   }
 
-  /** ChooseCourseWeeksDialog：标题+完成+单双全周勾选+5 列周格（ExpressionPopupAnim 底部上滑） */
+  /** ChooseCourseWeeksDialog：标题+完成+单双全周勾选+自适应列周格（平板/横屏居中，手机底滑） */
   @Builder
   weekDialog() {
     Column() {
-      Blank()
-        .onClick(() => {
-          this.showWeekDialog = false;
-        })
-      Column() {
-        Row() {
-          Text('选择上课周数')
-            .fontSize(19)
-            .fontColor($r('app.color.common_color_7'))
-            .layoutWeight(1)
-            .textAlign(TextAlign.Center)
-            .padding(12)
-          Text('完成')
-            .fontSize(17)
-            .fontColor($r('app.color.common_color_7'))
-            .padding(10)
-            .backgroundColor($r('app.color.hover_grey'))
-            .onClick(() => {
-              this.confirmWeekDialog();
-            })
-        }
-        .width('100%')
-        .alignItems(VerticalAlign.Center)
-        Divider()
-          .color($r('app.color.common_color_5'))
-          .strokeWidth(0.5)
+      Scroll() {
+        Column() {
+          Row() {
+            Text('选择上课周数')
+              .fontSize(19)
+              .fontColor($r('app.color.common_color_7'))
+              .layoutWeight(1)
+              .textAlign(TextAlign.Center)
+              .padding(12)
+            Text('完成')
+              .fontSize(17)
+              .fontColor($r('app.color.common_color_7'))
+              .padding(10)
+              .borderRadius(6)
+              .backgroundColor($r('app.color.hover_grey'))
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick(() => {
+                this.confirmWeekDialog();
+              })
+          }
           .width('100%')
-        Row() {
-          Text('单周')
-            .fontSize(17)
-            .fontColor($r('app.color.common_color_1'))
-            .layoutWeight(1)
-            .textAlign(TextAlign.Center)
-            .padding({ top: 10, bottom: 10 })
-            .onClick(() => {
-              if (this.oddChecked) {
-                this.selectNoneWeek();
-              } else {
-                this.selectOddWeeks();
-              }
-              this.refreshWeekChecks();
-            })
-          Row()
-            .width(1)
-            .height(20)
-            .backgroundColor($r('app.color.common_color_5'))
-          Text('双周')
-            .fontSize(17)
-            .fontColor($r('app.color.common_color_1'))
-            .layoutWeight(1)
-            .textAlign(TextAlign.Center)
-            .padding({ top: 10, bottom: 10 })
-            .onClick(() => {
-              if (this.evenChecked) {
-                this.selectNoneWeek();
-              } else {
-                this.selectEvenWeeks();
-              }
-              this.refreshWeekChecks();
-            })
-          Row()
-            .width(1)
-            .height(20)
-            .backgroundColor($r('app.color.common_color_5'))
-          Text('全周')
-            .fontSize(17)
-            .fontColor($r('app.color.common_color_1'))
-            .layoutWeight(1)
-            .textAlign(TextAlign.Center)
-            .padding({ top: 10, bottom: 10 })
-            .onClick(() => {
-              if (this.allChecked) {
-                this.selectNoneWeek();
-              } else {
-                this.selectAllWeeks();
-              }
-              this.refreshWeekChecks();
-            })
-        }
-        .width('100%')
-        .alignItems(VerticalAlign.Center)
-        Divider()
-          .color($r('app.color.common_color_5'))
-          .strokeWidth(0.5)
+          .alignItems(VerticalAlign.Center)
+          Divider()
+            .color($r('app.color.common_color_5'))
+            .strokeWidth(0.5)
+            .width('100%')
+          Row() {
+            Text('单周')
+              .fontSize(17)
+              .fontColor($r('app.color.common_color_1'))
+              .layoutWeight(1)
+              .textAlign(TextAlign.Center)
+              .padding({ top: 10, bottom: 10 })
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick(() => {
+                if (this.oddChecked) {
+                  this.selectNoneWeek();
+                } else {
+                  this.selectOddWeeks();
+                }
+                this.refreshWeekChecks();
+              })
+            Row()
+              .width(1)
+              .height(20)
+              .backgroundColor($r('app.color.common_color_5'))
+            Text('双周')
+              .fontSize(17)
+              .fontColor($r('app.color.common_color_1'))
+              .layoutWeight(1)
+              .textAlign(TextAlign.Center)
+              .padding({ top: 10, bottom: 10 })
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick(() => {
+                if (this.evenChecked) {
+                  this.selectNoneWeek();
+                } else {
+                  this.selectEvenWeeks();
+                }
+                this.refreshWeekChecks();
+              })
+            Row()
+              .width(1)
+              .height(20)
+              .backgroundColor($r('app.color.common_color_5'))
+            Text('全周')
+              .fontSize(17)
+              .fontColor($r('app.color.common_color_1'))
+              .layoutWeight(1)
+              .textAlign(TextAlign.Center)
+              .padding({ top: 10, bottom: 10 })
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick(() => {
+                if (this.allChecked) {
+                  this.selectNoneWeek();
+                } else {
+                  this.selectAllWeeks();
+                }
+                this.refreshWeekChecks();
+              })
+          }
           .width('100%')
-        Grid() {
-          ForEach(this.weekChosen, (chosen: boolean, index: number) => {
-            GridItem() {
-              Text('' + (index + 1))
-                .fontSize(16)
-                .fontColor(chosen ? $r('app.color.white') : $r('app.color.black'))
-                .width('100%')
-                .height('100%')
-                .textAlign(TextAlign.Center)
-                .backgroundColor(chosen ? $r('app.color.common_color_12') : Color.Transparent)
-                .borderRadius({
-                  topLeft: chosen && (index % WEEK_GRID_COLUMNS === 0 || index === 0 ||
-                    !this.weekChosen[index - 1]) ? 14 : 0,
-                  topRight: chosen && ((index + 1) % WEEK_GRID_COLUMNS === 0 ||
-                    index === this.weekChosen.length - 1 || !this.weekChosen[index + 1]) ? 14 : 0,
-                  bottomLeft: chosen && (index % WEEK_GRID_COLUMNS === 0 || index === 0 ||
-                    !this.weekChosen[index - 1]) ? 14 : 0,
-                  bottomRight: chosen && ((index + 1) % WEEK_GRID_COLUMNS === 0 ||
-                    index === this.weekChosen.length - 1 || !this.weekChosen[index + 1]) ? 14 : 0
-                })
-                .padding({ top: 3, bottom: 3 })
-            }
-            .height(40)
-            .onClick(() => {
-              this.onWeekItemClick(index);
-            })
-          }, (chosen: boolean, index: number) => 'wk' + index + '_' + (chosen ? '1' : '0'))
+          .alignItems(VerticalAlign.Center)
+          Divider()
+            .color($r('app.color.common_color_5'))
+            .strokeWidth(0.5)
+            .width('100%')
+          Grid() {
+            ForEach(this.weekChosen, (chosen: boolean, index: number) => {
+              GridItem() {
+                Text('' + (index + 1))
+                  .fontSize(16)
+                  .fontColor(chosen ? $r('app.color.white') : $r('app.color.black'))
+                  .width('100%')
+                  .height('100%')
+                  .textAlign(TextAlign.Center)
+                  .backgroundColor(chosen ? $r('app.color.common_color_12') : Color.Transparent)
+                  .borderRadius({
+                    topLeft: chosen && (index % this.getWeekGridCols() === 0 || index === 0 ||
+                      !this.weekChosen[index - 1]) ? 14 : 0,
+                    topRight: chosen && ((index + 1) % this.getWeekGridCols() === 0 ||
+                      index === this.weekChosen.length - 1 || !this.weekChosen[index + 1]) ? 14 : 0,
+                    bottomLeft: chosen && (index % this.getWeekGridCols() === 0 || index === 0 ||
+                      !this.weekChosen[index - 1]) ? 14 : 0,
+                    bottomRight: chosen && ((index + 1) % this.getWeekGridCols() === 0 ||
+                      index === this.weekChosen.length - 1 || !this.weekChosen[index + 1]) ? 14 : 0
+                  })
+                  .padding({ top: 3, bottom: 3 })
+              }
+              .height(40)
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick(() => {
+                this.onWeekItemClick(index);
+              })
+            }, (chosen: boolean, index: number) => 'wk' + index + '_' + (chosen ? '1' : '0') + '_' + this.currentBreakpoint)
+          }
+          .columnsTemplate(AdaptiveLayoutHelper.buildColumnsTemplate(this.getWeekGridCols()))
+          .width('100%')
+          .height(AdaptiveLayoutHelper.computeGridHeightVp(this.weekChosen.length, this.getWeekGridCols(), 40, 0, 29))
+          .padding({ left: 12, right: 12, top: 10, bottom: 19 })
         }
-        .columnsTemplate('1fr 1fr 1fr 1fr 1fr')
         .width('100%')
-        .padding({ left: 12, right: 12, top: 10, bottom: 19 })
       }
       .width('100%')
+      .constraintSize({
+        maxWidth: AdaptiveLayoutHelper.getSheetMaxWidth(this.currentBreakpoint, this.windowWidthVp),
+        maxHeight: BreakpointSystem.getDialogMaxHeight(this.windowHeightVp)
+      })
       .backgroundColor($r('app.color.white'))
+      .borderRadius(AdaptiveLayoutHelper.shouldUseCenterSheet(this.currentBreakpoint, this.isCompactHeight) ?
+        12 : { topLeft: 12, topRight: 12 })
+      .clip(true)
+      .padding({
+        bottom: AdaptiveLayoutHelper.shouldUseCenterSheet(this.currentBreakpoint, this.isCompactHeight) ?
+          0 : this.avoidAreaBottomVp
+      })
       .onClick(() => {
         // 拦截面板内点击
       })
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#77000000')
-    .alignItems(HorizontalAlign.Start)
-    .justifyContent(FlexAlign.End)
+    .backgroundColor('#66000000')
+    .alignItems(HorizontalAlign.Center)
+    .justifyContent(AdaptiveLayoutHelper.shouldUseCenterSheet(this.currentBreakpoint, this.isCompactHeight) ?
+      FlexAlign.Center : FlexAlign.End)
+    .onClick(() => {
+      this.showWeekDialog = false;
+    })
   }
 
   /** ChooseCourseSectionDialog：标题+完成+周X|第X节|到|第X节 四段滚轮 */
   @Builder
   sectionDialog() {
     Column() {
-      Blank()
-        .onClick(() => {
-          this.showSectionDialog = false;
-        })
-      Column() {
-        Row() {
-          Text('选择上课节数')
-            .fontSize(19)
-            .fontColor($r('app.color.common_color_7'))
-            .layoutWeight(1)
-            .textAlign(TextAlign.Center)
-            .padding(12)
-          Text('完成')
-            .fontSize(17)
-            .fontColor($r('app.color.common_color_7'))
-            .padding(10)
-            .backgroundColor($r('app.color.hover_grey'))
-            .onClick(() => {
-              this.confirmSectionDialog();
-            })
+      Scroll() {
+        Column() {
+          Row() {
+            Text('选择上课节数')
+              .fontSize(19)
+              .fontColor($r('app.color.common_color_7'))
+              .layoutWeight(1)
+              .textAlign(TextAlign.Center)
+              .padding(12)
+            Text('完成')
+              .fontSize(17)
+              .fontColor($r('app.color.common_color_7'))
+              .padding(10)
+              .borderRadius(6)
+              .backgroundColor($r('app.color.hover_grey'))
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick(() => {
+                this.confirmSectionDialog();
+              })
+          }
+          .width('100%')
+          .alignItems(VerticalAlign.Center)
+          Row() {
+            Column() {
+              this.wheelList(this.dayScroller, this.dayOptions(), this.day - 1, 'day',
+                (idx: number) => {
+                  this.day = idx + 1;
+                })
+            }
+            .layoutWeight(3)
+            Column() {
+              this.wheelList(this.startScroller, this.sectionOptions(), this.startSection - 1, 'st',
+                (idx: number) => {
+                  this.onStartWheelChange(idx);
+                })
+            }
+            .layoutWeight(4)
+            Text('到')
+              .fontSize(17)
+              .fontColor($r('app.color.common_color_2'))
+              .margin({ left: 6, right: 6 })
+            Column() {
+              this.wheelList(this.endScroller, this.sectionOptions(), this.endSection - 1, 'ed',
+                (idx: number) => {
+                  this.onEndWheelChange(idx);
+                })
+            }
+            .layoutWeight(4)
+          }
+          .width('100%')
+          .alignItems(VerticalAlign.Center)
+          .padding({ bottom: 19 })
         }
         .width('100%')
-        .alignItems(VerticalAlign.Center)
-        Row() {
-          Column() {
-            this.wheelList(this.dayScroller, this.dayOptions(), this.day - 1, 'day',
-              (idx: number) => {
-                this.day = idx + 1;
-              })
-          }
-          .layoutWeight(3)
-          Column() {
-            this.wheelList(this.startScroller, this.sectionOptions(), this.startSection - 1, 'st',
-              (idx: number) => {
-                this.onStartWheelChange(idx);
-              })
-          }
-          .layoutWeight(4)
-          Text('到')
-            .fontSize(17)
-            .fontColor($r('app.color.common_color_2'))
-            .margin({ left: 6, right: 6 })
-          Column() {
-            this.wheelList(this.endScroller, this.sectionOptions(), this.endSection - 1, 'ed',
-              (idx: number) => {
-                this.onEndWheelChange(idx);
-              })
-          }
-          .layoutWeight(4)
-        }
-        .width('100%')
-        .alignItems(VerticalAlign.Center)
-        .padding({ bottom: 19 })
       }
       .width('100%')
+      .constraintSize({
+        maxWidth: AdaptiveLayoutHelper.getSheetMaxWidth(this.currentBreakpoint, this.windowWidthVp),
+        maxHeight: BreakpointSystem.getDialogMaxHeight(this.windowHeightVp)
+      })
       .backgroundColor($r('app.color.white'))
+      .borderRadius(AdaptiveLayoutHelper.shouldUseCenterSheet(this.currentBreakpoint, this.isCompactHeight) ?
+        12 : { topLeft: 12, topRight: 12 })
+      .clip(true)
+      .padding({
+        bottom: AdaptiveLayoutHelper.shouldUseCenterSheet(this.currentBreakpoint, this.isCompactHeight) ?
+          0 : this.avoidAreaBottomVp
+      })
       .onClick(() => {
         // 拦截面板内点击
       })
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#77000000')
-    .alignItems(HorizontalAlign.Start)
-    .justifyContent(FlexAlign.End)
+    .backgroundColor('#66000000')
+    .alignItems(HorizontalAlign.Center)
+    .justifyContent(AdaptiveLayoutHelper.shouldUseCenterSheet(this.currentBreakpoint, this.isCompactHeight) ?
+      FlexAlign.Center : FlexAlign.End)
+    .onClick(() => {
+      this.showSectionDialog = false;
+    })
   }
 
   build() {
@@ -773,17 +820,30 @@ struct AddCoursePage {
             }
             .width('100%')
             .margin({ top: 15 })
+            .hoverEffect(HoverEffect.Highlight)
+            .onClick(() => {
+              this.openWeekDialog();
+            })
             Divider()
               .color($r('app.color.common_color_5'))
               .strokeWidth(0.5)
               .width('100%')
-            this.formRow($r('app.media.mobile_campus_schedule_class_b'), '课程节数', 'section')
+            Column() {
+              this.formRow($r('app.media.mobile_campus_schedule_class_b'), '课程节数', 'section')
+            }
+            .width('100%')
+            .hoverEffect(HoverEffect.Highlight)
+            .onClick(() => {
+              this.openSectionDialog();
+            })
             Divider()
               .color($r('app.color.common_color_5'))
               .strokeWidth(0.5)
               .width('100%')
           }
           .width('100%')
+          .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+          .alignSelf(ItemAlign.Center)
         }
         .width('100%')
         .layoutWeight(1)
@@ -799,12 +859,15 @@ struct AddCoursePage {
             .textAlign(TextAlign.Center)
             .borderRadius(4)
             .backgroundColor($r('app.color.mobile_campus_schedule_confirm_blue'))
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               this.submit();
             })
         }
         .width('100%')
-        .padding({ left: 12, right: 12, top: 48, bottom: 27 })
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
+        .padding({ left: 12, right: 12, top: this.isCompactHeight ? 16 : 48, bottom: Math.max(27, this.avoidAreaBottomVp + 12) })
       }
       .width('100%')
       .height('100%')
@@ -819,5 +882,6 @@ struct AddCoursePage {
     }
     .width('100%')
     .height('100%')
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
   }
 }

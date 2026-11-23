@@ -26,6 +26,8 @@ struct SchoolCircleEntryPage {
   /** SocialMainActivity.T2：PopupMenu 展开态 */
   @State showMenu: boolean = false;
   @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 780;
   @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
   @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
@@ -99,70 +101,83 @@ struct SchoolCircleEntryPage {
       Column()
         .width('100%')
         .height('100%')
+        .backgroundColor('#66000000')
         .onClick(() => {
           this.showMenu = false;
         })
-      Column() {
-        Text('我的帖子')
-          .fontSize(15)
-          .fontColor($r('app.color.common_color_1'))
-          .padding({ left: 16, right: 24, top: 12, bottom: 12 })
-          .width('100%')
-          .onClick(() => {
-            // SocialMainActivity T2 post → MyPostActivity{user_id,user_name,user_type,school_id}
-            this.showMenu = false;
-            router.pushUrl({
-              url: 'pages/MyPostPage',
-              params: {
-                'user_id': LoginSession.userId,
-                'user_name': '',
-                'user_type': LoginSession.userType,
-                'school_id': LoginSession.schoolId
-              }
-            });
-          })
-        Divider()
-          .color($r('app.color.common_color_6'))
-          .strokeWidth(0.5)
-        Text('我的关注')
-          .fontSize(15)
-          .fontColor($r('app.color.common_color_1'))
-          .padding({ left: 16, right: 24, top: 12, bottom: 12 })
-          .width('100%')
-          .onClick(() => {
-            this.showMenu = false;
-            router.pushUrl({ url: 'pages/FriendUserListPage', params: { 'UserListType': 'FOLLOWING' } });
-          })
-        Divider()
-          .color($r('app.color.common_color_6'))
-          .strokeWidth(0.5)
-        Text('我的粉丝')
-          .fontSize(15)
-          .fontColor($r('app.color.common_color_1'))
-          .padding({ left: 16, right: 24, top: 12, bottom: 12 })
-          .width('100%')
-          .onClick(() => {
-            this.showMenu = false;
-            router.pushUrl({ url: 'pages/FriendUserListPage', params: { 'UserListType': 'FOLLOWER' } });
-          })
-        Divider()
-          .color($r('app.color.common_color_6'))
-          .strokeWidth(0.5)
-        Text('我的消息')
-          .fontSize(15)
-          .fontColor($r('app.color.common_color_1'))
-          .padding({ left: 16, right: 24, top: 12, bottom: 12 })
-          .width('100%')
-          .onClick(() => {
-            // SocialMainActivity.c.iMessage → R2() → X1(SocialMessageActivity)
-            this.showMenu = false;
-            router.pushUrl({ url: 'pages/SocialMessagePage' });
-          })
+      Scroll() {
+        Column() {
+          Text('我的帖子')
+            .fontSize(15)
+            .fontColor($r('app.color.common_color_1'))
+            .padding({ left: 16, right: 24, top: 12, bottom: 12 })
+            .width('100%')
+            .hoverEffect(HoverEffect.Highlight)
+            .onClick(() => {
+              // SocialMainActivity T2 post → MyPostActivity{user_id,user_name,user_type,school_id}
+              this.showMenu = false;
+              router.pushUrl({
+                url: 'pages/MyPostPage',
+                params: {
+                  'user_id': LoginSession.userId,
+                  'user_name': '',
+                  'user_type': LoginSession.userType,
+                  'school_id': LoginSession.schoolId
+                }
+              });
+            })
+          Divider()
+            .color($r('app.color.common_color_6'))
+            .strokeWidth(0.5)
+          Text('我的关注')
+            .fontSize(15)
+            .fontColor($r('app.color.common_color_1'))
+            .padding({ left: 16, right: 24, top: 12, bottom: 12 })
+            .width('100%')
+            .hoverEffect(HoverEffect.Highlight)
+            .onClick(() => {
+              this.showMenu = false;
+              router.pushUrl({ url: 'pages/FriendUserListPage', params: { 'UserListType': 'FOLLOWING' } });
+            })
+          Divider()
+            .color($r('app.color.common_color_6'))
+            .strokeWidth(0.5)
+          Text('我的粉丝')
+            .fontSize(15)
+            .fontColor($r('app.color.common_color_1'))
+            .padding({ left: 16, right: 24, top: 12, bottom: 12 })
+            .width('100%')
+            .hoverEffect(HoverEffect.Highlight)
+            .onClick(() => {
+              this.showMenu = false;
+              router.pushUrl({ url: 'pages/FriendUserListPage', params: { 'UserListType': 'FOLLOWER' } });
+            })
+          Divider()
+            .color($r('app.color.common_color_6'))
+            .strokeWidth(0.5)
+          Text('我的消息')
+            .fontSize(15)
+            .fontColor($r('app.color.common_color_1'))
+            .padding({ left: 16, right: 24, top: 12, bottom: 12 })
+            .width('100%')
+            .hoverEffect(HoverEffect.Highlight)
+            .onClick(() => {
+              // SocialMainActivity.c.iMessage → R2() → X1(SocialMessageActivity)
+              this.showMenu = false;
+              router.pushUrl({ url: 'pages/SocialMessagePage' });
+            })
+        }
+        .width('100%')
       }
+      .scrollBar(BarState.Off)
       .backgroundColor($r('app.color.white'))
       .borderRadius(4)
-      .width(140)
-      .margin({ top: 45, right: 8 })
+      .width(Math.min(160, BreakpointSystem.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp)))
+      .constraintSize({ maxHeight: BreakpointSystem.getDialogMaxHeight(this.windowHeightVp) })
+      .margin({ top: 45, right: Math.max(8, this.avoidAreaRightVp + 8) })
+      .onClick(() => {
+        // 拦截菜单点击
+      })
     }
     .width('100%')
     .height('100%')

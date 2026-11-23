@@ -315,6 +315,7 @@ struct AppsTab {
               .borderRadius(12)
               .alignItems(HorizontalAlign.Center)
               .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.95 })
+              .hoverEffect(HoverEffect.Highlight)
               .onClick(() => {
                 if (item.url !== '') {
                   // LX=2 轻应用：直接加载服务端下发的 H5 地址
@@ -367,6 +368,7 @@ struct AppsTab {
           .fontColor([$r('app.color.common_color_1')])
           .symbolEffect(new BounceSymbolEffect(EffectScope.WHOLE, EffectDirection.UP), this.searchTrigger)
           .margin({ right: 20, top: 14 })
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             this.searchTrigger = this.searchTrigger < 0 ? 1 : this.searchTrigger + 1;
             // WorkFragment$e：搜索图标 → e.a.z=/app/AppSearchActivity（HAP AppSearchPage）
@@ -403,6 +405,7 @@ struct AppsTab {
                         .borderRadius(12)
                         .alignItems(HorizontalAlign.Center)
                         .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.95 })
+                        .hoverEffect(HoverEffect.Highlight)
                         .onClick(() => {
                           this.dispatchApp(item.yymc, item.yyid, item.lx, item.url);
                         })
@@ -446,6 +449,7 @@ struct AppsTab {
               Text('点击添加 >')
                 .fontSize(13)
                 .fontColor($r('app.color.common_color_3'))
+                .hoverEffect(HoverEffect.Highlight)
                 .onClick(() => {
                   // AppTitleAdapter.d 回调（AppFragmentV2$e）→ a1(getActivity(), e.a.x, bundle, 5467)：
                   // e.a.x = R$string.mobile_campus_router_edit_common_app = "/app/EditCommonAppActivity"
@@ -522,6 +526,7 @@ struct ReportTab {
     .height(this.isCompactHeight ? 36 : 44)
     .justifyContent(FlexAlign.Center)
     .alignItems(HorizontalAlign.Center)
+    .hoverEffect(HoverEffect.Highlight)
     .onClick(() => {
       this.subTabIndex = index;
     })
@@ -544,6 +549,7 @@ struct ReportTab {
     .height(this.isCompactHeight ? 36 : 44)
     .justifyContent(FlexAlign.Center)
     .alignItems(HorizontalAlign.Center)
+    .hoverEffect(HoverEffect.Highlight)
     .onClick(() => {
       this.subTabIndex = index;
     })
@@ -705,6 +711,7 @@ struct Index {
         ImmersiveLightHelper.fallbackBg('#FFF0F0') : Color.Transparent)
       .systemMaterial(this.useSideRail() ? ImmersiveLightHelper.pillMaterial() : undefined)
       .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.94 })
+      .hoverEffect(HoverEffect.Highlight)
     } else {
       Column() {
         SymbolGlyph(glyphNormal)
@@ -726,6 +733,7 @@ struct Index {
       .alignItems(HorizontalAlign.Center)
       .backgroundColor(this.useSideRail() ? $r('app.color.main_bg') : Color.Transparent)
       .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.94 })
+      .hoverEffect(HoverEffect.Highlight)
     }
   }
 

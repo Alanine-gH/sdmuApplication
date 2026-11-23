@@ -4,6 +4,8 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { TitleBar } from '../components/TitleBar';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 集市发帖页 — 1:1 复刻 MarketPostActivity（activity_market_post）+ MarketPostView + MarketModel。
@@ -27,6 +29,9 @@ struct MarketPostPage {
   @State marketType: number = 0; // 0=想卖 1=想买
   @State submitting: boolean = false;
   @State scoreReady: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('keyboardHeightVp') keyboardHeightVp: number = 0;
 
   aboutToAppear(): void {
     // 源码 f1()：d0(getUserScores).G() —— push 域，实测不可达 → scoreReady 保持 false
@@ -127,22 +132,31 @@ struct MarketPostPage {
       }, (uri: string) => uri)
       if (this.photos.length < 9) {
         GridItem() {
-          Image($r('app.media.up_photo_bg'))
-            .width('100%')
-            .height('100%')
-            .objectFit(ImageFit.Cover)
-            .borderRadius(3)
-            .onClick(() => {
-              this.pickPhotos();
-            })
+            Image($r('app.media.up_photo_bg'))
+              .width('100%')
+              .height('100%')
+              .objectFit(ImageFit.Cover)
+              .borderRadius(3)
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick(() => {
+                this.pickPhotos();
+              })
+          }
         }
       }
-    }
-    .columnsTemplate('1fr 1fr 1fr')
-    .columnsGap(5)
-    .rowsGap(5)
-    .height(this.photos.length === 0 ? 90 : (Math.floor((this.photos.length - 1) / 3) + 1) * 95 + 5)
-    .width('100%')
+      .columnsTemplate(AdaptiveLayoutHelper.buildColumnsTemplate(
+        BreakpointSystem.getGridColumns(this.currentBreakpoint, 3)
+      ))
+      .columnsGap(5)
+      .rowsGap(5)
+      .height(AdaptiveLayoutHelper.computeGridHeightVp(
+        this.photos.length + (this.photos.length < 9 ? 1 : 0),
+        BreakpointSystem.getGridColumns(this.currentBreakpoint, 3),
+        90,
+        5,
+        5
+      ))
+      .width('100%')
   }
 
   /** 源码 view_market_post.xml：意向 RadioGroup（想卖/想买 selector_market_post） */
@@ -159,6 +173,7 @@ struct MarketPostPage {
         .backgroundColor(this.marketType === 0 ? $r('app.color.common_color_12') : $r('app.color.common_color_6'))
         .borderRadius(4)
         .padding({ left: 18, right: 18, top: 6, bottom: 6 })
+        .hoverEffect(HoverEffect.Highlight)
         .onClick(() => {
           this.marketType = 0;
         })
@@ -169,6 +184,7 @@ struct MarketPostPage {
         .borderRadius(4)
         .padding({ left: 18, right: 18, top: 6, bottom: 6 })
         .margin({ left: 12 })
+        .hoverEffect(HoverEffect.Highlight)
         .onClick(() => {
           this.marketType = 1;
         })
@@ -191,6 +207,7 @@ struct MarketPostPage {
         Text(this.scoreReady ? '设置时长' : '设置时长 >')
           .fontSize(16)
           .fontColor($r('app.color.common_color_3'))
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             // 源码 e.click：!existTop 且 usableScores<minUnitprice → toast；push 域不可达无余额 → 同款提示
             promptAction.showToast({ message: '当前可用积分不够参与竞价' });
@@ -263,6 +280,9 @@ struct MarketPostPage {
           .margin({ top: 1 })
         }
         .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
+        .padding({ bottom: this.avoidAreaBottomVp + this.keyboardHeightVp })
       }
       .width('100%')
       .layoutWeight(1)
@@ -272,5 +292,6 @@ struct MarketPostPage {
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.common_color_6'))
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
   }
 }

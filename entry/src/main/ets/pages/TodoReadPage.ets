@@ -6,6 +6,7 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { LoadingView } from '../components/LoadingView';
 import { EmptyView } from '../components/EmptyView';
 import { LoginSession } from '../network/LoginSession';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 待阅事宜页 — 1:1 翻译原 APK TodoReadActivity.java(215行)：
@@ -58,6 +59,9 @@ struct TodoReadPage {
   @State tabsFailed: boolean = false;
   @State channels: OaChannel[] = [];
   @State showChannelDialog: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 780;
   /** 关注弹窗待操作 docUnid（TodoFragment$a C0205a.f12352b） */
   private pendingDocUnid: string = '';
 
@@ -640,12 +644,12 @@ struct TodoReadPage {
   @Builder
   channelDialogOverlay() {
     Column() {
-      Column({ space: 12 }) {
-        Text('请选择关注渠道')
-          .fontSize(16)
-          .fontColor($r('app.color.common_color_1'))
-          .fontWeight(FontWeight.Bold)
-        Scroll() {
+      Scroll() {
+        Column({ space: 12 }) {
+          Text('请选择关注渠道')
+            .fontSize(16)
+            .fontColor($r('app.color.common_color_1'))
+            .fontWeight(FontWeight.Bold)
           Column({ space: 8 }) {
             ForEach(this.channels, (ch: OaChannel, idx: number) => {
               Row() {
@@ -661,51 +665,61 @@ struct TodoReadPage {
               }
               .width('100%')
               .padding({ top: 6, bottom: 6 })
+              .hoverEffect(HoverEffect.Highlight)
               .onClick(() => {
                 this.toggleChannel(idx);
               })
             }, (ch: OaChannel, idx: number) => idx.toString() + ch.terminalId)
           }
           .width('100%')
+          Row({ space: 12 }) {
+            Text('取消')
+              .fontSize(15)
+              .fontColor($r('app.color.common_color_3'))
+              .textAlign(TextAlign.Center)
+              .layoutWeight(1)
+              .padding({ top: 10, bottom: 10 })
+              .borderRadius(4)
+              .backgroundColor($r('app.color.common_color_6'))
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick(() => {
+                this.showChannelDialog = false;
+              })
+            Text('确定')
+              .fontSize(15)
+              .fontColor($r('app.color.white'))
+              .textAlign(TextAlign.Center)
+              .layoutWeight(1)
+              .padding({ top: 10, bottom: 10 })
+              .borderRadius(4)
+              .backgroundColor($r('app.color.mobile_campus_primary_color_default'))
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick(() => {
+                this.onChannelsConfirmed();
+              })
+          }
+          .width('100%')
         }
-        .layoutWeight(1)
-        .align(Alignment.Top)
-        Row({ space: 12 }) {
-          Text('取消')
-            .fontSize(15)
-            .fontColor($r('app.color.common_color_3'))
-            .textAlign(TextAlign.Center)
-            .layoutWeight(1)
-            .padding({ top: 10, bottom: 10 })
-            .borderRadius(4)
-            .backgroundColor($r('app.color.common_color_6'))
-            .onClick(() => {
-              this.showChannelDialog = false;
-            })
-          Text('确定')
-            .fontSize(15)
-            .fontColor($r('app.color.white'))
-            .textAlign(TextAlign.Center)
-            .layoutWeight(1)
-            .padding({ top: 10, bottom: 10 })
-            .borderRadius(4)
-            .backgroundColor($r('app.color.mobile_campus_primary_color_default'))
-            .onClick(() => {
-              this.onChannelsConfirmed();
-            })
-        }
+        .padding(16)
         .width('100%')
       }
-      .padding(16)
+      .scrollBar(BarState.Off)
       .backgroundColor($r('app.color.white'))
       .borderRadius(8)
-      .width('80%')
-      .height(320)
+      .width(BreakpointSystem.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp))
+      .constraintSize({ maxHeight: BreakpointSystem.getDialogMaxHeight(this.windowHeightVp) })
+      .onClick(() => {
+        // 拦截弹窗内点击
+      })
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#80000000')
+    .padding({ left: 16, right: 16 })
+    .backgroundColor('#66000000')
     .justifyContent(FlexAlign.Center)
     .alignItems(HorizontalAlign.Center)
+    .onClick(() => {
+      this.showChannelDialog = false;
+    })
   }
 }

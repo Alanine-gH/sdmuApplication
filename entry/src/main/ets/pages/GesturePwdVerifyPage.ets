@@ -6,6 +6,7 @@ import { GesturePwdBean } from '../model/GestureManager';
 import { LoginSession } from '../network/LoginSession';
 import { PrivacyWindowHelper } from '../common/PrivacyWindowHelper';
 import { BreakpointSystem } from '../common/BreakpointSystem';
+import { BiometricAuthHelper, BiometricCapability } from '../common/BiometricAuthHelper';
 
 /**
  * 手势密码校验页 — 1:1 复刻 GesturePwdVerifyActivity（229 行）
@@ -41,6 +42,9 @@ struct GesturePwdVerifyPage {
   @State errorToken: number = 0;
   /** 源码 r：CountDownTimer；t：冻结中 */
   @State frozen: boolean = false;
+  @State biometricEnabled: boolean = false;
+  @State biometricCap: BiometricCapability | null = null;
+  @State biometricBusy: boolean = false;
   private countdownTimerId: number = -1;
   /** 源码 s：冻结秒数 */
   private readonly freezeSeconds: number = 60;
@@ -85,6 +89,15 @@ struct GesturePwdVerifyPage {
     this.N2();
     // 源码 f1()：gesturePwdBean != null → switchToCheckMode(gesturePwds, 5)
     this.currentAttemptTime = 1;
+    this.biometricCap = BiometricAuthHelper.checkCapability();
+    try {
+      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      BiometricAuthHelper.isBiometricUnlockEnabled(ctx).then((enabled: boolean) => {
+        this.biometricEnabled = enabled;
+      });
+    } catch {
+      this.biometricEnabled = false;
+    }
   }
 
   onPageShow(): void {
@@ -98,6 +111,7 @@ struct GesturePwdVerifyPage {
   }
 
   aboutToDisappear(): void {
+    BiometricAuthHelper.cancelActiveAuth();
     // 源码 onDestroy：CountDownTimer.cancel()
     if (this.countdownTimerId !== -1) {
       clearTimeout(this.countdownTimerId);
@@ -132,6 +146,42 @@ struct GesturePwdVerifyPage {
 
   private toast(msg: string): void {
     this.getUIContext().getPromptAction().showToast({ message: msg });
+  }
+
+  private hasBiometricVerifyAvailable(): boolean {
+    return this.biometricEnabled &&
+      this.biometricCap !== null &&
+      BiometricAuthHelper.shouldOfferBiometricToggle(this.biometricCap);
+  }
+
+  private async startBiometricVerify(): Promise<void> {
+    if (this.frozen || this.biometricBusy || this.biometricCap === null) {
+      return;
+    }
+    if (!BiometricAuthHelper.shouldShowBiometricVerify(this.biometricEnabled, this.biometricCap, this.frozen)) {
+      this.toast(this.biometricCap.description);
+      return;
+    }
+    this.biometricBusy = true;
+    try {
+      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      const outcome = await BiometricAuthHelper.authenticate({
+        title: '生物识别快捷验证',
+        navigationButtonText: '使用手势密码',
+        authTypes: this.biometricCap.authTypes,
+        uiContext: ctx
+      });
+      if (outcome.success) {
+        this.currentAttemptTime = 1;
+        this.M2();
+        return;
+      }
+      if (!outcome.canceled && outcome.message !== '') {
+        this.toast(outcome.message);
+      }
+    } finally {
+      this.biometricBusy = false;
+    }
   }
 
   private sameSeq(a: number[], b: number[]): boolean {
@@ -277,6 +327,22 @@ struct GesturePwdVerifyPage {
           })
             .margin({ top: 12.5 })
             .padding({ left: 6, right: 6 })
+
+          if (this.hasBiometricVerifyAvailable()) {
+            Button(this.biometricBusy ? '正在验证...' : '指纹/人脸快捷验证')
+              .fontSize(14)
+              .fontColor('#1B68B7')
+              .backgroundColor('#EBF4FF')
+              .borderRadius(20)
+              .padding({ left: 20, right: 20, top: 8, bottom: 8 })
+              .margin({ top: 16 })
+              .enabled(!this.frozen && !this.biometricBusy)
+              .opacity(this.frozen ? 0.45 : 1)
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick(() => {
+                this.startBiometricVerify();
+              })
+          }
         }
         .width('100%')
         .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })

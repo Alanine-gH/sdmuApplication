@@ -8,6 +8,7 @@ import { cameraPicker, camera } from '@kit.CameraKit';
 import { Context } from '@kit.AbilityKit';
 import { LoadingView } from '../components/LoadingView';
 import { EmptyView } from '../components/EmptyView';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 业务申请表单填写页 — 1:1 翻译原 APK WorkApplyFormConfigActivity.java(804行)：
@@ -88,6 +89,9 @@ struct WorkApplyFormConfigPage {
   @State loadErrMsg: string = '';
   @State showSelectDialog: boolean = false;
   @State selectVmIdx: number = -1;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 780;
   private navParams: WorkApplyNavParams = { processid: '', title: '' };
   private bmpurl: string = '';
   private topRadioIdx: number = -1;
@@ -1180,44 +1184,52 @@ struct WorkApplyFormConfigPage {
   @Builder
   selectDialogOverlay() {
     Column() {
-      Column() {
-        Scroll() {
-          Column() {
-            ForEach(this.vms[this.selectVmIdx].options, (opt: KVOption, oi: number) => {
-              Text(opt.text)
-                .fontSize(16)
-                .fontColor($r('app.color.common_color_1'))
-                .width('100%')
-                .padding({ top: 12, bottom: 12 })
-                .textAlign(TextAlign.Center)
-                .border({ width: { bottom: 0.5 }, color: $r('app.color.common_color_5') })
-                .onClick(() => {
-                  this.pickSelect(this.selectVmIdx, oi);
-                })
-            }, (opt: KVOption, oi: number) => oi.toString() + opt.id)
-          }
-          .width('100%')
+      Scroll() {
+        Column() {
+          ForEach(this.vms[this.selectVmIdx].options, (opt: KVOption, oi: number) => {
+            Text(opt.text)
+              .fontSize(16)
+              .fontColor($r('app.color.common_color_1'))
+              .width('100%')
+              .padding({ top: 12, bottom: 12 })
+              .textAlign(TextAlign.Center)
+              .border({ width: { bottom: 0.5 }, color: $r('app.color.common_color_5') })
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick(() => {
+                this.pickSelect(this.selectVmIdx, oi);
+              })
+          }, (opt: KVOption, oi: number) => oi.toString() + opt.id)
+          Text('取消')
+            .fontSize(15)
+            .fontColor($r('app.color.common_color_3'))
+            .width('100%')
+            .textAlign(TextAlign.Center)
+            .padding({ top: 12, bottom: 12 })
+            .hoverEffect(HoverEffect.Highlight)
+            .onClick(() => {
+              this.showSelectDialog = false;
+            })
         }
-        .constraintSize({ maxHeight: 360 })
-        Text('取消')
-          .fontSize(15)
-          .fontColor($r('app.color.common_color_3'))
-          .width('100%')
-          .textAlign(TextAlign.Center)
-          .padding({ top: 12, bottom: 12 })
-          .onClick(() => {
-            this.showSelectDialog = false;
-          })
+        .width('100%')
       }
-      .width('80%')
+      .scrollBar(BarState.Off)
+      .width(BreakpointSystem.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp))
+      .constraintSize({ maxHeight: BreakpointSystem.getDialogMaxHeight(this.windowHeightVp) })
       .backgroundColor($r('app.color.white'))
       .borderRadius(8)
+      .onClick(() => {
+        // 拦截弹窗内点击
+      })
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#80000000')
+    .padding({ left: 16, right: 16 })
+    .backgroundColor('#66000000')
     .justifyContent(FlexAlign.Center)
     .alignItems(HorizontalAlign.Center)
+    .onClick(() => {
+      this.showSelectDialog = false;
+    })
   }
 
   private pickSelect(vmIdx: number, optionIdx: number): void {

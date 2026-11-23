@@ -422,45 +422,51 @@ struct CourseDetailPage {
   @Builder
   leaveDialog() {
     Column() {
-      Column() {
-        Row() {
-          Text('请假详情')
+      Scroll() {
+        Column() {
+          Row() {
+            Text('请假详情')
+              .fontSize(18)
+              .fontColor($r('app.color.common_color_1'))
+              .layoutWeight(1)
+              .textAlign(TextAlign.Center)
+            Image($r('app.media.mobile_campus_base_close_g'))
+              .width(20)
+              .height(20)
+              .padding(6)
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick(() => {
+                this.leaveDetail = null;
+              })
+          }
+          .width('100%')
+          .alignItems(VerticalAlign.Center)
+          .margin({ top: 12, bottom: 12 })
+          Divider()
+            .color($r('app.color.common_color_6'))
+            .strokeWidth(0.5)
+            .width('100%')
+          Text(this.leaveDetail === null ? '' : this.leaveDetail.student_name)
             .fontSize(18)
-            .fontColor($r('app.color.common_color_1'))
-            .layoutWeight(1)
-            .textAlign(TextAlign.Center)
-          Image($r('app.media.mobile_campus_base_close_g'))
-            .width(20)
-            .height(20)
-            .padding(6)
-            .onClick(() => {
-              this.leaveDetail = null;
-            })
+            .fontWeight(FontWeight.Bold)
+            .fontColor($r('app.color.ybg_blue'))
+            .margin({ top: 12 })
+            .width('100%')
+          this.leaveRow('学号:', this.leaveDetail === null ? '' : this.leaveDetail.student_no)
+          this.leaveRow('专业:', this.leaveDetail === null ? '' : this.leaveDetail.profession)
+          this.leaveRow('班级:', this.leaveDetail === null ? '' : this.leaveDetail.class_name)
+          this.leaveRow('开始时间:', this.leaveDetail === null ? '' : this.leaveDetail.start_date)
+          this.leaveRow('结束时间:', this.leaveDetail === null ? '' : this.leaveDetail.end_date)
+          this.leaveRow('开始节次:', this.leaveDetail === null ? '' : this.leaveDetail.ksjc)
+          this.leaveRow('结束节次:', this.leaveDetail === null ? '' : this.leaveDetail.jsjc)
+          this.leaveRow('请假事由:', this.leaveDetail === null ? '' : this.leaveDetail.reason)
         }
         .width('100%')
-        .alignItems(VerticalAlign.Center)
-        .margin({ top: 12, bottom: 12 })
-        Divider()
-          .color($r('app.color.common_color_6'))
-          .strokeWidth(0.5)
-          .width('100%')
-        Text(this.leaveDetail === null ? '' : this.leaveDetail.student_name)
-          .fontSize(18)
-          .fontWeight(FontWeight.Bold)
-          .fontColor($r('app.color.ybg_blue'))
-          .margin({ top: 12 })
-          .width('100%')
-        this.leaveRow('学号:', this.leaveDetail === null ? '' : this.leaveDetail.student_no)
-        this.leaveRow('专业:', this.leaveDetail === null ? '' : this.leaveDetail.profession)
-        this.leaveRow('班级:', this.leaveDetail === null ? '' : this.leaveDetail.class_name)
-        this.leaveRow('开始时间:', this.leaveDetail === null ? '' : this.leaveDetail.start_date)
-        this.leaveRow('结束时间:', this.leaveDetail === null ? '' : this.leaveDetail.end_date)
-        this.leaveRow('开始节次:', this.leaveDetail === null ? '' : this.leaveDetail.ksjc)
-        this.leaveRow('结束节次:', this.leaveDetail === null ? '' : this.leaveDetail.jsjc)
-        this.leaveRow('请假事由:', this.leaveDetail === null ? '' : this.leaveDetail.reason)
+        .padding({ left: 12, right: 12, bottom: 24 })
       }
-      .width('100%')
-      .padding({ left: 12, right: 12, bottom: 24 })
+      .scrollBar(BarState.Off)
+      .width(BreakpointSystem.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp))
+      .constraintSize({ maxHeight: BreakpointSystem.getDialogMaxHeight(this.windowHeightVp) })
       .backgroundColor($r('app.color.white'))
       .borderRadius(8)
       .onClick(() => {
@@ -470,7 +476,8 @@ struct CourseDetailPage {
     .width('100%')
     .height('100%')
     .justifyContent(FlexAlign.Center)
-    .padding({ left: 24, right: 24 })
+    .alignItems(HorizontalAlign.Center)
+    .padding({ left: 16, right: 16 })
     .backgroundColor('#66000000')
     .onClick(() => {
       this.leaveDetail = null;

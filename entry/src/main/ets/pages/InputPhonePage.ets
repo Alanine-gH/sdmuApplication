@@ -235,6 +235,7 @@ struct InputPhonePage {
             .textAlign(TextAlign.Center)
             .layoutWeight(1)
             .padding({ top: 12, bottom: 12 })
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               this.showQuitDialog = false;
               this.quitAndLogout();
@@ -250,6 +251,7 @@ struct InputPhonePage {
             .textAlign(TextAlign.Center)
             .layoutWeight(1)
             .padding({ top: 12, bottom: 12 })
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               // 源码 sure 按钮 → a()：仅 dismiss
               this.showQuitDialog = false;
@@ -302,10 +304,14 @@ struct InputPhonePage {
               .fontColor($r('app.color.common_color_1'))
               .backgroundColor(Color.Transparent)
               .type(InputType.PhoneNumber)
+              .enterKeyType(EnterKeyType.Done)
               .maxLength(11)
               .enabled(this.validation === '')
               .padding({ left: 56, right: 56 })
               .margin({ top: 18 })
+              .onSubmit(() => {
+                this.onNextClick();
+              })
               .onChange((value: string) => {
                 this.phone = value;
               })
@@ -315,6 +321,7 @@ struct InputPhonePage {
               .fontColor(this.phone.trim() === '' || this.submitting ? '#CECECE' : '#1B68B7')
               .padding(10)
               .margin({ top: 48 })
+              .hoverEffect(HoverEffect.Highlight)
               .onClick(() => {
                 this.onNextClick();
               })

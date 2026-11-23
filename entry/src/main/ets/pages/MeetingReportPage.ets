@@ -8,6 +8,7 @@ import { ApiResponse } from '../model/ResponseModel';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { MeetingReportEntity } from '../model/MeetingApiModel';
 import { Constants } from '../data/Constants';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 会议报告页 — MeetingReportShowActivity.java(463行) 源码级翻译
@@ -54,6 +55,9 @@ struct MeetingReportPage {
   @State loading: boolean = true;
   /** 删除确认弹窗（framework dialog.g） */
   @State showDeleteDialog: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 780;
   private hyid: string = '';
   private isCreator: boolean = false;
   private canEdit: boolean = false;
@@ -418,47 +422,68 @@ struct MeetingReportPage {
   @Builder
   deleteDialog() {
     Column() {
-      Text('您确定删除当前文档？')
-        .fontSize(17)
-        .fontColor($r('app.color.common_color_1'))
-        .margin({ top: 16, bottom: 16 })
-      Divider()
-        .color($r('app.color.common_color_5'))
-        .strokeWidth(0.5)
+      Scroll() {
+        Column() {
+          Text('您确定删除当前文档？')
+            .fontSize(17)
+            .fontColor($r('app.color.common_color_1'))
+            .margin({ top: 16, bottom: 16 })
+          Divider()
+            .color($r('app.color.common_color_5'))
+            .strokeWidth(0.5)
+            .width('100%')
+          Row() {
+            Text('取消')
+              .fontSize(17)
+              .fontColor($r('app.color.common_color_3'))
+              .textAlign(TextAlign.Center)
+              .layoutWeight(1)
+              .height(44)
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick(() => {
+                this.showDeleteDialog = false;
+              })
+            Divider()
+              .vertical(true)
+              .color($r('app.color.common_color_5'))
+              .strokeWidth(0.5)
+              .height(44)
+            Text('确定')
+              .fontSize(17)
+              .fontColor($r('app.color.mobile_campus_primary_color_default'))
+              .textAlign(TextAlign.Center)
+              .layoutWeight(1)
+              .height(44)
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick(() => {
+                this.showDeleteDialog = false;
+                this.submitDelete();
+              })
+          }
+          .width('100%')
+          .alignItems(VerticalAlign.Center)
+        }
         .width('100%')
-      Row() {
-        Text('取消')
-          .fontSize(17)
-          .fontColor($r('app.color.common_color_3'))
-          .textAlign(TextAlign.Center)
-          .layoutWeight(1)
-          .height(44)
-          .onClick(() => {
-            this.showDeleteDialog = false;
-          })
-        Divider()
-          .vertical(true)
-          .color($r('app.color.common_color_5'))
-          .strokeWidth(0.5)
-          .height(44)
-        Text('确定')
-          .fontSize(17)
-          .fontColor($r('app.color.mobile_campus_primary_color_default'))
-          .textAlign(TextAlign.Center)
-          .layoutWeight(1)
-          .height(44)
-          .onClick(() => {
-            this.showDeleteDialog = false;
-            this.submitDelete();
-          })
+        .alignItems(HorizontalAlign.Center)
       }
-      .width('100%')
-      .alignItems(VerticalAlign.Center)
+      .scrollBar(BarState.Off)
+      .width(BreakpointSystem.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp))
+      .constraintSize({ maxHeight: BreakpointSystem.getDialogMaxHeight(this.windowHeightVp) })
+      .borderRadius(8)
+      .backgroundColor($r('app.color.white'))
+      .clip(true)
+      .onClick(() => {
+        // 拦截弹窗内点击
+      })
     }
-    .width(270)
-    .borderRadius(8)
-    .backgroundColor($r('app.color.white'))
+    .width('100%')
+    .height('100%')
+    .padding({ left: 16, right: 16 })
+    .justifyContent(FlexAlign.Center)
     .alignItems(HorizontalAlign.Center)
-    .clip(true)
+    .backgroundColor('#66000000')
+    .onClick(() => {
+      this.showDeleteDialog = false;
+    })
   }
 }

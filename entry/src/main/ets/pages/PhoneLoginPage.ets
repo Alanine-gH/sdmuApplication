@@ -256,6 +256,7 @@ struct PhoneLoginPage {
                   .height(24)
                 TextInput({ placeholder: '请输入您的手机号', text: this.phoneNum })
                   .type(InputType.PhoneNumber)
+                  .enterKeyType(EnterKeyType.Done)
                   .fontSize(17)
                   .fontColor($r('app.color.common_color_1'))
                   .placeholderColor($r('app.color.common_color_3'))
@@ -265,6 +266,9 @@ struct PhoneLoginPage {
                   .backgroundColor(Color.Transparent)
                   .caretColor($r('app.color.mobile_campus_primary_color'))
                   .layoutWeight(1)
+                  .onSubmit(() => {
+                    this.getSmsCode();
+                  })
                   .onChange((value: string) => {
                     this.phoneNum = value;
                   })
@@ -280,6 +284,7 @@ struct PhoneLoginPage {
                   .height(16)
                   .borderRadius(8)
                   .backgroundColor($r('app.color.common_color_4'))
+                  .hoverEffect(HoverEffect.Highlight)
                   .onClick(() => {
                     this.phoneNum = '';
                   })
@@ -312,6 +317,7 @@ struct PhoneLoginPage {
                   .borderRadius(23)
                   .systemMaterial(ImmersiveLightHelper.primaryButtonMaterial())
                   .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
+                  .hoverEffect(HoverEffect.Highlight)
                   .onClick(() => {
                     this.getSmsCode();
                   })
@@ -368,11 +374,17 @@ struct PhoneLoginPage {
 
                 TextInput({ text: this.codeDigits })
                   .type(InputType.Number)
+                  .enterKeyType(EnterKeyType.Done)
                   .maxLength(6)
                   .opacity(0)
                   .width(255)
                   .height(40)
                   .caretColor(Color.Transparent)
+                  .onSubmit(() => {
+                    if (this.codeDigits.length >= 4 && !this.logging) {
+                      this.doSmsLogin();
+                    }
+                  })
                   .onChange((value: string) => {
                     this.codeDigits = value;
                     // APK VerifyCodeView 同款：满 4 位自动 loginBySms
@@ -402,6 +414,7 @@ struct PhoneLoginPage {
                 })
                 .backgroundColor($r('app.color.white'))
                 .margin({ top: 24 })
+                .hoverEffect(HoverEffect.Highlight)
                 .onClick(() => {
                   this.resendSms();
                 })
@@ -428,6 +441,7 @@ struct PhoneLoginPage {
                   .fill($r('app.color.mobile_campus_primary_color'))
               }
             }
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               this.privacyAgreed = !this.privacyAgreed;
             })
@@ -440,6 +454,7 @@ struct PhoneLoginPage {
             Text('《隐私政策》')
               .fontSize(15)
               .fontColor($r('app.color.mobile_campus_primary_color'))
+              .hoverEffect(HoverEffect.Highlight)
               .onClick(() => {
                 router.pushUrl({
                   url: 'pages/WebViewPage',
@@ -454,6 +469,7 @@ struct PhoneLoginPage {
             Text('《服务协议》')
               .fontSize(15)
               .fontColor($r('app.color.mobile_campus_primary_color'))
+              .hoverEffect(HoverEffect.Highlight)
               .onClick(() => {
                 router.pushUrl({
                   url: 'pages/WebViewPage',

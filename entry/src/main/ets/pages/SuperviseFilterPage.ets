@@ -4,6 +4,7 @@ import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { SuperviseDepartment } from '../model/SuperviseModel';
 import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 督导筛选页 — 源码级翻译 [W21 supervise]（SuperviseFilterActivity.java 逐行 → ArkTS）：
@@ -49,6 +50,8 @@ struct SuperviseFilterPage {
   @State wheelVisible: boolean = false;
   @State pickerIndex: number = 0;
   @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 640;
   @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
   @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
@@ -190,107 +193,120 @@ struct SuperviseFilterPage {
                   .height(14)
                   .margin({ left: 6 })
               }
-              .layoutWeight(1)
-              .margin({ left: 12 })
-              .alignItems(VerticalAlign.Center)
-              .onClick(() => {
-                // 源码 b.onClick：SuperviseFilterDialog.show()
-                this.pickerIndex = 0;
-                this.wheelVisible = true;
-              })
-            }
-            .width('100%')
-            .padding(12)
+            .layoutWeight(1)
+            .margin({ left: 12 })
             .alignItems(VerticalAlign.Center)
+            .hoverEffect(HoverEffect.Highlight)
+            .onClick(() => {
+              // 源码 b.onClick：SuperviseFilterDialog.show()
+              this.pickerIndex = 0;
+              this.wheelVisible = true;
+            })
           }
           .width('100%')
-          .backgroundColor($r('app.color.white'))
-
-          Blank()
-            .height(12)
-
-          // 卡2：选择节次 GridView（5 列 × 14 项 checkbox）
-          Column() {
-            Row() {
-              Text('选择节次')
-                .fontSize(16)
-                .fontColor($r('app.color.common_color_1'))
-            }
-            .width('100%')
-            .padding(12)
-
-            Grid() {
-              ForEach(SECTIONS, (label: string, index: number) => {
-                GridItem() {
-                  Text(label)
-                    .fontSize(16)
-                    .fontColor(this.checks[index] ? Color.White : '#B2BDC9')
-                    .textAlign(TextAlign.Center)
-                    .width('100%')
-                    .height(48)
-                    .backgroundColor(this.checks[index] ? '#1B68B7' : Color.Transparent)
-                    .onClick(() => {
-                      this.onSectionCheck(index, !this.checks[index]);
-                    })
-                }
-              }, (label: string) => label)
-            }
-            .columnsTemplate('1fr 1fr 1fr 1fr 1fr')
-            .width('100%')
-            .padding({ left: 12, right: 12, bottom: 12 })
-            .height(150)
-          }
-          .width('100%')
-          .backgroundColor($r('app.color.white'))
+          .padding(12)
+          .alignItems(VerticalAlign.Center)
         }
         .width('100%')
-        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
-        .alignSelf(ItemAlign.Center)
-        .padding({
-          left: this.avoidAreaLeftVp,
-          right: this.avoidAreaRightVp,
-          bottom: this.keyboardHeightVp
-        })
+        .backgroundColor($r('app.color.white'))
+
+        Blank()
+          .height(12)
+
+        // 卡2：选择节次 GridView（响应式列 × 14 项 checkbox）
+        Column() {
+          Row() {
+            Text('选择节次')
+              .fontSize(16)
+              .fontColor($r('app.color.common_color_1'))
+          }
+          .width('100%')
+          .padding(12)
+
+          Grid() {
+            ForEach(SECTIONS, (label: string, index: number) => {
+              GridItem() {
+                Text(label)
+                  .fontSize(16)
+                  .fontColor(this.checks[index] ? Color.White : '#B2BDC9')
+                  .textAlign(TextAlign.Center)
+                  .width('100%')
+                  .height(48)
+                  .backgroundColor(this.checks[index] ? '#1B68B7' : Color.Transparent)
+                  .hoverEffect(HoverEffect.Highlight)
+                  .onClick(() => {
+                    this.onSectionCheck(index, !this.checks[index]);
+                  })
+              }
+            }, (label: string) => label)
+          }
+          .columnsTemplate(AdaptiveLayoutHelper.buildColumnsTemplate(
+            BreakpointSystem.getGridColumns(this.currentBreakpoint, 5)
+          ))
+          .width('100%')
+          .padding({ left: 12, right: 12, bottom: 12 })
+          .height(AdaptiveLayoutHelper.computeGridHeightVp(
+            SECTIONS.length,
+            BreakpointSystem.getGridColumns(this.currentBreakpoint, 5),
+            48,
+            0,
+            12
+          ))
+        }
+        .width('100%')
+        .backgroundColor($r('app.color.white'))
       }
       .width('100%')
-      .layoutWeight(1)
-      .scrollBar(BarState.Off)
-      .align(Alignment.Top)
-
-      // superviseSubmit：selector_filter_btn 双态（enabled #1B68B7 / disabled 透明）+ 字色白/#999999
-      Text('提交')
-        .fontSize(17)
-        .fontColor(this.submitEnabled ? Color.White : '#999999')
-        .textAlign(TextAlign.Center)
-        .width('100%')
-        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
-        .alignSelf(ItemAlign.Center)
-        .padding({
-          top: 10,
-          bottom: 10 + this.avoidAreaBottomVp,
-          left: this.avoidAreaLeftVp,
-          right: this.avoidAreaRightVp
-        })
-        .backgroundColor(this.submitEnabled ? '#1B68B7' : Color.Transparent)
-        .onClick(() => {
-          this.submitFilter();
-        })
+      .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+      .alignSelf(ItemAlign.Center)
+      .padding({
+        left: this.avoidAreaLeftVp,
+        right: this.avoidAreaRightVp,
+        bottom: this.keyboardHeightVp
+      })
     }
     .width('100%')
-    .height('100%')
-    .backgroundColor('#F2F2F2')
-    .bindSheet($$this.wheelVisible, this.departmentWheelBuilder(), {
-      height: 280,
-      preferType: SheetType.CENTER,
-      dragBar: false,
-      showClose: false,
-      backgroundColor: $r('app.color.ybg_white')
-    } as SheetOptions)
-  }
+    .layoutWeight(1)
+    .scrollBar(BarState.Off)
+    .align(Alignment.Top)
 
-  /** SuperviseFilterDialog（mobile_campus_supervise_dialog.xml）：tvChoose 空 + tvFinish"完成" + WheelView */
-  @Builder
-  departmentWheelBuilder() {
+    // superviseSubmit：selector_filter_btn 双态（enabled #1B68B7 / disabled 透明）+ 字色白/#999999
+    Text('提交')
+      .fontSize(17)
+      .fontColor(this.submitEnabled ? Color.White : '#999999')
+      .textAlign(TextAlign.Center)
+      .width('100%')
+      .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+      .alignSelf(ItemAlign.Center)
+      .padding({
+        top: 10,
+        bottom: 10 + this.avoidAreaBottomVp,
+        left: this.avoidAreaLeftVp,
+        right: this.avoidAreaRightVp
+      })
+      .backgroundColor(this.submitEnabled ? '#1B68B7' : Color.Transparent)
+      .hoverEffect(HoverEffect.Highlight)
+      .onClick(() => {
+        this.submitFilter();
+      })
+  }
+  .width('100%')
+  .height('100%')
+  .backgroundColor('#F2F2F2')
+  .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+  .bindSheet($$this.wheelVisible, this.departmentWheelBuilder(), {
+    height: Math.min(280, BreakpointSystem.getDialogMaxHeight(this.windowHeightVp)),
+    preferType: AdaptiveLayoutHelper.getSheetPreferType(this.currentBreakpoint, this.isCompactHeight),
+    dragBar: false,
+    showClose: false,
+    backgroundColor: $r('app.color.ybg_white')
+  } as SheetOptions)
+}
+
+/** SuperviseFilterDialog（mobile_campus_supervise_dialog.xml）：tvChoose 空 + tvFinish"完成" + WheelView */
+@Builder
+departmentWheelBuilder() {
+  Scroll() {
     Column() {
       Row() {
         Blank()
@@ -298,6 +314,7 @@ struct SuperviseFilterPage {
           .fontSize(15)
           .fontColor($r('app.color.common_color_1'))
           .padding({ left: 10, right: 10, top: 10, bottom: 10 })
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             this.onDepartmentPicked();
           })
@@ -310,13 +327,13 @@ struct SuperviseFilterPage {
         Text('暂无学院数据')
           .fontSize(15)
           .fontColor($r('app.color.common_color_3'))
-          .layoutWeight(1)
+          .height(200)
           .width('100%')
           .textAlign(TextAlign.Center)
       } else {
         TextPicker({ range: this.departmentNames(), selected: this.pickerIndex })
           .width('100%')
-          .layoutWeight(1)
+          .height(220)
           .canLoop(false)
           .backgroundColor($r('app.color.ybg_white'))
           .onChange((value: string | string[], index: number | number[]) => {
@@ -326,8 +343,10 @@ struct SuperviseFilterPage {
       }
     }
     .width('100%')
-    .height('100%')
   }
+  .width('100%')
+  .height('100%')
+}
 
   /** WheelView adapter e(i)=BMMC（弹窗空清单 → 空滚轮，服务器失败保真） */
   private departmentNames(): string[] {

@@ -200,7 +200,7 @@ export class BreakpointSystem {
 
   /** 纯函数：计算弹窗最大宽度（vp） */
   public static getDialogMaxWidth(bp: string, windowWidthVp: number): number {
-    const safeWidth: number = windowWidthVp > 0 ? windowWidthVp : 360;
+    const safeWidth: number = Number.isFinite(windowWidthVp) && windowWidthVp > 0 ? windowWidthVp : 360;
     const marginCap: number = Math.max(240, safeWidth - 32);
     if (bp === 'xs' || bp === 'sm') {
       return Math.min(400, marginCap);
@@ -213,7 +213,7 @@ export class BreakpointSystem {
 
   /** 纯函数：计算弹窗最大高度（vp） */
   public static getDialogMaxHeight(windowHeightVp: number): number {
-    const safeHeight: number = windowHeightVp > 0 ? windowHeightVp : 640;
+    const safeHeight: number = Number.isFinite(windowHeightVp) && windowHeightVp > 0 ? windowHeightVp : 640;
     return Math.max(220, Math.round(safeHeight * 0.82));
   }
 

@@ -172,14 +172,13 @@ struct TodoSearchDepartmentPage {
               .padding({ left: 0, right: 8 })
               .height('100%')
               .layoutWeight(1)
+              .enterKeyType(EnterKeyType.Search)
+              .defaultFocus(true)
               .onChange((value: string) => {
                 this.keyword = value;
               })
-              .onSubmit((enterKey: EnterKeyType) => {
-                // 源码 c 类：IME_ACTION_SEARCH(3)/IME_ACTION_DONE(6) 触发搜索
-                if (enterKey === EnterKeyType.Search || enterKey === EnterKeyType.Done) {
-                  this.submitSearch();
-                }
+              .onSubmit(() => {
+                this.submitSearch();
               })
           }
           .layoutWeight(1)
@@ -195,6 +194,7 @@ struct TodoSearchDepartmentPage {
             .margin({ left: 8 })
             .height(44)
             .textAlign(TextAlign.Center)
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               this.getUIContext().getRouter().back();
             })
@@ -291,6 +291,7 @@ struct TodoSearchDepartmentPage {
             .width(80)
             .height('100%')
             .textAlign(TextAlign.Center)
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               this.submit();
             })
@@ -333,6 +334,7 @@ struct TodoSearchDepartmentPage {
       .padding({ left: 12, right: 12 })
       .alignItems(VerticalAlign.Center)
       .backgroundColor($r('app.color.white'))
+      .hoverEffect(HoverEffect.Highlight)
       .onClick(() => {
         this.onRowClick(bean);
       })

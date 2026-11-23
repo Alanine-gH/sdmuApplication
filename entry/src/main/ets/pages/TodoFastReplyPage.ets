@@ -3,6 +3,7 @@ import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { LoadingView } from '../components/LoadingView';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 常用意见页 — 1:1 翻译原 APK TodoFastreplyActivity.java(503行)：
@@ -43,6 +44,10 @@ struct TodoFastReplyPage {
   @State showEditDialog: boolean = false;
   @State editIdx: number = -1;
   @State editText: string = '';
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 780;
+  @StorageProp('keyboardHeightVp') keyboardHeightVp: number = 0;
   /** 请求防抖（C0202a/C0203a 无 loading 锁，HAP 侧防重复提交） */
   private saving: boolean = false;
 
@@ -409,60 +414,78 @@ struct TodoFastReplyPage {
   @Builder
   editDialogOverlay() {
     Column() {
-      Column({ space: 14 }) {
-        Text('修改常用意见')
-          .fontSize(16)
-          .fontColor($r('app.color.common_color_1'))
-          .fontWeight(FontWeight.Bold)
-        TextInput({
-          text: this.editText,
-          placeholder: '请输入常用意见'
-        })
-          .fontSize(15)
-          .fontColor($r('app.color.common_color_1'))
-          .placeholderColor('#B5B5B5')
-          .height(40)
-          .backgroundColor($r('app.color.common_color_6'))
-          .borderRadius(4)
-          .padding({ left: 10, right: 10 })
-          .onChange((value: string) => {
-            this.editText = value;
+      Scroll() {
+        Column({ space: 14 }) {
+          Text('修改常用意见')
+            .fontSize(16)
+            .fontColor($r('app.color.common_color_1'))
+            .fontWeight(FontWeight.Bold)
+          TextInput({
+            text: this.editText,
+            placeholder: '请输入常用意见'
           })
-        Row({ space: 12 }) {
-          Text('取消')
             .fontSize(15)
-            .fontColor($r('app.color.common_color_3'))
-            .textAlign(TextAlign.Center)
-            .layoutWeight(1)
-            .padding({ top: 10, bottom: 10 })
-            .borderRadius(4)
+            .fontColor($r('app.color.common_color_1'))
+            .placeholderColor('#B5B5B5')
+            .height(40)
             .backgroundColor($r('app.color.common_color_6'))
-            .onClick(() => {
-              this.showEditDialog = false;
-            })
-          Text('确定')
-            .fontSize(15)
-            .fontColor($r('app.color.white'))
-            .textAlign(TextAlign.Center)
-            .layoutWeight(1)
-            .padding({ top: 10, bottom: 10 })
             .borderRadius(4)
-            .backgroundColor($r('app.color.mobile_campus_primary_color_default'))
-            .onClick(() => {
+            .padding({ left: 10, right: 10 })
+            .enterKeyType(EnterKeyType.Done)
+            .onChange((value: string) => {
+              this.editText = value;
+            })
+            .onSubmit(() => {
               this.onEditConfirm();
             })
+          Row({ space: 12 }) {
+            Text('取消')
+              .fontSize(15)
+              .fontColor($r('app.color.common_color_3'))
+              .textAlign(TextAlign.Center)
+              .layoutWeight(1)
+              .padding({ top: 10, bottom: 10 })
+              .borderRadius(4)
+              .backgroundColor($r('app.color.common_color_6'))
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick(() => {
+                this.showEditDialog = false;
+              })
+            Text('确定')
+              .fontSize(15)
+              .fontColor($r('app.color.white'))
+              .textAlign(TextAlign.Center)
+              .layoutWeight(1)
+              .padding({ top: 10, bottom: 10 })
+              .borderRadius(4)
+              .backgroundColor($r('app.color.mobile_campus_primary_color_default'))
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick(() => {
+                this.onEditConfirm();
+              })
+          }
+          .width('100%')
         }
+        .padding(16)
         .width('100%')
       }
-      .padding(16)
+      .scrollBar(BarState.Off)
       .backgroundColor($r('app.color.white'))
       .borderRadius(8)
-      .width('80%')
+      .width(BreakpointSystem.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp))
+      .constraintSize({ maxHeight: BreakpointSystem.getDialogMaxHeight(this.windowHeightVp) })
+      .onClick(() => {
+        // 拦截弹窗内点击
+      })
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#80000000')
+    .padding({ left: 16, right: 16, bottom: this.keyboardHeightVp })
+    .backgroundColor('#66000000')
     .justifyContent(FlexAlign.Center)
     .alignItems(HorizontalAlign.Center)
+    .onClick(() => {
+      this.showEditDialog = false;
+    })
   }
 }

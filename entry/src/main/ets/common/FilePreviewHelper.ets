@@ -16,10 +16,10 @@ export interface FilePreviewResult {
 
 const PREVIEW_MIME_MAP: Record<string, string> = {
   'txt': 'text/plain',
-  'cpp': 'text/x-c',
-  'c': 'text/x-c',
-  'h': 'text/x-c',
-  'java': 'text/x-java-source',
+  'cpp': 'text/x-c++src',
+  'c': 'text/x-csrc',
+  'h': 'text/x-chdr',
+  'java': 'text/x-java',
   'xhtml': 'application/xhtml+xml',
   'xml': 'text/xml',
   'html': 'text/html',
@@ -109,7 +109,14 @@ export class FilePreviewHelper {
 
   /** 纯函数：清理不安全文件名字符并防止目录穿越 */
   public static sanitizeFileName(rawName: string, fallbackPrefix: string = 'attachment'): string {
-    const cleanPrefix: string = (fallbackPrefix || 'attachment').replace(/[\\/:*?"<>|]/g, '_') || 'attachment';
+    const cleanedPrefix: string = (fallbackPrefix || 'attachment')
+      .replace(/\.\.+/g, '_')
+      .replace(/[\\/:*?"<>|]/g, '_')
+      .replace(/^\.+/, '')
+      .trim();
+    const cleanPrefix: string = (cleanedPrefix === '' || cleanedPrefix === '.' || cleanedPrefix === '..' || /^_+$/.test(cleanedPrefix))
+      ? 'attachment'
+      : cleanedPrefix;
     if (!rawName || rawName.trim() === '') {
       return cleanPrefix;
     }
@@ -125,6 +132,37 @@ export class FilePreviewHelper {
       return cleanPrefix;
     }
     return replaced;
+  }
+
+  /** 纯函数：根据下载地址生成稳定哈希前缀并拼接安全文件名（避免不同 URL 同名碰撞） */
+  public static buildCachedFileName(resolvedUrl: string, fileName: string): string {
+    const safeName: string = FilePreviewHelper.sanitizeFileName(fileName, 'attachment');
+    const urlStr: string = (resolvedUrl || '').trim();
+    let hash: number = 2166136261;
+    for (let i = 0; i < urlStr.length; i++) {
+      hash ^= urlStr.charCodeAt(i);
+      hash = Math.imul(hash, 16777619) >>> 0;
+    }
+    const hex: string = (hash >>> 0).toString(16).padStart(8, '0');
+    return `${hex}_${safeName}`;
+  }
+
+  /** 纯函数：检测非 HTML 附件下载是否误返回了 HTML 登录/错误页 */
+  public static isUnexpectedHtmlResponse(
+    fileName: string,
+    contentType: string,
+    bodyPrefix: string
+  ): boolean {
+    const ext: string = FilePreviewHelper.extractExtension(fileName);
+    if (ext === 'html' || ext === 'htm' || ext === 'xhtml') {
+      return false;
+    }
+    const ctLower: string = (contentType || '').toLowerCase();
+    if (ctLower.indexOf('text/html') >= 0 || ctLower.indexOf('application/xhtml+xml') >= 0) {
+      return true;
+    }
+    const trimmedBody: string = (bodyPrefix || '').replace(/^\s+/, '').toLowerCase();
+    return trimmedBody.startsWith('<!doctype html') || trimmedBody.startsWith('<html');
   }
 
   /** 将沙箱绝对路径转为带 bundleName 授权的 file:// URI */
@@ -356,7 +394,8 @@ export class FilePreviewHelper {
     }
 
     const safeName: string = FilePreviewHelper.sanitizeFileName(fileName, 'attachment');
-    const targetPath: string = `${baseDir}/${safeName}`;
+    const cachedName: string = FilePreviewHelper.buildCachedFileName(resolvedUrl, safeName);
+    const targetPath: string = `${baseDir}/${cachedName}`;
 
     try {
       if (fs.accessSync(targetPath)) {
@@ -399,6 +438,31 @@ export class FilePreviewHelper {
           method: 'none',
           localPath: '',
           message: '附件内容为空'
+        };
+      }
+      let contentType: string = '';
+      if (resp.header) {
+        const headerRec = resp.header as Record<string, Object>;
+        const headerKeys: string[] = Object.keys(headerRec);
+        for (const k of headerKeys) {
+          if (k.toLowerCase() === 'content-type') {
+            const val: Object = headerRec[k];
+            contentType = typeof val === 'string' ? val as string : String(val);
+            break;
+          }
+        }
+      }
+      const headSlice: Uint8Array = new Uint8Array(buffer, 0, Math.min(256, buffer.byteLength));
+      let bodyPrefix: string = '';
+      for (let i = 0; i < headSlice.length; i++) {
+        bodyPrefix += String.fromCharCode(headSlice[i]);
+      }
+      if (FilePreviewHelper.isUnexpectedHtmlResponse(safeName, contentType, bodyPrefix)) {
+        return {
+          success: false,
+          method: 'none',
+          localPath: '',
+          message: '附件下载返回了网页登录页，请重新登录后重试'
         };
       }
       outFile = fs.openSync(targetPath, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);

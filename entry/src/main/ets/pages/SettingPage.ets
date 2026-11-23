@@ -2,12 +2,14 @@ import { router } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import fs from '@ohos.file.fs';
 import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 import { TitleBar } from '../components/TitleBar';
 import { ApiService } from '../network/ApiService';
 import { LoginSession } from '../network/LoginSession';
 import { ApiResponse } from '../model/ResponseModel';
 import { GestureManager, GesturePwdBean } from '../model/GestureManager';
 import { PrivacyWindowHelper } from '../common/PrivacyWindowHelper';
+import { BiometricAuthHelper, BiometricCapability } from '../common/BiometricAuthHelper';
 
 /**
  * 设置页 — 1:1 复刻 mobile_campus_activity_setting.xml
@@ -31,6 +33,14 @@ struct SettingPage {
     const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
     PrivacyWindowHelper.isEnabled(ctx).then((enabled: boolean) => {
       this.privacyWindowEnabled = enabled;
+    });
+    const cap: BiometricCapability = BiometricAuthHelper.checkCapability();
+    this.biometricSupported = BiometricAuthHelper.shouldOfferBiometricToggle(cap);
+    this.biometricHint = this.biometricSupported
+      ? cap.description
+      : '当前设备未录入指纹/人脸或锁屏密码，暂不可开启';
+    BiometricAuthHelper.isBiometricUnlockEnabled(ctx).then((enabled: boolean) => {
+      this.biometricEnabled = enabled && this.biometricSupported;
     });
   }
 
@@ -69,11 +79,17 @@ struct SettingPage {
   @State pushEnabled: boolean = true;
   @StorageLink(PrivacyWindowHelper.KEY_PRIVACY_WINDOW) privacyWindowEnabled: boolean =
     PrivacyWindowHelper.DEFAULT_PRIVACY_ENABLED;
+  @StorageLink(BiometricAuthHelper.KEY_BIOMETRIC_ENABLED) biometricEnabled: boolean =
+    BiometricAuthHelper.DEFAULT_BIOMETRIC_ENABLED;
+  @State biometricSupported: boolean = false;
+  @State biometricHint: string = '当前设备未录入或不支持生物识别';
   @State showUpdateDialog: boolean = false;
   /** [W22 launch-chain] SettingActivity h() 手势密码链：校验密码弹窗态 + 输入值 */
   @State showGesturePwdDialog: boolean = false;
   @State checkPassword: string = '';
   @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 780;
   @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
 
   /** 源码 h.onClick（llGesturePwdLayout）：GestureManager.b(userId) 有已存手势 →
@@ -129,66 +145,85 @@ struct SettingPage {
     if (this.showGesturePwdDialog) {
       Column() {
         Column() {
-        Text('校验密码')
-          .fontSize(16)
-          .fontColor($r('app.color.common_color_1'))
-          .textAlign(TextAlign.Center)
+          Scroll() {
+            Column() {
+              Text('校验密码')
+                .fontSize(16)
+                .fontColor($r('app.color.common_color_1'))
+                .textAlign(TextAlign.Center)
+                .width('100%')
+                .padding({ top: 20 })
+              Text('请输入登录密码验证身份...')
+                .fontSize(14)
+                .fontColor($r('app.color.common_color_2'))
+                .textAlign(TextAlign.Center)
+                .width('100%')
+                .padding({ left: 24, right: 24, top: 12 })
+              TextInput({ placeholder: '登录密码', text: this.checkPassword })
+                .type(InputType.Password)
+                .fontSize(15)
+                .height(42)
+                .margin({ left: 24, right: 24, top: 12 })
+                .enterKeyType(EnterKeyType.Done)
+                .onSubmit(() => {
+                  this.submitCheckPassword();
+                })
+                .onChange((value: string) => {
+                  this.checkPassword = value;
+                })
+              Divider()
+                .color($r('app.color.common_color_6'))
+                .strokeWidth(0.5)
+                .margin({ top: 16 })
+              Row() {
+                Text('取消')
+                  .fontSize(15)
+                  .fontColor($r('app.color.common_color_1'))
+                  .textAlign(TextAlign.Center)
+                  .layoutWeight(1)
+                  .padding({ top: 12, bottom: 12 })
+                  .hoverEffect(HoverEffect.Highlight)
+                  .onClick(() => {
+                    this.cancelCheckPassword();
+                  })
+                Divider()
+                  .vertical(true)
+                  .color($r('app.color.common_color_6'))
+                  .strokeWidth(0.5)
+                  .height(40)
+                Text('确定')
+                  .fontSize(15)
+                  .fontColor($r('app.color.mobile_campus_primary_color'))
+                  .textAlign(TextAlign.Center)
+                  .layoutWeight(1)
+                  .padding({ top: 12, bottom: 12 })
+                  .hoverEffect(HoverEffect.Highlight)
+                  .onClick(() => {
+                    this.submitCheckPassword();
+                  })
+              }
+              .alignItems(VerticalAlign.Center)
+            }
+            .width('100%')
+          }
           .width('100%')
-          .padding({ top: 20 })
-        Text('请输入登录密码验证身份...')
-          .fontSize(14)
-          .fontColor($r('app.color.common_color_2'))
-          .textAlign(TextAlign.Center)
-          .width('100%')
-          .padding({ left: 24, right: 24, top: 12 })
-        TextInput({ placeholder: '登录密码', text: this.checkPassword })
-          .type(InputType.Password)
-          .fontSize(15)
-          .height(42)
-          .margin({ left: 24, right: 24, top: 12 })
-          .onChange((value: string) => {
-            this.checkPassword = value;
-          })
-        Divider()
-          .color($r('app.color.common_color_6'))
-          .strokeWidth(0.5)
-          .margin({ top: 16 })
-        Row() {
-          Text('取消')
-            .fontSize(15)
-            .fontColor($r('app.color.common_color_1'))
-            .textAlign(TextAlign.Center)
-            .layoutWeight(1)
-            .padding({ top: 12, bottom: 12 })
-            .onClick(() => {
-              this.cancelCheckPassword();
-            })
-          Divider()
-            .vertical(true)
-            .color($r('app.color.common_color_6'))
-            .strokeWidth(0.5)
-            .height(40)
-          Text('确定')
-            .fontSize(15)
-            .fontColor($r('app.color.mobile_campus_primary_color'))
-            .textAlign(TextAlign.Center)
-            .layoutWeight(1)
-            .padding({ top: 12, bottom: 12 })
-            .onClick(() => {
-              this.submitCheckPassword();
-            })
+          .scrollBar(BarState.Off)
         }
-        .alignItems(VerticalAlign.Center)
-        }
-        .width(280)
+        .width(AdaptiveLayoutHelper.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp))
+        .constraintSize({ maxHeight: AdaptiveLayoutHelper.getDialogMaxHeight(this.windowHeightVp) })
         .backgroundColor($r('app.color.ybg_white'))
-        .borderRadius(6)
+        .borderRadius(8)
+        .clip(true)
+        .onClick(() => {
+          // 拦截弹窗卡片点击
+        })
       }
       .width('100%')
       .height('100%')
+      .padding({ left: 16, right: 16 })
       .justifyContent(FlexAlign.Center)
       .alignItems(HorizontalAlign.Center)
-      .backgroundColor('rgba(0,0,0,0.35)')
+      .backgroundColor('#66000000')
     }
   }
 
@@ -251,6 +286,7 @@ struct SettingPage {
           .padding({ left: 12, right: 12 })
           .alignItems(VerticalAlign.Center)
           .backgroundColor($r('app.color.white'))
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             this.checkUpdate();
           })
@@ -274,6 +310,7 @@ struct SettingPage {
           .padding({ left: 12, right: 12 })
           .alignItems(VerticalAlign.Center)
           .backgroundColor($r('app.color.white'))
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             this.clearCache();
           })
@@ -293,6 +330,7 @@ struct SettingPage {
           .padding({ left: 12, right: 12 })
           .alignItems(VerticalAlign.Center)
           .backgroundColor($r('app.color.white'))
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             router.pushUrl({ url: 'pages/FontSizePage' });
           })
@@ -308,6 +346,7 @@ struct SettingPage {
             Toggle({ type: ToggleType.Switch, isOn: this.pushEnabled })
               .selectedColor($r('app.color.blue_default'))
               .switchPointColor($r('app.color.white'))
+              .hoverEffect(HoverEffect.Highlight)
               .onChange((isOn: boolean) => {
                 this.pushEnabled = isOn;
               })
@@ -334,9 +373,53 @@ struct SettingPage {
           .padding({ left: 12, right: 12 })
           .alignItems(VerticalAlign.Center)
           .backgroundColor($r('app.color.white'))
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             this.onGestureRow();
           })
+
+          this.settingDivider()
+
+          // 生物识别快捷验证 + Switch
+          Row() {
+            Column() {
+              Text('生物识别快捷验证')
+                .fontSize(16)
+                .fontColor($r('app.color.common_color_1'))
+              Text(this.biometricHint)
+                .fontSize(12)
+                .fontColor($r('app.color.common_color_3'))
+                .margin({ top: 2 })
+            }
+            .layoutWeight(1)
+            .alignItems(HorizontalAlign.Start)
+
+            Toggle({ type: ToggleType.Switch, isOn: this.biometricEnabled })
+              .selectedColor($r('app.color.blue_default'))
+              .switchPointColor($r('app.color.white'))
+              .enabled(this.biometricSupported || this.biometricEnabled)
+              .hoverEffect(HoverEffect.Highlight)
+              .onChange((isOn: boolean) => {
+                if (this.biometricEnabled === isOn) {
+                  return;
+                }
+                if (isOn && !this.biometricSupported) {
+                  this.biometricEnabled = false;
+                  this.getUIContext().getPromptAction().showToast({
+                    message: '当前设备未录入指纹、人脸或锁屏密码，无法开启'
+                  });
+                  return;
+                }
+                this.biometricEnabled = isOn;
+                const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+                BiometricAuthHelper.setBiometricUnlockEnabled(isOn, ctx);
+              })
+          }
+          .width('100%')
+          .constraintSize({ minHeight: 56 })
+          .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+          .alignItems(VerticalAlign.Center)
+          .backgroundColor($r('app.color.white'))
 
           this.settingDivider()
 
@@ -357,6 +440,7 @@ struct SettingPage {
             Toggle({ type: ToggleType.Switch, isOn: this.privacyWindowEnabled })
               .selectedColor($r('app.color.blue_default'))
               .switchPointColor($r('app.color.white'))
+              .hoverEffect(HoverEffect.Highlight)
               .onChange((isOn: boolean) => {
                 if (this.privacyWindowEnabled === isOn) {
                   return;
@@ -387,6 +471,7 @@ struct SettingPage {
           .padding({ left: 12, right: 12 })
           .alignItems(VerticalAlign.Center)
           .backgroundColor($r('app.color.white'))
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             router.pushUrl({ url: 'pages/PrivacySettingsPage' });
           })
@@ -408,6 +493,7 @@ struct SettingPage {
           .padding({ left: 12, right: 12 })
           .alignItems(VerticalAlign.Center)
           .backgroundColor($r('app.color.white'))
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             router.pushUrl({
               url: 'pages/PrivacyTextPage',
@@ -430,6 +516,7 @@ struct SettingPage {
           .padding({ left: 12, right: 12 })
           .alignItems(VerticalAlign.Center)
           .backgroundColor($r('app.color.white'))
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             router.pushUrl({
               url: 'pages/PrivacyTextPage',
@@ -456,6 +543,7 @@ struct SettingPage {
           .padding({ left: 12, right: 12 })
           .alignItems(VerticalAlign.Center)
           .backgroundColor($r('app.color.white'))
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             router.pushUrl({ url: 'pages/AboutPage' });
           })

@@ -53,6 +53,7 @@ export struct TitleBar {
             .borderRadius(17)
             .systemMaterial(ImmersiveLightHelper.pillMaterial())
             .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.94 })
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               if (this.onBack !== null) {
                 this.onBack();
@@ -74,6 +75,7 @@ export struct TitleBar {
             .height(35)
             .objectFit(ImageFit.Contain)
             .margin({ right: 12 })
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               if (this.onRightClick !== null) {
                 this.onRightClick();
@@ -95,6 +97,7 @@ export struct TitleBar {
                 color: $r('app.color.common_color_4')
               })
               .margin({ right: 15 })
+              .hoverEffect(HoverEffect.Highlight)
               .onClick(() => {
                 if (this.rightEnabled && this.onRightClick !== null) {
                   this.onRightClick();
@@ -109,6 +112,7 @@ export struct TitleBar {
               .margin({ right: 12 })
               .systemMaterial(ImmersiveLightHelper.pillMaterial())
               .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.95 })
+              .hoverEffect(HoverEffect.Highlight)
               .onClick(() => {
                 if (this.onRightClick !== null) {
                   this.onRightClick();

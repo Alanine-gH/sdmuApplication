@@ -5,6 +5,8 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { TitleBar } from '../components/TitleBar';
 import { LoginSession } from '../network/LoginSession';
 import { MeetingExtraEntity, MeetingExtraDataEntity } from '../model/MeetingApiModel';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 参会人员情况页 — MeetingStaffSituationActivity.java(186行) 源码级翻译
@@ -42,6 +44,11 @@ struct MeetingStaffSituationPage {
   /** 理由弹窗（MeetingEditeDialog） */
   @State showReasonDialog: boolean = false;
   @State reasonText: string = '';
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 640;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('keyboardHeightVp') keyboardHeightVp: number = 0;
   private xlh: string = '';
   private hyid: string = '';
 
@@ -234,19 +241,26 @@ struct MeetingStaffSituationPage {
           .width(20)
           .height(20)
           .margin({ right: 15 })
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             this.openSignPage();
           })
-        List() {
-          ForEach(this.extras, (group: MeetingExtraEntity, index: number) => {
-            ListItem() {
-              this.groupSection(group, index)
-            }
-          }, (group: MeetingExtraEntity, index: number) => group.TYPE + '_' + String(index))
+        Row() {
+          List() {
+            ForEach(this.extras, (group: MeetingExtraEntity, index: number) => {
+              ListItem() {
+                this.groupSection(group, index)
+              }
+            }, (group: MeetingExtraEntity, index: number) => group.TYPE + '_' + String(index))
+          }
+          .width('100%')
+          .height('100%')
+          .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+          .scrollBar(BarState.Off)
         }
         .width('100%')
         .layoutWeight(1)
-        .scrollBar(BarState.Off)
+        .justifyContent(FlexAlign.Center)
 
         // layoutContainer：widget.d 底栏（arrow_down + "回到会议详情"）
         this.bottomBar()
@@ -264,6 +278,7 @@ struct MeetingStaffSituationPage {
     .height('100%')
     .backgroundColor($r('app.color.mobile_campus_bg_color'))
     .alignContent(Alignment.Center)
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
   }
 
   /** 分组：组头（40dip 白底）+ 子区（横向 grid / 纵向行 / 外部人员行） */
@@ -308,8 +323,17 @@ struct MeetingStaffSituationPage {
         }
       }, (person: MeetingExtraDataEntity) => group.TYPE + '_' + person.YHID + '_' + String(person.XLH))
     }
-    .columnsTemplate('1fr 1fr 1fr 1fr 1fr')
+    .columnsTemplate(AdaptiveLayoutHelper.buildColumnsTemplate(
+      BreakpointSystem.getGridColumns(this.currentBreakpoint, 5)
+    ))
     .width('100%')
+    .height(AdaptiveLayoutHelper.computeGridHeightVp(
+      group.DATA.length,
+      BreakpointSystem.getGridColumns(this.currentBreakpoint, 5),
+      86,
+      0,
+      24
+    ))
     .padding(12)
     .backgroundColor($r('app.color.white'))
   }
@@ -473,12 +497,13 @@ struct MeetingStaffSituationPage {
       .width('100%')
       .height(47.5)
       .justifyContent(FlexAlign.Center)
+      .hoverEffect(HoverEffect.Highlight)
       .onClick(() => {
         this.backToDetail();
       })
     }
     .width('100%')
-    .height(48)
+    .padding({ bottom: this.avoidAreaBottomVp })
     .backgroundColor($r('app.color.white'))
   }
 
@@ -486,42 +511,65 @@ struct MeetingStaffSituationPage {
   @Builder
   reasonDialog() {
     Column() {
-      Text('不参与会议的原因')
-        .fontSize(17)
-        .fontColor($r('app.color.common_color_1'))
-        .margin({ top: 8 })
-      TextArea({
-        text: this.reasonText,
-        placeholder: '请输入不参与会议原因'
+      Scroll() {
+        Column() {
+          Text('不参与会议的原因')
+            .fontSize(17)
+            .fontColor($r('app.color.common_color_1'))
+            .margin({ top: 12 })
+          TextArea({
+            text: this.reasonText,
+            placeholder: '请输入不参与会议原因'
+          })
+            .fontSize(16)
+            .fontColor($r('app.color.common_color_1'))
+            .backgroundColor($r('app.color.mobile_campus_bg_color'))
+            .width('100%')
+            .height(68)
+            .margin({ top: 8, bottom: 8 })
+            .maxLength(50)
+            .onChange((value: string) => {
+              this.reasonText = value;
+            })
+          Divider()
+            .color($r('app.color.common_color_5'))
+            .strokeWidth(0.5)
+            .width('100%')
+          Text('提交')
+            .fontSize(17)
+            .fontColor($r('app.color.mobile_campus_primary_color_default'))
+            .textAlign(TextAlign.Center)
+            .width('100%')
+            .height(44)
+            .hoverEffect(HoverEffect.Highlight)
+            .onClick(() => {
+              this.submitReason();
+            })
+        }
+        .width('100%')
+        .padding({ left: 12, right: 12 })
+        .alignItems(HorizontalAlign.Center)
+      }
+      .width('100%')
+      .constraintSize({
+        maxWidth: BreakpointSystem.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp),
+        maxHeight: BreakpointSystem.getDialogMaxHeight(this.windowHeightVp)
       })
-        .fontSize(16)
-        .fontColor($r('app.color.common_color_1'))
-        .backgroundColor($r('app.color.mobile_campus_bg_color'))
-        .width(246)
-        .height(68)
-        .margin({ top: 8, bottom: 8 })
-        .maxLength(50)
-        .onChange((value: string) => {
-          this.reasonText = value;
-        })
-      Divider()
-        .color($r('app.color.common_color_5'))
-        .strokeWidth(0.5)
-        .width('100%')
-      Text('提交')
-        .fontSize(17)
-        .fontColor($r('app.color.mobile_campus_primary_color_default'))
-        .textAlign(TextAlign.Center)
-        .width('100%')
-        .height(44)
-        .onClick(() => {
-          this.submitReason();
-        })
+      .borderRadius(8)
+      .backgroundColor($r('app.color.white'))
+      .clip(true)
+      .onClick(() => {
+        // 拦截弹窗内部点击
+      })
     }
-    .width(270)
-    .borderRadius(8)
-    .backgroundColor($r('app.color.white'))
+    .width('100%')
+    .height('100%')
+    .padding({ left: 16, right: 16, bottom: this.keyboardHeightVp })
+    .backgroundColor('#66000000')
+    .justifyContent(FlexAlign.Center)
     .alignItems(HorizontalAlign.Center)
-    .clip(true)
+    .onClick(() => {
+      this.showReasonDialog = false;
+    })
   }
 }

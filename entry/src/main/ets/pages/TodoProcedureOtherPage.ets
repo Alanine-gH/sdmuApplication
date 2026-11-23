@@ -10,6 +10,8 @@ import { TitleBar } from '../components/TitleBar';
 import { LoadingView } from '../components/LoadingView';
 import { EmptyView } from '../components/EmptyView';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 流程处理页 — 源码级翻译（W23）：
@@ -74,6 +76,7 @@ struct ProcedureUserGrid {
   @Prop gridType: string = '1';
   /** ownerSelectType=="2" 只读基座行数（TodoProcedureAdapter.f：i<baseSize 隐藏 checkbox 不可点） */
   @Prop readonlyBase: number = 0;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
   onAdd?: () => void;
   onToggle?: (index: number) => void;
 
@@ -160,7 +163,9 @@ struct ProcedureUserGrid {
         }
       }
     }
-    .columnsTemplate('1fr 1fr 1fr 1fr 1fr')
+    .columnsTemplate(AdaptiveLayoutHelper.buildColumnsTemplate(
+      BreakpointSystem.getGridColumns(this.currentBreakpoint, 5)
+    ))
     .rowsGap(8)
     .height(this.gridHeight(this.users.length, this.collapsed))
     .width('100%')
@@ -175,8 +180,8 @@ struct ProcedureUserGrid {
     if (this.showAdd) {
       shown = shown + 1;
     }
-    const rows: number = Math.max(1, Math.ceil(shown / 5));
-    return rows * 74 + 24;
+    const cols: number = BreakpointSystem.getGridColumns(this.currentBreakpoint, 5);
+    return Math.max(98, AdaptiveLayoutHelper.computeGridHeightVp(shown, cols, 66, 8, 24));
   }
 }
 
@@ -346,6 +351,12 @@ struct TodoProcedureOtherPage {
   @State signSealId: string = '';
   /** 源码 H3→u.a(z)：校验通过才可点提交（buttonMapList 全体 c(z)） */
   @State actionButtonsEnabled: boolean = true;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 640;
+  @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('keyboardHeightVp') keyboardHeightVp: number = 0;
   /** 入参管道 */
   private processid: string = '';
   private unid: string = '';
@@ -1493,8 +1504,13 @@ struct TodoProcedureOtherPage {
         .width('100%')
         .layoutWeight(1)
       } else if (this.failed) {
-        Column() {
-          EmptyView({ tipText: this.loadErrMsg === '' ? '流程数据获取失败' : this.loadErrMsg })
+        Scroll() {
+          Column() {
+            EmptyView({ tipText: this.loadErrMsg === '' ? '流程数据获取失败' : this.loadErrMsg })
+          }
+          .width('100%')
+          .constraintSize({ minHeight: 320 })
+          .justifyContent(FlexAlign.Center)
         }
         .width('100%')
         .layoutWeight(1)
@@ -1513,6 +1529,7 @@ struct TodoProcedureOtherPage {
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.main_bg'))
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
   }
 
   /** 主内容：下一环节区 + 抄送区 + 意见区 + 电子签章区 + 底部按钮列 */
@@ -1533,12 +1550,25 @@ struct TodoProcedureOtherPage {
           }
         }
         .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
+        .padding({ bottom: this.keyboardHeightVp })
       }
       .scrollBar(BarState.Off)
       .width('100%')
       .layoutWeight(1)
 
-      this.processBtnBar()
+      Row() {
+        Column() {
+          this.processBtnBar()
+        }
+        .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+      }
+      .width('100%')
+      .justifyContent(FlexAlign.Center)
+      .padding({ bottom: this.avoidAreaBottomVp })
+      .backgroundColor($r('app.color.white'))
     }
     .width('100%')
     .height('100%')
@@ -2008,14 +2038,6 @@ struct TodoProcedureOtherPage {
   @Builder
   otherLayer() {
     Column() {
-      Column()
-        .width('100%')
-        .layoutWeight(1)
-        .backgroundColor('rgba(0,0,0,0.35)')
-        .onClick(() => {
-          // 源码弹层独立 Activity：返回=取消（tvCancel 语义）
-        })
-
       Column() {
         Row() {
           Text(this.otherActionName)
@@ -2028,6 +2050,7 @@ struct TodoProcedureOtherPage {
             .fontSize(15)
             .fontColor($r('app.color.common_color_1'))
             .padding({ left: 8, right: 8 })
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               this.showOtherLayer = false;
             })
@@ -2093,6 +2116,7 @@ struct TodoProcedureOtherPage {
             .layoutWeight(1)
             .textAlign(TextAlign.Center)
             .height('100%')
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               this.showOtherLayer = false;
             })
@@ -2103,6 +2127,7 @@ struct TodoProcedureOtherPage {
             .layoutWeight(1)
             .textAlign(TextAlign.Center)
             .height('100%')
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               this.confirmOtherLayer();
             })
@@ -2111,12 +2136,32 @@ struct TodoProcedureOtherPage {
         .height(48)
       }
       .width('100%')
-      .height('82%')
+      .constraintSize({
+        maxWidth: AdaptiveLayoutHelper.getSheetMaxWidth(this.currentBreakpoint, this.windowWidthVp),
+        maxHeight: BreakpointSystem.getDialogMaxHeight(this.windowHeightVp)
+      })
+      .height(BreakpointSystem.getDialogMaxHeight(this.windowHeightVp))
       .backgroundColor($r('app.color.white'))
+      .borderRadius(AdaptiveLayoutHelper.shouldUseCenterSheet(this.currentBreakpoint, this.isCompactHeight) ?
+        12 : { topLeft: 12, topRight: 12 })
+      .clip(true)
+      .padding({
+        bottom: AdaptiveLayoutHelper.shouldUseCenterSheet(this.currentBreakpoint, this.isCompactHeight) ?
+          0 : this.avoidAreaBottomVp
+      })
+      .onClick(() => {
+        // 拦截弹窗内点击
+      })
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('rgba(0,0,0,0.35)')
+    .backgroundColor('#66000000')
+    .alignItems(HorizontalAlign.Center)
+    .justifyContent(AdaptiveLayoutHelper.shouldUseCenterSheet(this.currentBreakpoint, this.isCompactHeight) ?
+      FlexAlign.Center : FlexAlign.End)
+    .onClick(() => {
+      this.showOtherLayer = false;
+    })
   }
 
   private returnNodeLabels(): string[] {

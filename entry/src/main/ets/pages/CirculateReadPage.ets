@@ -4,6 +4,8 @@ import { ApiResponse } from '../model/ResponseModel';
 import { OaSubDeptUser } from '../model/OaTodoModel';
 import { TitleBar } from '../components/TitleBar';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 传阅页 — 源码级翻译（W23，原空占位重写）：
@@ -37,6 +39,8 @@ const COPY_SEPARATOR: string = ',';
 struct CirculateReadPage {
   @State users: OaSubDeptUser[] = [];
   @State canSubmit: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   private nav: CirculateNavParams = { processId: '', docUnid: '' };
 
   aboutToAppear(): void {
@@ -175,6 +179,9 @@ struct CirculateReadPage {
             this.copyArea()
           }
           .width('100%')
+          .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+          .alignSelf(ItemAlign.Center)
+          .padding({ bottom: Math.max(56, this.avoidAreaBottomVp + 56) })
         }
         .scrollBar(BarState.Off)
         .width('100%')
@@ -188,7 +195,8 @@ struct CirculateReadPage {
           .width(113)
           .height(44)
           .textAlign(TextAlign.Center)
-          .margin({ right: 0, bottom: 0 })
+          .margin({ right: 0, bottom: this.avoidAreaBottomVp })
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             if (this.canSubmit) {
               this.submitCirculate();
@@ -201,6 +209,7 @@ struct CirculateReadPage {
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.white'))
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
   }
 
   /** CopyViewLayout（默认标题"抄送人员"） */
@@ -222,6 +231,7 @@ struct CirculateReadPage {
             .height(18)
             .padding(4)
             .margin({ right: 16 })
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               this.clearUsers();
             })
@@ -272,6 +282,7 @@ struct CirculateReadPage {
                 .textAlign(TextAlign.Center)
             }
             .alignItems(HorizontalAlign.Center)
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               this.toggleUser(index);
             })
@@ -292,17 +303,26 @@ struct CirculateReadPage {
               .margin({ top: 8 })
           }
           .alignItems(HorizontalAlign.Center)
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             this.openUserPicker();
           })
         }
         .visibility(this.users.length < 200 ? Visibility.Visible : Visibility.None)
       }
-      .columnsTemplate('1fr 1fr 1fr 1fr 1fr')
+      .columnsTemplate(AdaptiveLayoutHelper.buildColumnsTemplate(
+        BreakpointSystem.getGridColumns(this.currentBreakpoint, 5)
+      ))
       .rowsGap(8)
       .padding(12)
       .width('100%')
-      .height(this.users.length <= 5 ? 100 : 174)
+      .height(AdaptiveLayoutHelper.computeGridHeightVp(
+        this.users.length + (this.users.length < 200 ? 1 : 0),
+        BreakpointSystem.getGridColumns(this.currentBreakpoint, 5),
+        76,
+        8,
+        24
+      ))
 
       Column()
         .width('100%')

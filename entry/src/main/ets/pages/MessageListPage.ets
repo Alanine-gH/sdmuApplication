@@ -4,6 +4,9 @@ import { ApiResponse } from '../model/ResponseModel';
 import { MainNotificationV2, MessageExtAppBean, MessageSystemSwitch } from '../model/MessageModel';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { LoadingView } from '../components/LoadingView';
+import { EmptyView } from '../components/EmptyView';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper, SplitPaneConfig } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 消息列表页 — 1:1 翻译原 APK MessageListActivity.java(494行) + MessageFragment.java(426行)
@@ -97,6 +100,16 @@ struct MessageListPage {
   @State swAllRead: string = '';
   @State swAllDelete: string = '';
   @State swBatchDelete: string = '';
+  @State selectedMsg: MainNotificationV2 | null = null;
+  @State selectedMsgContent: string = '';
+  @State detailLoading: boolean = false;
+  @State detailError: string = '';
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 780;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
 
   aboutToAppear(): void {
     // 源码 MessageListActivity.f1 → Q2()（页签）+ R2()（SystemSwitch 三开关）
@@ -365,6 +378,16 @@ struct MessageListPage {
 
   /** 源码 d.onItemClick 跳转段：isEmc → 详情(无CONTENT)；EXT 无 LX → 详情(带CONTENT/SENDBY)；有 LX → AppRouterUtils.f */
   private jumpByMessage(item: MainNotificationV2, idx: number): void {
+    const splitCfg: SplitPaneConfig =
+      AdaptiveLayoutHelper.getSplitPaneConfig(this.currentBreakpoint, this.windowWidthVp);
+    if (!splitCfg.useTwoPane) {
+      this.openMessageFullPage(item);
+      return;
+    }
+    this.selectMessageForPreview(item);
+  }
+
+  private openMessageFullPage(item: MainNotificationV2): void {
     if (item.isEmc === 1) {
       this.openDetail(item, false);
       return;
@@ -377,6 +400,41 @@ struct MessageListPage {
     ext.xxTitle = item.TITLE;
     ext.xxContent = item.CONTENT;
     this.jumpByLx(ext);
+  }
+
+  private selectMessageForPreview(item: MainNotificationV2): void {
+    this.selectedMsg = item;
+    this.detailError = '';
+    this.selectedMsgContent = item.CONTENT;
+    if (item.CONTENT !== '') {
+      this.detailLoading = false;
+      return;
+    }
+    this.detailLoading = true;
+    const xlh: string = item.XLH;
+    ApiService.getEmcMessageContent(item.XLH, item.channelCode)
+      .then((response: ApiResponse<Object>) => {
+        if (response.code === 1000) {
+          this.detailLoading = false;
+          return;
+        }
+        if (this.selectedMsg === null || this.selectedMsg.XLH !== xlh) {
+          return;
+        }
+        this.detailLoading = false;
+        if (response.code === 0) {
+          this.selectedMsgContent = typeof response.data === 'string' ? response.data as string : '';
+        } else {
+          this.detailError = response.message === '' ? '获取消息详情失败' : response.message;
+        }
+      })
+      .catch((error: BusinessError) => {
+        ApiService.logError('MessageListPage inline detail fail: ' + error.message);
+        if (this.selectedMsg !== null && this.selectedMsg.XLH === xlh) {
+          this.detailLoading = false;
+          this.detailError = '网络异常，请稍后重试';
+        }
+      });
   }
 
   /** 源码 U1/c2 → g2(activity, e.a.C0, bundle) = EmcMessageDetailActivity（/main/notification_detail） */
@@ -732,19 +790,61 @@ struct MessageListPage {
     Stack() {
       Column() {
         this.topBar()
-        this.tabBar()
-        this.swiperArea()
-        if (this.editMode === 1) {
-          Text('删除（' + this.deleteCount + '）')
-            .fontSize(16)
-            .fontColor($r('app.color.read_dot_bg'))
-            .textAlign(TextAlign.Center)
-            .width('100%')
-            .padding({ top: 15, bottom: 15 })
-            .backgroundColor($r('app.color.white'))
-            .onClick(() => {
-              this.onTvDeleteClick();
-            })
+        if (AdaptiveLayoutHelper.getSplitPaneConfig(this.currentBreakpoint, this.windowWidthVp).useTwoPane) {
+          Row() {
+            Column() {
+              this.tabBar()
+              this.swiperArea()
+              if (this.editMode === 1) {
+                Text('删除（' + this.deleteCount + '）')
+                  .fontSize(16)
+                  .fontColor($r('app.color.read_dot_bg'))
+                  .textAlign(TextAlign.Center)
+                  .width('100%')
+                  .padding({ top: 15, bottom: 15 })
+                  .backgroundColor($r('app.color.white'))
+                  .hoverEffect(HoverEffect.Highlight)
+                  .onClick(() => {
+                    this.onTvDeleteClick();
+                  })
+              }
+            }
+            .layoutWeight(AdaptiveLayoutHelper.getSplitPaneConfig(
+              this.currentBreakpoint, this.windowWidthVp).masterRatio)
+            .height('100%')
+
+            Divider()
+              .vertical(true)
+              .width(0.5)
+              .height('100%')
+              .color($r('app.color.common_color_5'))
+
+            Column() {
+              this.messageDetailPane()
+            }
+            .layoutWeight(AdaptiveLayoutHelper.getSplitPaneConfig(
+              this.currentBreakpoint, this.windowWidthVp).detailRatio)
+            .height('100%')
+          }
+          .width('100%')
+          .layoutWeight(1)
+          .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
+        } else {
+          this.tabBar()
+          this.swiperArea()
+          if (this.editMode === 1) {
+            Text('删除（' + this.deleteCount + '）')
+              .fontSize(16)
+              .fontColor($r('app.color.read_dot_bg'))
+              .textAlign(TextAlign.Center)
+              .width('100%')
+              .padding({ top: 15, bottom: 15 })
+              .backgroundColor($r('app.color.white'))
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick(() => {
+                this.onTvDeleteClick();
+              })
+          }
         }
       }
       .width('100%')
@@ -776,6 +876,7 @@ struct MessageListPage {
             .height(35)
             .objectFit(ImageFit.Contain)
             .margin({ left: 5 })
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               router.back();
             })
@@ -786,6 +887,7 @@ struct MessageListPage {
               .fontColor('#333333')
               .maxLines(1)
               .padding({ right: 15 })
+              .hoverEffect(HoverEffect.Highlight)
               .onClick(() => {
                 this.toggleEditMode();
               })
@@ -796,6 +898,7 @@ struct MessageListPage {
               .objectFit(ImageFit.Contain)
               .padding(2.5)
               .margin({ right: 5 })
+              .hoverEffect(HoverEffect.Highlight)
               .onClick(() => {
                 this.onEditIconClick();
               })
@@ -855,6 +958,7 @@ struct MessageListPage {
           .alignItems(HorizontalAlign.Center)
           .justifyContent(FlexAlign.Center)
           .layoutWeight(1)
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             this.currentTab = idx;
           })
@@ -922,6 +1026,7 @@ struct MessageListPage {
             .borderRadius(4)
             .border({ width: 1, color: '#1B68B7' })
             .margin({ top: 24 })
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               this.reloadTab(idx);
             })
@@ -1037,9 +1142,11 @@ struct MessageListPage {
         .padding({ left: 10 })
       }
       .width('100%')
-      .backgroundColor($r('app.color.white'))
+      .backgroundColor(this.selectedMsg !== null && this.selectedMsg.XLH === row.XLH
+        ? '#EEF5FC' : $r('app.color.white'))
       .padding({ left: 10, top: 12, right: 15, bottom: 12 })
       .alignItems(VerticalAlign.Top)
+      .hoverEffect(HoverEffect.Highlight)
       .onClick(() => {
         this.onItemTap(row, idx, pos);
       })
@@ -1054,6 +1161,107 @@ struct MessageListPage {
     .width('100%')
   }
 
+  /** 双栏右侧消息详情预览面板 */
+  @Builder
+  messageDetailPane() {
+    Column() {
+      if (this.selectedMsg === null) {
+        Column() {
+          EmptyView({ tipText: '请选择左侧消息查看详情' })
+        }
+        .width('100%')
+        .height('100%')
+      } else {
+        Scroll() {
+          Column({ space: 12 }) {
+            Column({ space: 8 }) {
+              Text(this.selectedMsg.TITLE)
+                .fontSize(18)
+                .fontWeight(FontWeight.Medium)
+                .fontColor('#333333')
+                .width('100%')
+              if (this.selectedMsg.SENDBY !== '') {
+                Text('发布人员：' + this.selectedMsg.SENDBY)
+                  .fontSize(13)
+                  .fontColor('#999999')
+              }
+              if (this.selectedMsg.SENDTIME !== '') {
+                Text('发布日期：' + this.selectedMsg.SENDTIME)
+                  .fontSize(13)
+                  .fontColor('#999999')
+              }
+              Row() {
+                Text('打开完整页面')
+                  .fontSize(14)
+                  .fontColor($r('app.color.white'))
+                  .padding({ left: 18, right: 18, top: 9, bottom: 9 })
+                  .borderRadius(6)
+                  .backgroundColor('#1B68B7')
+                  .hoverEffect(HoverEffect.Highlight)
+                  .onClick(() => {
+                    if (this.selectedMsg !== null) {
+                      this.openMessageFullPage(this.selectedMsg);
+                    }
+                  })
+              }
+              .width('100%')
+              .justifyContent(FlexAlign.End)
+              .margin({ top: 4 })
+            }
+            .width('100%')
+            .padding(16)
+            .borderRadius(8)
+            .backgroundColor($r('app.color.white'))
+            .alignItems(HorizontalAlign.Start)
+
+            if (this.detailLoading) {
+              Column() {
+                LoadingView()
+              }
+              .width('100%')
+              .height(160)
+              .backgroundColor($r('app.color.white'))
+              .borderRadius(8)
+            } else if (this.detailError !== '') {
+              Column() {
+                Text(this.detailError)
+                  .fontSize(14)
+                  .fontColor('#999999')
+              }
+              .width('100%')
+              .padding(16)
+              .backgroundColor($r('app.color.white'))
+              .borderRadius(8)
+              .alignItems(HorizontalAlign.Center)
+            } else {
+              Column() {
+                Text(this.selectedMsgContent === '' ? '暂无正文内容，请点击上方按钮查看完整页面' : this.selectedMsgContent)
+                  .fontSize(16)
+                  .fontColor('#333333')
+                  .lineHeight(24)
+                  .width('100%')
+              }
+              .width('100%')
+              .padding(16)
+              .borderRadius(8)
+              .backgroundColor($r('app.color.white'))
+              .alignItems(HorizontalAlign.Start)
+            }
+          }
+          .width('100%')
+          .padding({ left: 16, right: 16, top: 16, bottom: Math.max(16, this.avoidAreaBottomVp) })
+        }
+        .width('100%')
+        .height('100%')
+        .scrollBar(BarState.Off)
+        .align(Alignment.Top)
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor('#F2F2F2')
+  }
+
   /** layout_message_popup_dialog.xml：三角(sanjiaoxing #434343) + 深灰菜单(#434343 r8) */
   @Builder
   popupOverlay() {
@@ -1061,6 +1269,7 @@ struct MessageListPage {
       Column()
         .width('100%')
         .height('100%')
+        .backgroundColor('#66000000')
         .onClick(() => {
           this.showPopup = false;
         })
@@ -1078,51 +1287,65 @@ struct MessageListPage {
         }
         .width(150)
         .height(18)
-        Column() {
-          if (this.popupFlags().showAllRead) {
-            Text('全部已读')
-              .fontSize(14)
-              .fontColor($r('app.color.white'))
-              .padding({ left: 16, right: 16, top: 10, bottom: 10 })
-              .onClick(() => {
-                this.onPopupAllRead();
-              })
+        Scroll() {
+          Column() {
+            if (this.popupFlags().showAllRead) {
+              Text('全部已读')
+                .fontSize(14)
+                .fontColor($r('app.color.white'))
+                .padding({ left: 16, right: 16, top: 10, bottom: 10 })
+                .hoverEffect(HoverEffect.Highlight)
+                .onClick(() => {
+                  this.onPopupAllRead();
+                })
+            }
+            if (this.popupFlags().showLine1) {
+              Divider()
+                .color($r('app.color.white'))
+                .strokeWidth(0.5)
+            }
+            if (this.popupFlags().showAllDelete) {
+              Text('全部删除')
+                .fontSize(14)
+                .fontColor($r('app.color.white'))
+                .padding({ left: 16, right: 16, top: 10, bottom: 10 })
+                .hoverEffect(HoverEffect.Highlight)
+                .onClick(() => {
+                  this.onPopupAllDelete();
+                })
+            }
+            if (this.popupFlags().showLine2) {
+              Divider()
+                .color($r('app.color.white'))
+                .strokeWidth(0.5)
+            }
+            if (this.popupFlags().showBatchDelete) {
+              Text('批量删除')
+                .fontSize(14)
+                .fontColor($r('app.color.white'))
+                .padding({ left: 16, right: 16, top: 10, bottom: 10 })
+                .hoverEffect(HoverEffect.Highlight)
+                .onClick(() => {
+                  this.onPopupBatchDelete();
+                })
+            }
           }
-          if (this.popupFlags().showLine1) {
-            Divider()
-              .color($r('app.color.white'))
-              .strokeWidth(0.5)
-          }
-          if (this.popupFlags().showAllDelete) {
-            Text('全部删除')
-              .fontSize(14)
-              .fontColor($r('app.color.white'))
-              .padding({ left: 16, right: 16, top: 10, bottom: 10 })
-              .onClick(() => {
-                this.onPopupAllDelete();
-              })
-          }
-          if (this.popupFlags().showLine2) {
-            Divider()
-              .color($r('app.color.white'))
-              .strokeWidth(0.5)
-          }
-          if (this.popupFlags().showBatchDelete) {
-            Text('批量删除')
-              .fontSize(14)
-              .fontColor($r('app.color.white'))
-              .padding({ left: 16, right: 16, top: 10, bottom: 10 })
-              .onClick(() => {
-                this.onPopupBatchDelete();
-              })
-          }
+          .backgroundColor('#434343')
+          .borderRadius(8)
+          .alignItems(HorizontalAlign.Start)
         }
-        .backgroundColor('#434343')
-        .borderRadius(8)
-        .alignItems(HorizontalAlign.Start)
+        .scrollBar(BarState.Off)
+        .constraintSize({
+          maxWidth: BreakpointSystem.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp),
+          maxHeight: BreakpointSystem.getDialogMaxHeight(this.windowHeightVp)
+        })
+        .onClick(() => {
+          // 拦截弹窗内点击
+        })
       }
       .width('100%')
       .margin({ top: 45 })
+      .padding({ right: Math.max(8, this.avoidAreaRightVp + 8) })
       .alignItems(HorizontalAlign.End)
     }
     .width('100%')

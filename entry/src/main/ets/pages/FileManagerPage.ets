@@ -66,6 +66,7 @@ struct FileManagerPage {
   @State showToolbar: boolean = false;
   @State showPdfModal: boolean = false;
   @State pdfTitle: string = '';
+  @State pendingPdfPath: string = '';
   @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
   @StorageProp('windowWidthVp') windowWidthVp: number = 360;
   @StorageProp('windowHeightVp') windowHeightVp: number = 780;
@@ -81,6 +82,7 @@ struct FileManagerPage {
   }
 
   private closePdfModal(): void {
+    this.pendingPdfPath = '';
     if (this.showPdfModal) {
       this.showPdfModal = false;
       try {
@@ -88,6 +90,21 @@ struct FileManagerPage {
       } catch {
         // 忽略释放异常
       }
+    }
+  }
+
+  private async loadPendingPdf(): Promise<void> {
+    const path: string = this.pendingPdfPath;
+    if (path === '') {
+      return;
+    }
+    try {
+      const parseRes = await this.pdfController.loadDocument(path);
+      if (parseRes !== pdfService.ParseResult.PARSE_SUCCESS) {
+        this.getUIContext().getPromptAction().showToast({ message: 'PDF 文档解析失败' });
+      }
+    } catch {
+      this.getUIContext().getPromptAction().showToast({ message: 'PDF 文档加载失败' });
     }
   }
 
@@ -176,16 +193,10 @@ struct FileManagerPage {
       return;
     }
     if (res.method === 'pdfView') {
-      try {
-        const parseRes = await this.pdfController.loadDocument(file.filePath);
-        if (parseRes === pdfService.ParseResult.PARSE_SUCCESS) {
-          this.pdfTitle = file.name;
-          this.showPdfModal = true;
-          return;
-        }
-      } catch {
-        // 降级提示
-      }
+      this.pendingPdfPath = file.filePath;
+      this.pdfTitle = file.name;
+      this.showPdfModal = true;
+      return;
     }
     this.getUIContext().getPromptAction().showToast({ message: res.message !== '' ? res.message : '不支持打开' });
   }
@@ -264,6 +275,7 @@ struct FileManagerPage {
                 .fontSize(14)
                 .fontColor($r('app.color.common_color_1'))
                 .padding({ left: 15, right: 8 })
+                .hoverEffect(HoverEffect.Highlight)
                 .onClick(() => {
                   this.toggleSelectAll();
                 })
@@ -271,6 +283,7 @@ struct FileManagerPage {
                 .fontSize(14)
                 .fontColor($r('app.color.ybg_red'))
                 .padding({ left: 8, right: 15 })
+                .hoverEffect(HoverEffect.Highlight)
                 .onClick(() => {
                   this.onDeleteClick();
                 })
@@ -342,6 +355,7 @@ struct FileManagerPage {
                 .padding({ top: 10, bottom: 10, right: 12 })
                 .alignItems(VerticalAlign.Center)
                 .backgroundColor($r('app.color.white'))
+                .hoverEffect(HoverEffect.Highlight)
                 .onClick(() => {
                   this.onItemClick(file);
                 })
@@ -389,6 +403,7 @@ struct FileManagerPage {
             .fontSize(14)
             .fontColor('#3A92ED')
             .padding({ left: 10, right: 4, top: 4, bottom: 4 })
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               this.closePdfModal();
             })
@@ -407,6 +422,9 @@ struct FileManagerPage {
         })
           .width('100%')
           .layoutWeight(1)
+          .onAppear(() => {
+            this.loadPendingPdf();
+          })
       }
       .width(AdaptiveLayoutHelper.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp))
       .height(AdaptiveLayoutHelper.getDialogMaxHeight(this.windowHeightVp))

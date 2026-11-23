@@ -98,6 +98,7 @@ struct EditTodoDetailPage {
   @State selectVmIdx: number = -1;
   @State showPdfModal: boolean = false;
   @State pdfTitle: string = '';
+  @State pendingPdfPath: string = '';
   @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
   @StorageProp('windowWidthVp') windowWidthVp: number = 360;
   @StorageProp('windowHeightVp') windowHeightVp: number = 780;
@@ -114,6 +115,7 @@ struct EditTodoDetailPage {
   }
 
   private closePdfModal(): void {
+    this.pendingPdfPath = '';
     if (this.showPdfModal) {
       this.showPdfModal = false;
       try {
@@ -121,6 +123,21 @@ struct EditTodoDetailPage {
       } catch {
         // 忽略释放异常
       }
+    }
+  }
+
+  private async loadPendingPdf(): Promise<void> {
+    const path: string = this.pendingPdfPath;
+    if (path === '') {
+      return;
+    }
+    try {
+      const parseRes = await this.pdfController.loadDocument(path);
+      if (parseRes !== pdfService.ParseResult.PARSE_SUCCESS) {
+        this.toast('PDF 文档解析失败');
+      }
+    } catch {
+      this.toast('PDF 文档加载失败');
     }
   }
 
@@ -137,20 +154,12 @@ struct EditTodoDetailPage {
       return;
     }
     if (res.method === 'pdfView' && res.localPath !== '') {
-      try {
-        const parseRes = await this.pdfController.loadDocument(res.localPath);
-        if (parseRes === pdfService.ParseResult.PARSE_SUCCESS) {
-          this.pdfTitle = title;
-          this.showPdfModal = true;
-          return;
-        }
-      } catch {
-        // 降级提示
-      }
+      this.pendingPdfPath = res.localPath;
+      this.pdfTitle = title;
+      this.showPdfModal = true;
+      return;
     }
-    if (res.message !== '') {
-      this.toast(res.message);
-    }
+    this.toast(res.message !== '' ? res.message : '暂不支持打开该附件');
   }
 
   aboutToAppear(): void {
@@ -779,6 +788,9 @@ struct EditTodoDetailPage {
         })
           .width('100%')
           .layoutWeight(1)
+          .onAppear(() => {
+            this.loadPendingPdf();
+          })
       }
       .width(AdaptiveLayoutHelper.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp))
       .height(AdaptiveLayoutHelper.getDialogMaxHeight(this.windowHeightVp))
@@ -1265,9 +1277,10 @@ struct EditTodoDetailPage {
                 .fontSize(16)
                 .fontColor($r('app.color.common_color_1'))
                 .width('100%')
-                .padding({ top: 12, bottom: 12 })
+                .padding({ top: 12, bottom: 12, left: 12, right: 12 })
                 .textAlign(TextAlign.Center)
                 .border({ width: { bottom: 0.5 }, color: $r('app.color.common_color_5') })
+                .hoverEffect(HoverEffect.Highlight)
                 .onClick(() => {
                   this.pickSelect(this.selectVmIdx, oi);
                 })
@@ -1275,26 +1288,37 @@ struct EditTodoDetailPage {
           }
           .width('100%')
         }
-        .constraintSize({ maxHeight: 360 })
+        .constraintSize({ maxHeight: Math.max(160, BreakpointSystem.getDialogMaxHeight(this.windowHeightVp) - 52) })
+        .scrollBar(BarState.Off)
         Text('取消')
           .fontSize(15)
           .fontColor($r('app.color.common_color_3'))
           .width('100%')
           .textAlign(TextAlign.Center)
           .padding({ top: 12, bottom: 12 })
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             this.showSelectDialog = false;
           })
       }
-      .width('80%')
+      .width(BreakpointSystem.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp))
+      .constraintSize({ maxHeight: BreakpointSystem.getDialogMaxHeight(this.windowHeightVp) })
       .backgroundColor($r('app.color.white'))
       .borderRadius(8)
+      .clip(true)
+      .onClick(() => {
+        // 拦截弹窗卡片点击事件
+      })
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#80000000')
+    .padding({ left: 16, right: 16 })
+    .backgroundColor('#66000000')
     .justifyContent(FlexAlign.Center)
     .alignItems(HorizontalAlign.Center)
+    .onClick(() => {
+      this.showSelectDialog = false;
+    })
   }
 
   private pickSelect(vmIdx: number, optionIdx: number): void {

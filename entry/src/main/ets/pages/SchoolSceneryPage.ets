@@ -9,6 +9,8 @@ import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { SchoolSceneryItem } from '../model/ContactModel';
 import { LoginSession } from '../network/LoginSession';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 校园风光 — SchoolSceneryActivity + SchoolSceneryFragment + SchoolSceneryAdapter 源码级翻译。
@@ -44,8 +46,15 @@ struct SchoolSceneryPage {
   @State isLoading: boolean = true;
   @State loadError: string = '';
   @State currentIndex: number = 0;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   private canUpload: boolean = LoginSession.sessionKey !== '';
   private pendingPics: string[] = [];
+
+  private getFlowCols(): number {
+    return BreakpointSystem.getGridColumns(this.currentBreakpoint, 2);
+  }
 
   aboutToAppear(): void {
     this.loadPhotos('newest');
@@ -90,14 +99,15 @@ struct SchoolSceneryPage {
     this.loadPhotos(next);
   }
 
-  /** 源码 onBindViewHolder：height = (HEIGHT==''?0:HEIGHT)*165dp / (WIDTH==''?屏宽:WIDTH) */
+  /** 源码 onBindViewHolder：按当前瀑布流列宽与原始宽高比等比缩放条目高度 */
   private itemHeight(item: SchoolSceneryItem): number {
-    const width: number = item.WIDTH === '' ? 375 : Number(item.WIDTH);
-    const height: number = item.HEIGHT === '' ? 0 : Number(item.HEIGHT);
-    if (width <= 0 || Number.isNaN(width) || Number.isNaN(height) || height <= 0) {
-      return 165;
-    }
-    return Math.round(165 * height / width);
+    const cols: number = this.getFlowCols();
+    const maxWProp: number | string = BreakpointSystem.getContentMaxWidth(this.currentBreakpoint);
+    const maxW: number = typeof maxWProp === 'number' ? maxWProp : this.windowWidthVp;
+    const colW: number = AdaptiveLayoutHelper.computeWaterFlowColWidthVp(this.windowWidthVp, maxW, cols, 7);
+    const rawW: number = item.WIDTH === '' ? 375 : Number(item.WIDTH);
+    const rawH: number = item.HEIGHT === '' ? 0 : Number(item.HEIGHT);
+    return AdaptiveLayoutHelper.computeAspectScaledHeightVp(rawW, rawH, colW, colW);
   }
 
   /** 源码署名分支：非 my 或 verifyState != "1" → XM；my+VERIFY 空/1 → 当前用户名；2 审核中；其他 未通过 */
@@ -277,6 +287,7 @@ struct SchoolSceneryPage {
             .fontColor($r('app.color.white'))
             .margin({ left: 4 })
         }
+        .hoverEffect(HoverEffect.Highlight)
         .onClick((): void => { this.onLike(item, index); })
         Text(this.titleText(item))
           .fontSize(12)
@@ -295,6 +306,7 @@ struct SchoolSceneryPage {
     .width('100%')
     .borderRadius(2)
     .clip(true)
+    .hoverEffect(HoverEffect.Highlight)
     .onClick((): void => { this.openPhoto(index); })
   }
 
@@ -307,60 +319,89 @@ struct SchoolSceneryPage {
         onRightClick: (): void => { this.pickAndUpload(); }
       })
       Row() {
-        ForEach(tabKeysForSession(this.canUpload), (key: string, index: number) => {
-          Column() {
-            Text(TAB_LABELS[index])
-              .fontSize(15)
-              .fontColor(this.activeTab === key ? $r('app.color.blue_default') : $r('app.color.common_color_3'))
-              .height(34)
-              .textAlign(TextAlign.Center)
-            Divider()
-              .color(this.activeTab === key ? $r('app.color.blue_default') : Color.Transparent)
-              .strokeWidth(2)
-              .width('60%')
-          }
-          .height(36)
-          .layoutWeight(1)
-          .onClick((): void => { this.switchTab(index); })
-        }, (key: string) => key)
+        Row() {
+          ForEach(tabKeysForSession(this.canUpload), (key: string, index: number) => {
+            Column() {
+              Text(TAB_LABELS[index])
+                .fontSize(15)
+                .fontColor(this.activeTab === key ? $r('app.color.blue_default') : $r('app.color.common_color_3'))
+                .height(34)
+                .textAlign(TextAlign.Center)
+              Divider()
+                .color(this.activeTab === key ? $r('app.color.blue_default') : Color.Transparent)
+                .strokeWidth(2)
+                .width('60%')
+            }
+            .height(36)
+            .layoutWeight(1)
+            .hoverEffect(HoverEffect.Highlight)
+            .onClick((): void => { this.switchTab(index); })
+          }, (key: string) => key)
+        }
+        .width('100%')
+        .height(36)
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
       }
       .width('100%')
       .height(36)
+      .justifyContent(FlexAlign.Center)
       .backgroundColor($r('app.color.white'))
       if (this.isLoading) {
         LoadingView()
       } else if (this.loadError !== '') {
-        Column({ space: 12 }) {
-          EmptyView({ tipText: this.loadError })
-          Button('重试')
-            .fontSize(14)
-            .backgroundColor($r('app.color.ybg_blue'))
-            .fontColor($r('app.color.white'))
-            .onClick((): void => { this.loadPhotos(this.activeTab); })
+        Scroll() {
+          Column({ space: 12 }) {
+            EmptyView({ tipText: this.loadError })
+            Button('重试')
+              .fontSize(14)
+              .backgroundColor($r('app.color.ybg_blue'))
+              .fontColor($r('app.color.white'))
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick((): void => { this.loadPhotos(this.activeTab); })
+          }
+          .width('100%')
+          .constraintSize({ minHeight: 320 })
+          .justifyContent(FlexAlign.Center)
         }
+        .width('100%')
+        .layoutWeight(1)
+      } else if (this.photos.length === 0) {
+        Scroll() {
+          Column() {
+            EmptyView({ tipText: this.activeTab === 'my' ? '你还没上传过照片哦' : '暂无校园风光' })
+          }
+          .width('100%')
+          .constraintSize({ minHeight: 320 })
+          .justifyContent(FlexAlign.Center)
+        }
+        .width('100%')
+        .layoutWeight(1)
+      } else {
+        Row() {
+          WaterFlow() {
+            ForEach(this.photos, (item: SchoolSceneryItem, index: number) => {
+              FlowItem() {
+                this.sceneryItem(item, index)
+              }
+            }, (item: SchoolSceneryItem) => item.PICID)
+          }
+          .columnsTemplate(AdaptiveLayoutHelper.buildColumnsTemplate(this.getFlowCols()))
+          .columnsGap(7)
+          .rowsGap(7)
+          .padding({ left: 7, right: 7, top: 7, bottom: Math.max(7, this.avoidAreaBottomVp) })
+          .width('100%')
+          .height('100%')
+          .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+          .scrollBar(BarState.Off)
+        }
+        .width('100%')
         .layoutWeight(1)
         .justifyContent(FlexAlign.Center)
-      } else if (this.photos.length === 0) {
-        EmptyView({ tipText: this.activeTab === 'my' ? '你还没上传过照片哦' : '暂无校园风光' })
-      } else {
-        WaterFlow() {
-          ForEach(this.photos, (item: SchoolSceneryItem, index: number) => {
-            FlowItem() {
-              this.sceneryItem(item, index)
-            }
-          }, (item: SchoolSceneryItem) => item.PICID)
-        }
-        .columnsTemplate('1fr 1fr')
-        .columnsGap(7)
-        .rowsGap(7)
-        .padding(7)
-        .layoutWeight(1)
-        .width('100%')
-        .scrollBar(BarState.Off)
       }
     }
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.common_color_6'))
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
   }
 }

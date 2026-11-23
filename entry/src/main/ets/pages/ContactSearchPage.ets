@@ -387,6 +387,7 @@ struct ContactSearchPage {
             .padding(0)
             .layoutWeight(1)
             .height(32)
+            .enterKeyType(EnterKeyType.Search)
             .defaultFocus(true)
             .onChange((value: string) => {
               this.keyword = value;
@@ -408,6 +409,7 @@ struct ContactSearchPage {
           .fontColor($r('app.color.common_color_1'))
           .height(44)
           .padding({ left: 8, right: 4 })
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             this.getUIContext().getRouter().back();
           })
@@ -466,6 +468,7 @@ struct ContactSearchPage {
         .width('100%')
         .justifyContent(FlexAlign.Center)
         .padding({ top: 29.5, bottom: 20 })
+        .hoverEffect(HoverEffect.Highlight)
         .onClick(() => {
           this.clearCache();
         })
@@ -497,6 +500,7 @@ struct ContactSearchPage {
           .width(14)
           .height(14)
           .padding(12)
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             this.onCacheRemove(item);
           })
@@ -505,6 +509,7 @@ struct ContactSearchPage {
       .padding({ left: 12.5, right: 12 })
       .backgroundColor($r('app.color.white'))
       .alignItems(VerticalAlign.Center)
+      .hoverEffect(HoverEffect.Highlight)
       .onClick(() => {
         this.onCacheItemClick(item);
       })
@@ -553,6 +558,7 @@ struct ContactSearchPage {
         .backgroundColor('#F2F2F2')
         .maxLines(1)
         .textAlign(TextAlign.Start)
+        .hoverEffect(HoverEffect.Highlight)
         .onClick(() => {
           this.onGroupClick(group);
         })
@@ -618,6 +624,7 @@ struct ContactSearchPage {
             .width(18)
             .height(18)
             .visibility(this.phoneOf(group.addressBookList[childIdx]) === '' ? Visibility.None : Visibility.Visible)
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               this.onPhoneTap(this.phoneOf(group.addressBookList[childIdx]),
                 group.addressBookList[childIdx].XLH, 1);
@@ -627,6 +634,7 @@ struct ContactSearchPage {
             .height(18)
             .margin({ left: 15 })
             .visibility(this.phoneOf(group.addressBookList[childIdx]) === '' ? Visibility.None : Visibility.Visible)
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               this.onPhoneTap(this.phoneOf(group.addressBookList[childIdx]),
                 group.addressBookList[childIdx].XLH, 0);
@@ -640,6 +648,7 @@ struct ContactSearchPage {
       .padding({ left: 12 })
       .alignItems(VerticalAlign.Center)
       .backgroundColor($r('app.color.white'))
+      .hoverEffect(HoverEffect.Highlight)
       .onClick(() => {
         this.onChildClick(group, childIdx);
       })

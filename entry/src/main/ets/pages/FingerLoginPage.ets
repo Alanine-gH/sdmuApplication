@@ -1,9 +1,11 @@
 import { router } from '@kit.ArkUI';
+import { common } from '@kit.AbilityKit';
 import { userAuth } from '@kit.UserAuthenticationKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { BreakpointSystem } from '../common/BreakpointSystem';
+import { BiometricAuthHelper } from '../common/BiometricAuthHelper';
 
 /**
  * 指纹登录页 — 1:1 复刻 FingerLoginActivity（194 行）+ mobile_campus_activity_finger_login.xml
@@ -57,6 +59,7 @@ struct FingerLoginPage {
   }
 
   aboutToDisappear(): void {
+    BiometricAuthHelper.cancelActiveAuth();
     if (this.toastTimerId !== -1) {
       clearTimeout(this.toastTimerId);
       this.toastTimerId = -1;
@@ -86,31 +89,23 @@ struct FingerLoginPage {
     this.getUIContext().getPromptAction().showToast({ message: msg });
   }
 
-  /** 源码 tvLogin → FingerHelper.d()：指纹认证（HAP userAuth 系统指纹弹窗等价 FingerDialog） */
-  private startFingerprint(): void {
-    try {
-      const authParam: userAuth.AuthParam = {
-        challenge: new Uint8Array(0),
-        authType: [userAuth.UserAuthType.FINGERPRINT],
-        authTrustLevel: 10000
-      };
-      // SDK getUserAuthInstance(authParam, widgetParam)：widgetParam.title 对应 FingerDialog 标题
-      const widgetParam: userAuth.WidgetParam = { title: '电脑登录确认' };
-      const instance: userAuth.UserAuthInstance = userAuth.getUserAuthInstance(authParam, widgetParam);
-      // SDK IAuthCallback 为接口（onResult(result: UserAuthResult)）→ 对象字面量实现
-      instance.on('result', {
-        onResult: (result: userAuth.UserAuthResult): void => {
-          // 源码 FingerHelper$c：onAuthenticationSucceeded → e.a(1)；其余分支仅弹窗态，无业务动作
-          if (result.result === userAuth.UserAuthResultCode.SUCCESS) {
-            this.onFingerStatus(1);
-          }
-        }
-      });
-      // SDK start(): void（同步发起，系统弹指纹窗）
-      instance.start();
-    } catch (error) {
-      const be = error as BusinessError;
-      ApiService.logError('fingerprint init fail: ' + be.message);
+  /** 源码 tvLogin → FingerHelper.d()：指纹认证（通过 BiometricAuthHelper 封装探测与状态反馈） */
+  private async startFingerprint(): Promise<void> {
+    const cap = BiometricAuthHelper.checkCapability();
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    const outcome = await BiometricAuthHelper.authenticate({
+      title: '电脑登录确认',
+      authTypes: [userAuth.UserAuthType.FINGERPRINT],
+      uiContext: ctx
+    });
+    if (outcome.success) {
+      await this.onFingerStatus(1);
+      return;
+    }
+    if (outcome.notEnrolled || outcome.locked || outcome.canceled ||
+      outcome.code === userAuth.UserAuthResultCode.TYPE_NOT_SUPPORT || outcome.message !== '') {
+      const msg: string = outcome.message !== '' ? outcome.message : cap.description;
+      this.toast(msg);
     }
   }
 
@@ -195,6 +190,7 @@ struct FingerLoginPage {
             .height(50)
             .padding(9)
             .margin({ top: 5 })
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               // 源码 ivClose → finish()
               router.back();
@@ -228,6 +224,7 @@ struct FingerLoginPage {
           .margin({ top: 24 })
           .borderRadius(512)
           .backgroundColor('#1790FF')
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             // 源码 tvLogin → o.d()（指纹认证）
             this.startFingerprint();
@@ -239,6 +236,7 @@ struct FingerLoginPage {
           .textAlign(TextAlign.Center)
           .padding(6)
           .margin({ top: 10, bottom: Math.max(24, this.avoidAreaBottomVp + 16) })
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             // 源码 tvCancel → X0(browserId, buildTime, "0")
             this.cancelLogin();

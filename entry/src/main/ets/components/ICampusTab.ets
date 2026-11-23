@@ -5,6 +5,7 @@ import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { CourseItem, ScheduleTermParams, SCHEDULE_FALLBACK_START, SCHEDULE_FALLBACK_END,
   parseYmdMs, apkCurrentWeek, sectionTimeLabel } from '../model/CourseModel';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * I校园 Tab — 按 APK 实拍（mobile_campus_fragment_icampus 运行态）逐块复刻：
@@ -31,7 +32,20 @@ export struct ICampusTab {
   @State weekDays: WeekDay[] = [];
   /** 当前周次（第13周） */
   @State weekNo: number = 13;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('heightBreakpoint') heightBreakpoint: string = 'lg';
+  @StorageProp('isLandscape') isLandscape: boolean = false;
+  @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   scroller: Scroller = new Scroller();
+
+  private useSideRail(): boolean {
+    return BreakpointSystem.shouldUseSideRail(
+      this.currentBreakpoint,
+      this.heightBreakpoint,
+      this.isLandscape
+    );
+  }
 
   aboutToAppear(): void {
     this.buildWeekDays();
@@ -142,6 +156,9 @@ export struct ICampusTab {
         Text('更多')
           .fontSize(15)
           .fontColor($r('app.color.common_color_2'))
+          .padding({ left: 6, right: 2, top: 4, bottom: 4 })
+          .borderRadius(6)
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             router.pushUrl({ url: 'pages/SchedulePage' });
           })
@@ -226,6 +243,7 @@ export struct ICampusTab {
       }
     }
     .width('100%')
+    .borderRadius(12)
     .backgroundColor($r('app.color.white'))
   }
 
@@ -246,6 +264,9 @@ export struct ICampusTab {
         Text('更多')
           .fontSize(15)
           .fontColor($r('app.color.common_color_2'))
+          .padding({ left: 6, right: 2, top: 4, bottom: 4 })
+          .borderRadius(6)
+          .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             router.pushUrl({ url: 'pages/ScheduleMainActivity' });
           })
@@ -312,18 +333,31 @@ export struct ICampusTab {
       .padding({ top: 12, bottom: 12, left: 12, right: 12 })
     }
     .width('100%')
+    .borderRadius(12)
     .backgroundColor($r('app.color.white'))
-    .margin({ top: 9 })
   }
 
   build() {
     Column() {
       Scroll(this.scroller) {
         Column() {
-          this.scheduleCard()
-          this.scheduleMeetingCard()
+          GridRow({ columns: { xs: 1, sm: 1, md: 2, lg: 2, xl: 2 }, gutter: { x: 12, y: 12 } }) {
+            GridCol({ span: 1 }) {
+              this.scheduleCard()
+            }
+            GridCol({ span: 1 }) {
+              this.scheduleMeetingCard()
+            }
+          }
+          .width('100%')
         }
         .width('100%')
+        .padding({
+          left: 12,
+          right: 12,
+          top: 10,
+          bottom: this.useSideRail() ? Math.max(16, this.avoidAreaBottomVp + 16) : Math.max(92, this.avoidAreaBottomVp + 76)
+        })
       }
       .scrollable(ScrollDirection.Vertical)
       .width('100%')

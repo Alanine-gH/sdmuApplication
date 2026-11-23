@@ -7,6 +7,7 @@ import { EmptyView } from '../components/EmptyView';
 import { LoadingView } from '../components/LoadingView';
 import { PreferencesUtil } from '../data/PreferencesUtil';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 寝室卫生检查页 — 源码级翻译（W23，原空占位重写）：
@@ -87,6 +88,8 @@ struct InspectionPage {
   @State showFloorPicker: boolean = false;
   @State floors: OaLdmc[] = [];
   @State floorPickerIdx: number = 0;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
   /** 新增模式（源码 t） */
   private isAddRecord: boolean = false;
   private recordXlh: string = '';
@@ -472,6 +475,7 @@ struct InspectionPage {
     // 楼层选择 bindSheet（InspectionDialog WheelView visibleItems7 等价）
     .bindSheet(this.showFloorPicker, this.floorSheet(), {
       height: 320,
+      preferType: AdaptiveLayoutHelper.getSheetPreferType(this.currentBreakpoint, this.isCompactHeight),
       backgroundColor: Color.White,
       onDisappear: (): void => {
         this.showFloorPicker = false;
@@ -603,36 +607,41 @@ struct InspectionPage {
   /** InspectionDialog 等价：tvChoose 空 + WheelView(TextPicker visibleItems7) + 完成 */
   @Builder
   floorSheet() {
-    Column() {
-      Row() {
-        Blank()
-        Text('完成')
-          .fontSize(15)
-          .fontColor($r('app.color.common_color_7'))
-          .padding(10)
-          .onClick(() => {
-            this.onFloorPicked();
-          })
-      }
-      .width('100%')
-
-      if (this.floors.length > 0) {
-        TextPicker({ range: this.floorLabels(), selected: this.floorPickerIdx })
-          .width('100%')
-          .layoutWeight(1)
-          .onChange((value: string | string[], index: number | number[]) => {
-            // [W23 修复] OnTextPickerChangeCallback 签名（string|string[]）→ 单列取首值
-            this.floorPickerIdx = typeof index === 'number' ? index as number : (index as number[])[0];
-          })
-      } else {
-        Column() {
-          EmptyView({ tipText: '暂无楼层' })
+    Scroll() {
+      Column() {
+        Row() {
+          Blank()
+          Text('完成')
+            .fontSize(15)
+            .fontColor($r('app.color.common_color_7'))
+            .padding(10)
+            .hoverEffect(HoverEffect.Highlight)
+            .onClick(() => {
+              this.onFloorPicked();
+            })
         }
         .width('100%')
-        .layoutWeight(1)
+
+        if (this.floors.length > 0) {
+          TextPicker({ range: this.floorLabels(), selected: this.floorPickerIdx })
+            .width('100%')
+            .height(220)
+            .onChange((value: string | string[], index: number | number[]) => {
+              // [W23 修复] OnTextPickerChangeCallback 签名（string|string[]）→ 单列取首值
+              this.floorPickerIdx = typeof index === 'number' ? index as number : (index as number[])[0];
+            })
+        } else {
+          Column() {
+            EmptyView({ tipText: '暂无楼层' })
+          }
+          .width('100%')
+          .height(220)
+        }
       }
+      .width('100%')
     }
     .width('100%')
+    .scrollBar(BarState.Off)
   }
 
   private floorLabels(): string[] {

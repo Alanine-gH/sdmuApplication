@@ -6,6 +6,7 @@ import { TitleBar } from '../components/TitleBar';
 import { EmptyView } from '../components/EmptyView';
 import { LoadingView } from '../components/LoadingView';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 科研项目回执列表页 — 源码级翻译（W23，原空占位重写）：
@@ -44,6 +45,9 @@ struct ReceiptListPage {
   @State unexpenseState: string = 'loading';
   @State showDetail: boolean = false;
   @State detailRow: OaReimbursed | null = null;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 780;
   /** 入参 PROJECT_NUMBER（源码 y(Intent)；Index/WMHTab 直达入口无参） */
   private projectNumber: string = '';
 
@@ -308,96 +312,106 @@ struct ReceiptListPage {
     })
   }
 
-  /** mobile_campus_reimburse_dialog_detail：0.8 宽弹窗 + ticketfoot 底图 */
+  /** mobile_campus_reimburse_dialog_detail：自适应宽弹窗 + Scroll + ticketfoot 底图 */
   @Builder
   detailDialog() {
     Stack({ alignContent: Alignment.Center }) {
       Column()
         .width('100%')
         .height('100%')
-        .backgroundColor('rgba(0,0,0,0.5)')
+        .backgroundColor('#66000000')
         .onClick(() => {
           this.showDetail = false;
         })
 
-      Column() {
+      Scroll() {
         Column() {
-          Text(this.detailRow === null ? '' : this.detailRow.PROJECT_NAME)
-            .fontSize(18.5)
-            .fontColor('#1B68B7')
-            .height(59)
-            .width('100%')
-            .textAlign(TextAlign.Center)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-
           Column() {
-            this.detailLine('预约单号', this.detailRow === null ? '' : this.detailRow.SUB_NUMBER)
-            this.detailLine('业务编号', this.detailRow === null ? '' : this.detailRow.BUSINESS_NUMBER)
-            this.detailLine('业务类型', this.detailRow === null ? '' : this.detailRow.REIMBURSE_TYPE)
-            this.detailLine('报销金额',
-              this.detailRow === null ? '' : String(this.detailRow.AMOUNT))
-          }
-          .width('100%')
-          .padding({ left: 18, right: 18, top: 21, bottom: 21 })
+            Text(this.detailRow === null ? '' : this.detailRow.PROJECT_NAME)
+              .fontSize(18.5)
+              .fontColor('#1B68B7')
+              .height(59)
+              .width('100%')
+              .textAlign(TextAlign.Center)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-          Column() {
-            this.detailLine('报销人员', this.detailRow === null ? '' : this.detailRow.REIMBURSE_PEOPLE)
-            this.detailLine('报销日期',
-              this.detailRow === null ? '' : this.formatDate(this.detailRow.REIMBURSE_DATE))
-            // 源码原样：报销状态 tvExpenseType = REIMBURSE_TYPE
-            this.detailLine('报销状态', this.detailRow === null ? '' : this.detailRow.REIMBURSE_TYPE)
-            this.detailLine('部门编号', this.detailRow === null ? '' : this.detailRow.DEPT_NUMBER)
-            // 源码原样 bug：tvProjectNum 填 PROJECT_NAME（ReimburseDetailDialog.o:73）
-            this.detailLine('项目编号', this.detailRow === null ? '' : this.detailRow.PROJECT_NAME)
-          }
-          .width('100%')
-          .padding({ left: 18, right: 18, top: 21, bottom: 21 })
-
-          Column() {
-            Row() {
-              Text('摘         要')
-                .fontSize(14)
-                .fontColor($r('app.color.common_color_1'))
-              Text(this.detailRow === null ? '' : this.detailRow.DESC)
-                .fontSize(14)
-                .fontColor($r('app.color.common_color_3'))
-                .margin({ left: 12 })
-                .layoutWeight(1)
+            Column() {
+              this.detailLine('预约单号', this.detailRow === null ? '' : this.detailRow.SUB_NUMBER)
+              this.detailLine('业务编号', this.detailRow === null ? '' : this.detailRow.BUSINESS_NUMBER)
+              this.detailLine('业务类型', this.detailRow === null ? '' : this.detailRow.REIMBURSE_TYPE)
+              this.detailLine('报销金额',
+                this.detailRow === null ? '' : String(this.detailRow.AMOUNT))
             }
             .width('100%')
-            .alignItems(VerticalAlign.Top)
+            .padding({ left: 18, right: 18, top: 21, bottom: 21 })
 
-            Text('确定')
-              .fontSize(17)
-              .fontColor($r('app.color.white'))
-              .backgroundColor('#1B68B7')
-              .width(160)
-              .height(40)
-              .textAlign(TextAlign.Center)
-              .margin({ top: 24 })
-              .onClick(() => {
-                this.showDetail = false;
-              })
+            Column() {
+              this.detailLine('报销人员', this.detailRow === null ? '' : this.detailRow.REIMBURSE_PEOPLE)
+              this.detailLine('报销日期',
+                this.detailRow === null ? '' : this.formatDate(this.detailRow.REIMBURSE_DATE))
+              // 源码原样：报销状态 tvExpenseType = REIMBURSE_TYPE
+              this.detailLine('报销状态', this.detailRow === null ? '' : this.detailRow.REIMBURSE_TYPE)
+              this.detailLine('部门编号', this.detailRow === null ? '' : this.detailRow.DEPT_NUMBER)
+              // 源码原样 bug：tvProjectNum 填 PROJECT_NAME（ReimburseDetailDialog.o:73）
+              this.detailLine('项目编号', this.detailRow === null ? '' : this.detailRow.PROJECT_NAME)
+            }
+            .width('100%')
+            .padding({ left: 18, right: 18, top: 21, bottom: 21 })
+
+            Column() {
+              Row() {
+                Text('摘         要')
+                  .fontSize(14)
+                  .fontColor($r('app.color.common_color_1'))
+                Text(this.detailRow === null ? '' : this.detailRow.DESC)
+                  .fontSize(14)
+                  .fontColor($r('app.color.common_color_3'))
+                  .margin({ left: 12 })
+                  .layoutWeight(1)
+              }
+              .width('100%')
+              .alignItems(VerticalAlign.Top)
+
+              Text('确定')
+                .fontSize(17)
+                .fontColor($r('app.color.white'))
+                .backgroundColor('#1B68B7')
+                .width(160)
+                .height(40)
+                .textAlign(TextAlign.Center)
+                .margin({ top: 24 })
+                .hoverEffect(HoverEffect.Highlight)
+                .onClick(() => {
+                  this.showDetail = false;
+                })
+            }
+            .width('100%')
+            .padding({ left: 18, right: 18, top: 21, bottom: 21 })
           }
           .width('100%')
-          .padding({ left: 18, right: 18, top: 21, bottom: 21 })
-        }
-        .width('80%')
-        .borderRadius(8)
-        .backgroundColor($r('app.color.white'))
+          .borderRadius(8)
+          .backgroundColor($r('app.color.white'))
 
-        Image($r('app.media.mobile_campus_reimburse_ticketfoot'))
-          .width('80%')
-          .height(40)
-          .objectFit(ImageFit.Cover)
-          .margin({ top: -8 })
+          Image($r('app.media.mobile_campus_reimburse_ticketfoot'))
+            .width('100%')
+            .height(40)
+            .objectFit(ImageFit.Cover)
+            .margin({ top: -8 })
+        }
+        .width('100%')
+        .alignItems(HorizontalAlign.Center)
       }
-      .width('100%')
-      .alignItems(HorizontalAlign.Center)
+      .scrollBar(BarState.Off)
+      .width(BreakpointSystem.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp))
+      .constraintSize({ maxHeight: BreakpointSystem.getDialogMaxHeight(this.windowHeightVp) })
+      .onClick(() => {
+        // 拦截弹窗内点击
+      })
     }
     .width('100%')
     .height('100%')
+    .padding({ left: 16, right: 16 })
   }
 
   @Builder

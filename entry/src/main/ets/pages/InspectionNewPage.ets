@@ -1,5 +1,7 @@
 import { router } from '@kit.ArkUI';
 import { TitleBar } from '../components/TitleBar';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 新增记录 — 1:1 复刻自：
@@ -32,7 +34,7 @@ struct CommentStarRow {
   @Prop itemTitle: string = '';
   @Prop titleSize: number = 15;
   @Prop rating: number = 0;
-  private onRate: (rating: number) => void = (rating: number): void => {};
+  onRate: (rating: number) => void = (rating: number): void => {};
 
   build() {
     Row() {
@@ -86,6 +88,9 @@ struct InspectionNewPage {
     new StarRatingItem('节能减排', 15, 0)
   ];
   @State canSubmit: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('keyboardHeightVp') keyboardHeightVp: number = 0;
 
   private updateStarRating(index: number, rating: number): void {
     this.starItems = this.starItems.map((item: StarRatingItem, i: number): StarRatingItem => {
@@ -141,11 +146,14 @@ struct InspectionNewPage {
                 .height(32)
                 .objectFit(ImageFit.Contain)
             }
+            .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
               this.chosenPhotos = [...this.chosenPhotos, new ChosenPhoto(`photo${this.chosenPhotos.length + 1}`)];
             })
           }
-          .columnsTemplate('1fr 1fr 1fr 1fr 1fr')
+          .columnsTemplate(AdaptiveLayoutHelper.buildColumnsTemplate(
+            BreakpointSystem.getGridColumns(this.currentBreakpoint, 5)
+          ))
           .rowsGap(9)
           .columnsGap(9)
           .padding(15)
@@ -186,6 +194,7 @@ struct InspectionNewPage {
               .padding({ top: 13, bottom: 13 })
               .backgroundColor(this.canSubmit ? $r('app.color.ybg_blue') : $r('app.color.common_color_5'))
               .borderRadius(4)
+              .hoverEffect(HoverEffect.Highlight)
               .onClick(() => {
                 if (this.canSubmit) {
                   router.back();
@@ -196,7 +205,9 @@ struct InspectionNewPage {
           .padding({ left: 20, right: 20, top: 60 })
         }
         .width('100%')
-        .padding({ bottom: 10 })
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
+        .padding({ bottom: Math.max(10, this.avoidAreaBottomVp + this.keyboardHeightVp) })
       }
       .width('100%')
       .layoutWeight(1)
@@ -207,5 +218,6 @@ struct InspectionNewPage {
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.common_color_6'))
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
   }
 }
