@@ -1,7 +1,13 @@
 import { preferences } from '@kit.ArkData';
-import { Context } from '@kit.AbilityKit';
+import { Context, Want } from '@kit.AbilityKit';
 import { formBindingData, formProvider } from '@kit.FormKit';
+import { BusinessError } from '@kit.BasicServicesKit';
 import { CourseItem } from '../model/CourseModel';
+
+export interface PinWidgetResult {
+  ok: boolean;
+  message: string;
+}
 
 export interface WidgetCourseSummary {
   name: string;
@@ -38,6 +44,71 @@ const KEY_FORM_IDS = 'widget_form_ids';
  * 桌面服务卡片数据共享、周课表网格计算与交互刷新助手
  */
 export class WidgetDataHelper {
+  public static readonly BUNDLE_NAME: string = 'com.sdmu.sdmuapplication';
+  public static readonly FORM_ABILITY_NAME: string = 'EntryFormAbility';
+  public static readonly MODULE_NAME: string = 'entry';
+  public static readonly FORM_SCHEDULE_WIDGET: string = 'schedule_widget';
+  public static readonly FORM_QUICK_ENTRY_WIDGET: string = 'quick_entry_widget';
+  public static readonly DIMENSION_2_2: number = 2;
+  public static readonly DIMENSION_4_4: number = 4;
+
+  /** 纯函数：构建 formProvider.openFormManager / AddFormMenuItem 所需 Want */
+  public static buildFormManagerWant(
+    formName: string = WidgetDataHelper.FORM_SCHEDULE_WIDGET,
+    dimension: number = WidgetDataHelper.DIMENSION_4_4
+  ): Want {
+    const safeName: string = (formName && formName.trim() !== '')
+      ? formName.trim()
+      : WidgetDataHelper.FORM_SCHEDULE_WIDGET;
+    const safeDimension: number = Number.isFinite(dimension) && dimension > 0
+      ? dimension
+      : WidgetDataHelper.DIMENSION_4_4;
+    return {
+      bundleName: WidgetDataHelper.BUNDLE_NAME,
+      abilityName: WidgetDataHelper.FORM_ABILITY_NAME,
+      parameters: {
+        'ohos.extra.param.key.module_name': WidgetDataHelper.MODULE_NAME,
+        'ohos.extra.param.key.form_name': safeName,
+        'ohos.extra.param.key.form_dimension': safeDimension
+      }
+    };
+  }
+
+  /** 纯函数：课表 4x4 桌面卡片 Want */
+  public static buildScheduleWidgetWant(): Want {
+    return WidgetDataHelper.buildFormManagerWant(
+      WidgetDataHelper.FORM_SCHEDULE_WIDGET,
+      WidgetDataHelper.DIMENSION_4_4
+    );
+  }
+
+  /** 纯函数：校园快捷入口 2x2 桌面卡片 Want */
+  public static buildQuickEntryWidgetWant(): Want {
+    return WidgetDataHelper.buildFormManagerWant(
+      WidgetDataHelper.FORM_QUICK_ENTRY_WIDGET,
+      WidgetDataHelper.DIMENSION_2_2
+    );
+  }
+
+  /** 唤起系统桌面卡片添加管理面板（不支持设备安全降级） */
+  public static openPinWidgetManager(
+    formName: string = WidgetDataHelper.FORM_SCHEDULE_WIDGET,
+    dimension: number = WidgetDataHelper.DIMENSION_4_4
+  ): PinWidgetResult {
+    try {
+      const want: Want = WidgetDataHelper.buildFormManagerWant(formName, dimension);
+      formProvider.openFormManager(want);
+      return { ok: true, message: '已唤起桌面卡片添加面板' };
+    } catch (err) {
+      const be = err as BusinessError;
+      const code: number = be.code ?? -1;
+      if (code === 16500100) {
+        return { ok: false, message: '桌面卡片暂不可用，请按下方图文引导手动添加' };
+      }
+      return { ok: false, message: '当前设备暂不支持快捷加桌，请按下方图文步骤添加到桌面' };
+    }
+  }
+
   public static saveFormId(context: Context, formId: string): void {
     try {
       const store = preferences.getPreferencesSync(context, { name: WIDGET_PREF_NAME });

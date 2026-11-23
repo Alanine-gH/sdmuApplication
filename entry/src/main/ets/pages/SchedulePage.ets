@@ -1,4 +1,5 @@
-import { router } from '@kit.ArkUI';
+import { AddFormMenuItem, router, SymbolGlyphModifier } from '@kit.ArkUI';
+import { formBindingData } from '@kit.FormKit';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { CourseItem, ScheduleTermParams, SCHEDULE_FALLBACK_START, SCHEDULE_FALLBACK_END,
@@ -122,6 +123,9 @@ struct SchedulePage {
   @State multiCourses: CourseItem[] = [];
   @State multiColorIdx: number = 0;
   @State showMultiDialog: boolean = false;
+  @State pinTrigger: number = -1;
+  @State prevWeekTrigger: number = -1;
+  @State nextWeekTrigger: number = -1;
   // 学期起止毫秒（termInfo 失败时用服务器实测兜底值，与 APK 常量语义一致）
   @State semesterStartMs: number = 0;
   @State semesterEndMs: number = 0;
@@ -272,7 +276,49 @@ struct SchedulePage {
   }
 
   private shiftWeek(delta: number): void {
+    if (delta < 0) {
+      this.prevWeekTrigger = this.prevWeekTrigger < 0 ? 1 : this.prevWeekTrigger + 1;
+    } else if (delta > 0) {
+      this.nextWeekTrigger = this.nextWeekTrigger < 0 ? 1 : this.nextWeekTrigger + 1;
+    }
     this.applyWeek(this.clampWeek(this.weekNumber + delta));
+  }
+
+  private scheduleFormBindingData(): formBindingData.FormBindingData {
+    try {
+      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      return formBindingData.createFormBindingData(WidgetDataHelper.loadFormData(ctx));
+    } catch {
+      return formBindingData.createFormBindingData(WidgetDataHelper.buildPayload('今日课表', []));
+    }
+  }
+
+  @Builder
+  scheduleWidgetMenu() {
+    Menu() {
+      AddFormMenuItem(
+        WidgetDataHelper.buildScheduleWidgetWant(),
+        'schedule_pin_snapshot_anchor',
+        {
+          formBindingData: this.scheduleFormBindingData(),
+          callback: (err: BusinessError, formId: string): void => {
+            if (!err && formId) {
+              this.getUIContext().getPromptAction().showToast({ message: '课表卡片已添加到桌面' });
+            }
+          },
+          style: {
+            options: {
+              content: '添加课表卡片到桌面',
+              symbolStartIcon: new SymbolGlyphModifier($r('sys.symbol.plus_square_on_square'))
+            }
+          }
+        }
+      )
+      MenuItem({ content: '查看添加引导' })
+        .onClick(() => {
+          router.pushUrl({ url: 'pages/AppWidgetGuidePage' });
+        })
+    }
   }
 
   // APK GetTimeTableUtil.o()：本地查询 timetable_djz==当前周（scheduleOfTerm 按 djz 周次拆行）；
@@ -600,19 +646,20 @@ struct SchedulePage {
     // T1：Toolbar 中央"第N周"(17fp)+右箭头；右侧 termbtn 学年学期入口
     Column() {
       Row() {
-        Text('＜')
-          .fontSize(17)
-          .fontColor($r('app.color.common_color_1'))
-          .width(34)
-          .height(34)
-          .borderRadius(17)
-          .textAlign(TextAlign.Center)
-          .margin({ left: 15 })
-          .systemMaterial(ImmersiveLightHelper.pillMaterial())
-          .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.94 })
-          .onClick(() => {
-            router.back();
-          })
+        Stack({ alignContent: Alignment.Center }) {
+          SymbolGlyph($r('sys.symbol.chevron_left'))
+            .fontSize(18)
+            .fontColor([$r('app.color.common_color_1')])
+        }
+        .width(34)
+        .height(34)
+        .borderRadius(17)
+        .margin({ left: 15 })
+        .systemMaterial(ImmersiveLightHelper.pillMaterial())
+        .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.94 })
+        .onClick(() => {
+          router.back();
+        })
         Row() {
           Row() {
             Text('第' + this.weekNumber + '周')
@@ -640,6 +687,22 @@ struct SchedulePage {
         .layoutWeight(1)
         .justifyContent(FlexAlign.Center)
         .height('100%')
+        Stack({ alignContent: Alignment.Center }) {
+          SymbolGlyph($r('sys.symbol.plus_square_on_square'))
+            .fontSize(17)
+            .fontColor([$r('app.color.common_color_1')])
+            .symbolEffect(new BounceSymbolEffect(EffectScope.WHOLE, EffectDirection.UP), this.pinTrigger)
+        }
+        .width(32)
+        .height(32)
+        .borderRadius(16)
+        .margin({ right: 8 })
+        .systemMaterial(ImmersiveLightHelper.pillMaterial())
+        .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.94 })
+        .bindMenu(this.scheduleWidgetMenu())
+        .onClick(() => {
+          this.pinTrigger = this.pinTrigger < 0 ? 1 : this.pinTrigger + 1;
+        })
         Image($r('app.media.mobile_campus_timetable_termbtn'))
           .width(43.5)
           .height(14)
@@ -701,24 +764,34 @@ struct SchedulePage {
       }
       .layoutWeight(1)
       Column() {
-        Text('‹')
-          .fontSize(18)
-          .fontColor($r('app.color.common_color_3'))
-          .width(22)
-          .height(22)
-          .textAlign(TextAlign.Center)
-          .onClick(() => {
-            this.shiftWeek(-1);
-          })
-        Text('›')
-          .fontSize(18)
-          .fontColor($r('app.color.common_color_3'))
-          .width(22)
-          .height(22)
-          .textAlign(TextAlign.Center)
-          .onClick(() => {
-            this.shiftWeek(1);
-          })
+        Stack({ alignContent: Alignment.Center }) {
+          SymbolGlyph($r('sys.symbol.chevron_left'))
+            .fontSize(16)
+            .fontColor([$r('app.color.common_color_3')])
+            .symbolEffect(
+              new BounceSymbolEffect(EffectScope.WHOLE, EffectDirection.UP),
+              this.prevWeekTrigger
+            )
+        }
+        .width(24)
+        .height(22)
+        .onClick(() => {
+          this.shiftWeek(-1);
+        })
+        Stack({ alignContent: Alignment.Center }) {
+          SymbolGlyph($r('sys.symbol.chevron_right'))
+            .fontSize(16)
+            .fontColor([$r('app.color.common_color_3')])
+            .symbolEffect(
+              new BounceSymbolEffect(EffectScope.WHOLE, EffectDirection.UP),
+              this.nextWeekTrigger
+            )
+        }
+        .width(24)
+        .height(22)
+        .onClick(() => {
+          this.shiftWeek(1);
+        })
       }
       .justifyContent(FlexAlign.Center)
     }
@@ -971,6 +1044,7 @@ struct SchedulePage {
         .layoutWeight(1)
         .backgroundColor($r('app.color.white'))
       }
+      .id('schedule_pin_snapshot_anchor')
       .width('100%')
       .height('100%')
       if (this.showWeekPopup) {

@@ -1,4 +1,5 @@
 import { router } from '@kit.ArkUI';
+import { common } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
@@ -6,6 +7,7 @@ import { ReimburseProjectDetail } from '../model/ContactModel';
 import { TitleBar } from '../components/TitleBar';
 import { EmptyView } from '../components/EmptyView';
 import { LoadingView } from '../components/LoadingView';
+import { PrivacyWindowHelper } from '../common/PrivacyWindowHelper';
 
 /**
  * 报销项目详情页 — 源码级翻译 [P-C placeholder]（ProjectDetailActivity.java 逐行 → ArkTS）：
@@ -46,6 +48,21 @@ struct ReceiptDetailPage {
       if (typeof v === 'string') { this.projectNumber = v as string; }
     }
     this.loadDetail();
+  }
+
+  onPageShow(): void {
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    PrivacyWindowHelper.enterSensitivePage('ReceiptDetailPage', ctx);
+  }
+
+  onPageHide(): void {
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    PrivacyWindowHelper.leaveSensitivePage('ReceiptDetailPage', ctx);
+  }
+
+  aboutToDisappear(): void {
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    PrivacyWindowHelper.leaveSensitivePage('ReceiptDetailPage', ctx);
   }
 
   /** 源码 f1()→R2()：l.g(a).d(PROJECT_NUMBER) → ReimburseModel.T0 project/detail */

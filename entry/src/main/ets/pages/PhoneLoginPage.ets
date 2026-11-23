@@ -1,4 +1,5 @@
 import { router } from '@kit.ArkUI';
+import { common } from '@kit.AbilityKit';
 import { TitleBar } from '../components/TitleBar';
 import { ApiService, CheckLoginPhoneResult } from '../network/ApiService';
 import { LoginSession } from '../network/LoginSession';
@@ -8,6 +9,7 @@ import { UserInfo } from '../model/UserModel';
 import { PreferencesUtil } from '../data/PreferencesUtil';
 import { Constants } from '../data/Constants';
 import { ImmersiveLightHelper } from '../common/ImmersiveLightHelper';
+import { PrivacyWindowHelper } from '../common/PrivacyWindowHelper';
 
 /**
  * 手机号登录页 — 1:1 复刻 APK 手机号登录链路（InputIdentifyCodeActivity 188 行 + IdentifyCodeModel）：
@@ -34,8 +36,20 @@ struct PhoneLoginPage {
   /** checkLoginPhone 服务器下发倒计时秒数（源码 InputIdentifyCodeActivity.q=timeSpace，重发沿用同值） */
   private timeFrequency: number = Api.SMS_TIME_FREQUENCY;
 
+  onPageShow(): void {
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    PrivacyWindowHelper.enterSensitivePage('PhoneLoginPage', ctx);
+  }
+
+  onPageHide(): void {
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    PrivacyWindowHelper.leaveSensitivePage('PhoneLoginPage', ctx);
+  }
+
   aboutToDisappear(): void {
     this.stopTimer();
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    PrivacyWindowHelper.leaveSensitivePage('PhoneLoginPage', ctx);
   }
 
   /** 系统返回键：验证码阶段返回手机号输入阶段（APK 返回键同款） */

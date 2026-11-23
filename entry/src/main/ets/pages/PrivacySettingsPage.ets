@@ -10,7 +10,9 @@
  * - IOSToggleButton：宽 52dip(=52vp)、边框 2px(=1vp) #E7E7E7、
  *   offColor/divider_grey、onColor/ybg_blue(#18B4ED)、spot 白色。
  */
+import { common } from '@kit.AbilityKit';
 import { TitleBar } from '../components/TitleBar';
+import { PrivacyWindowHelper } from '../common/PrivacyWindowHelper';
 
 @Component
 struct IosToggleBtn {
@@ -45,110 +47,147 @@ struct PrivacySettingsPage {
   @State hideScheduleFlag: boolean = false;
   @State hideContactFlag: boolean = false;
   @State findPhoneFlag: boolean = true;
+  @StorageLink(PrivacyWindowHelper.KEY_PRIVACY_WINDOW) privacyWindowFlag: boolean =
+    PrivacyWindowHelper.DEFAULT_PRIVACY_ENABLED;
+
+  aboutToAppear(): void {
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    PrivacyWindowHelper.isEnabled(ctx).then((enabled: boolean) => {
+      this.privacyWindowFlag = enabled;
+    });
+  }
 
   build() {
     Column() {
       // include toolbar_normal
       TitleBar({ title: '隐私设置', showBack: true })
 
-      Column() {
-        // layoutPrivacy：隐私条目分组（白底）
+      Scroll() {
         Column() {
-          Row() {
-            Text('隐藏我的成绩')
-              .fontSize(17)
-              .fontColor($r('app.color.common_color_2'))
-            Text('开启后其他用户不可见')
-              .fontSize(16)
-              .fontColor($r('app.color.common_color_3'))
-              .textAlign(TextAlign.End)
-              .layoutWeight(1)
-              .margin({ right: 8 })
-            IosToggleBtn({
-              switchOn: this.hideScoreFlag,
-              onToggle: (nextVal: boolean) => {
-                this.hideScoreFlag = nextVal;
-              }
-            })
-          }
-          .width('100%')
-          .padding({ left: 15, right: 15, top: 8, bottom: 8 })
-          .alignItems(VerticalAlign.Center)
+          // layoutPrivacy：隐私条目分组（白底）
+          Column() {
+            Row() {
+              Text('隐藏我的成绩')
+                .fontSize(17)
+                .fontColor($r('app.color.common_color_2'))
+              Text('开启后其他用户不可见')
+                .fontSize(16)
+                .fontColor($r('app.color.common_color_3'))
+                .textAlign(TextAlign.End)
+                .layoutWeight(1)
+                .margin({ right: 8 })
+              IosToggleBtn({
+                switchOn: this.hideScoreFlag,
+                onToggle: (nextVal: boolean) => {
+                  this.hideScoreFlag = nextVal;
+                }
+              })
+            }
+            .width('100%')
+            .padding({ left: 15, right: 15, top: 8, bottom: 8 })
+            .alignItems(VerticalAlign.Center)
 
-          Row() {
-            Text('隐藏我的课表')
-              .fontSize(17)
-              .fontColor($r('app.color.common_color_2'))
-            Text('开启后其他用户不可见')
-              .fontSize(16)
-              .fontColor($r('app.color.common_color_3'))
-              .textAlign(TextAlign.End)
-              .layoutWeight(1)
-              .margin({ right: 8 })
-            IosToggleBtn({
-              switchOn: this.hideScheduleFlag,
-              onToggle: (nextVal: boolean) => {
-                this.hideScheduleFlag = nextVal;
-              }
-            })
-          }
-          .width('100%')
-          .padding({ left: 15, right: 15, top: 8, bottom: 8 })
-          .alignItems(VerticalAlign.Center)
+            Row() {
+              Text('隐藏我的课表')
+                .fontSize(17)
+                .fontColor($r('app.color.common_color_2'))
+              Text('开启后其他用户不可见')
+                .fontSize(16)
+                .fontColor($r('app.color.common_color_3'))
+                .textAlign(TextAlign.End)
+                .layoutWeight(1)
+                .margin({ right: 8 })
+              IosToggleBtn({
+                switchOn: this.hideScheduleFlag,
+                onToggle: (nextVal: boolean) => {
+                  this.hideScheduleFlag = nextVal;
+                }
+              })
+            }
+            .width('100%')
+            .padding({ left: 15, right: 15, top: 8, bottom: 8 })
+            .alignItems(VerticalAlign.Center)
 
-          Row() {
-            Text('隐藏我的联系方式')
-              .fontSize(17)
-              .fontColor($r('app.color.common_color_2'))
-            Text('开启后其他用户不可见')
-              .fontSize(16)
-              .fontColor($r('app.color.common_color_3'))
-              .textAlign(TextAlign.End)
-              .layoutWeight(1)
-              .margin({ right: 8 })
-            IosToggleBtn({
-              switchOn: this.hideContactFlag,
-              onToggle: (nextVal: boolean) => {
-                this.hideContactFlag = nextVal;
-              }
-            })
+            Row() {
+              Text('隐藏我的联系方式')
+                .fontSize(17)
+                .fontColor($r('app.color.common_color_2'))
+              Text('开启后其他用户不可见')
+                .fontSize(16)
+                .fontColor($r('app.color.common_color_3'))
+                .textAlign(TextAlign.End)
+                .layoutWeight(1)
+                .margin({ right: 8 })
+              IosToggleBtn({
+                switchOn: this.hideContactFlag,
+                onToggle: (nextVal: boolean) => {
+                  this.hideContactFlag = nextVal;
+                }
+              })
+            }
+            .width('100%')
+            .padding({ left: 15, right: 15, top: 8, bottom: 8 })
+            .alignItems(VerticalAlign.Center)
+
+            Row() {
+              Text('防截屏隐私保护')
+                .fontSize(17)
+                .fontColor($r('app.color.common_color_2'))
+              Text('敏感页面禁止截屏录屏')
+                .fontSize(14)
+                .fontColor($r('app.color.common_color_3'))
+                .textAlign(TextAlign.End)
+                .layoutWeight(1)
+                .margin({ right: 8 })
+              IosToggleBtn({
+                switchOn: this.privacyWindowFlag,
+                onToggle: (nextVal: boolean) => {
+                  this.privacyWindowFlag = nextVal;
+                  const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+                  PrivacyWindowHelper.setEnabled(nextVal, ctx);
+                }
+              })
+            }
+            .width('100%')
+            .padding({ left: 15, right: 15, top: 8, bottom: 8 })
+            .alignItems(VerticalAlign.Center)
           }
           .width('100%')
-          .padding({ left: 15, right: 15, top: 8, bottom: 8 })
-          .alignItems(VerticalAlign.Center)
+          .backgroundColor($r('app.color.white'))
+
+          // layoutFindOne：查找手机分组（白底、marginTop 12vp）
+          Column() {
+            Row() {
+              Text('查找手机')
+                .fontSize(17)
+                .fontColor($r('app.color.common_color_2'))
+              Text('开启后可远程定位设备位置')
+                .fontSize(16)
+                .fontColor($r('app.color.common_color_3'))
+                .textAlign(TextAlign.End)
+                .layoutWeight(1)
+                .margin({ right: 8 })
+              IosToggleBtn({
+                switchOn: this.findPhoneFlag,
+                onToggle: (nextVal: boolean) => {
+                  this.findPhoneFlag = nextVal;
+                }
+              })
+            }
+            .width('100%')
+            .padding({ left: 15, right: 15, top: 8, bottom: 8 })
+            .alignItems(VerticalAlign.Center)
+          }
+          .width('100%')
+          .backgroundColor($r('app.color.white'))
+          .margin({ top: 12 })
         }
         .width('100%')
-        .backgroundColor($r('app.color.white'))
-
-        // layoutFindOne：查找手机分组（白底、marginTop 12vp）
-        Column() {
-          Row() {
-            Text('查找手机')
-              .fontSize(17)
-              .fontColor($r('app.color.common_color_2'))
-            Text('开启后可远程定位设备位置')
-              .fontSize(16)
-              .fontColor($r('app.color.common_color_3'))
-              .textAlign(TextAlign.End)
-              .layoutWeight(1)
-              .margin({ right: 8 })
-            IosToggleBtn({
-              switchOn: this.findPhoneFlag,
-              onToggle: (nextVal: boolean) => {
-                this.findPhoneFlag = nextVal;
-              }
-            })
-          }
-          .width('100%')
-          .padding({ left: 15, right: 15, top: 8, bottom: 8 })
-          .alignItems(VerticalAlign.Center)
-        }
-        .width('100%')
-        .backgroundColor($r('app.color.white'))
-        .margin({ top: 12 })
       }
       .width('100%')
       .layoutWeight(1)
+      .scrollBar(BarState.Off)
+      .align(Alignment.Top)
     }
     .width('100%')
     .height('100%')

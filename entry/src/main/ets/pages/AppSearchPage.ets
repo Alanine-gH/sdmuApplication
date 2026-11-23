@@ -4,6 +4,7 @@ import { LoginSession } from '../network/LoginSession';
 import { ApiResponse } from '../model/ResponseModel';
 import { PreferencesUtil } from '../data/PreferencesUtil';
 import { Constants } from '../data/Constants';
+import { PasteHelper } from '../common/PasteHelper';
 
 /**
  * 应用搜索页 — 源码级复刻 AppSearchActivity（newUI 包，/app/AppSearchActivity，
@@ -436,6 +437,40 @@ struct AppSearchPage {
         }
         .layoutWeight(1)
         .margin({ left: 16 })
+
+        Row() {
+          PasteButton({
+            icon: PasteIconStyle.LINES,
+            text: PasteDescription.PASTE,
+            buttonType: ButtonType.Capsule
+          })
+            .height(30)
+            .fontSize(12)
+            .iconSize(12)
+            .fontColor($r('app.color.white'))
+            .iconColor($r('app.color.white'))
+            .backgroundColor($r('app.color.sdmu_primary'))
+            .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+            .onClick(async (_event: ClickEvent, result: PasteButtonOnClickResult) => {
+              if (result !== PasteButtonOnClickResult.SUCCESS) {
+                this.getUIContext().getPromptAction().showToast({ message: '未获得剪贴板授权' });
+                return;
+              }
+              const res = await PasteHelper.readPlainTextFromSystemPasteboard();
+              if (!res.success) {
+                this.getUIContext().getPromptAction().showToast({ message: res.message });
+                return;
+              }
+              const keyword: string = PasteHelper.normalizeSingleLine(res.text, 40);
+              if (keyword === '') {
+                this.getUIContext().getPromptAction().showToast({ message: '剪贴板暂无文本内容' });
+                return;
+              }
+              this.searchText = keyword;
+              this.doSearch();
+            })
+        }
+        .margin({ left: 8 })
 
         Text('取消')
           .fontSize(14)

@@ -32,9 +32,12 @@ export struct TitleBar {
   @Prop rightEnabled: boolean = true;
   /** [W20 social] 右侧文字自定义色（PostDetailActivity.T1 "更多" ybg_blue；null 保持黑色） */
   rightTextColor: string | null = null;
-  /** [tablet-adapt] 多形态断点：sm(100%) / md(720vp) / lg(1080vp) */
+  /** [tablet-adapt] 多形态断点：xs/sm(100%) / md(720vp) / lg(1080vp) / xl(1200vp) */
   @StorageProp('isWideScreen') isWideScreen: boolean = false;
   @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
 
   build() {
     Column() {
@@ -121,7 +124,8 @@ export struct TitleBar {
         }
       }
       .width('100%')
-      .height(44)
+      .height(this.isCompactHeight ? 37 : 44)
+      .padding({ left: this.avoidAreaLeftVp > 0 ? this.avoidAreaLeftVp : 0, right: this.avoidAreaRightVp > 0 ? this.avoidAreaRightVp : 0 })
       .alignItems(VerticalAlign.Center)
       .backgroundColor($r('app.color.main_bg'))
       // [tablet-adapt] 宽屏标题栏内容按断点限宽居中（sm:100% / md:720 / lg:1080）
@@ -136,7 +140,7 @@ export struct TitleBar {
         .alignSelf(ItemAlign.Center)
     }
     .width('100%')
-    .height(45)
+    .height(this.isCompactHeight ? 38 : 45)
     .backgroundColor($r('app.color.main_bg'))
     .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
   }

@@ -1,8 +1,10 @@
 import { router } from '@kit.ArkUI';
+import { common } from '@kit.AbilityKit';
 import { TitleBar } from '../components/TitleBar';
 import { GesturePwdGrid } from '../components/GesturePwdGrid';
 import { GestureManager } from '../model/GestureManager';
 import { LoginSession } from '../network/LoginSession';
+import { PrivacyWindowHelper } from '../common/PrivacyWindowHelper';
 
 /**
  * 手势密码设置页 — 1:1 复刻 GesturePwdSettingActivity（100 行）
@@ -45,6 +47,21 @@ struct GesturePwdSettingPage {
     // 源码 m.switchToResetMode()
     this.resetCurrentTime = 0;
     this.tempPwd = [];
+  }
+
+  onPageShow(): void {
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    PrivacyWindowHelper.enterSensitivePage('GesturePwdSettingPage', ctx);
+  }
+
+  onPageHide(): void {
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    PrivacyWindowHelper.leaveSensitivePage('GesturePwdSettingPage', ctx);
+  }
+
+  aboutToDisappear(): void {
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    PrivacyWindowHelper.leaveSensitivePage('GesturePwdSettingPage', ctx);
   }
 
   private toast(msg: string): void {

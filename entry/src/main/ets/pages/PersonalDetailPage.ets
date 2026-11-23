@@ -1,4 +1,5 @@
 import { router } from '@kit.ArkUI';
+import { common } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
@@ -8,6 +9,7 @@ import { LoadingView } from '../components/LoadingView';
 import { LoginSession } from '../network/LoginSession';
 import { PreferencesUtil } from '../data/PreferencesUtil';
 import { Constants } from '../data/Constants';
+import { PrivacyWindowHelper } from '../common/PrivacyWindowHelper';
 
 /**
  * 我的资料页 — 1:1 翻译原 APK PersonalDetailNewActivity.java（568 行）：
@@ -134,10 +136,22 @@ struct PersonalDetailPage {
    *  HAP 等价 = 从编辑页返回时（onPageShow 非首显）重拉。
    */
   onPageShow(): void {
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    PrivacyWindowHelper.enterSensitivePage('PersonalDetailPage', ctx);
     if (this.hasShownOnce) {
       this.fetchUserInfo();
     }
     this.hasShownOnce = true;
+  }
+
+  onPageHide(): void {
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    PrivacyWindowHelper.leaveSensitivePage('PersonalDetailPage', ctx);
+  }
+
+  aboutToDisappear(): void {
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    PrivacyWindowHelper.leaveSensitivePage('PersonalDetailPage', ctx);
   }
 
   private identityLabel(): string {

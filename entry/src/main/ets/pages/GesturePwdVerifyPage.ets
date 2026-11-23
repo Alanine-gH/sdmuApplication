@@ -1,8 +1,10 @@
 import { router } from '@kit.ArkUI';
+import { common } from '@kit.AbilityKit';
 import { TitleBar } from '../components/TitleBar';
 import { GesturePwdGrid } from '../components/GesturePwdGrid';
 import { GesturePwdBean } from '../model/GestureManager';
 import { LoginSession } from '../network/LoginSession';
+import { PrivacyWindowHelper } from '../common/PrivacyWindowHelper';
 
 /**
  * 手势密码校验页 — 1:1 复刻 GesturePwdVerifyActivity（229 行）
@@ -80,12 +82,24 @@ struct GesturePwdVerifyPage {
     this.currentAttemptTime = 1;
   }
 
+  onPageShow(): void {
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    PrivacyWindowHelper.enterSensitivePage('GesturePwdVerifyPage', ctx);
+  }
+
+  onPageHide(): void {
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    PrivacyWindowHelper.leaveSensitivePage('GesturePwdVerifyPage', ctx);
+  }
+
   aboutToDisappear(): void {
     // 源码 onDestroy：CountDownTimer.cancel()
     if (this.countdownTimerId !== -1) {
       clearTimeout(this.countdownTimerId);
       this.countdownTimerId = -1;
     }
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    PrivacyWindowHelper.leaveSensitivePage('GesturePwdVerifyPage', ctx);
   }
 
   /** 源码 N2()：头像 + 掩码手机号（touxiang 开关分支：HAP 未持久化 SystemSwitch → null 分支） */

@@ -10,7 +10,6 @@ import { ICampusTab } from '../components/ICampusTab';
 import { IOfficeTab } from '../components/IOfficeTab';
 import { MineTab } from '../components/MineTab';
 import { BreakpointSystem } from '../common/BreakpointSystem';
-import { ThemeConstants } from '../common/ThemeConstants';
 import { ImmersiveLightHelper } from '../common/ImmersiveLightHelper';
 
 /** APK 应用宫格项（服务端下发 7 组，本清单为 2026-11-17 实拍结果） */
@@ -118,6 +117,17 @@ struct AppsTab {
   /** onActivityResult(5467) 返回刷新等价：编辑常用应用页 toggle 成功后置时间戳，本页监听重拉 */
   @StorageLink('common_app_changed') @Watch('onCommonAppChanged') commonAppChanged: number = 0;
   @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('heightBreakpoint') heightBreakpoint: string = 'lg';
+  @StorageProp('isLandscape') isLandscape: boolean = false;
+  @State searchTrigger: number = -1;
+
+  private useSideRail(): boolean {
+    return BreakpointSystem.shouldUseSideRail(
+      this.currentBreakpoint,
+      this.heightBreakpoint,
+      this.isLandscape
+    );
+  }
 
   private gridTemplate(): string {
     const cols: number = BreakpointSystem.getAppGridColumns(this.currentBreakpoint);
@@ -284,50 +294,53 @@ struct AppsTab {
   @Builder
   gridGroup(items: AppGridItem[]) {
     Column() {
-      Grid() {
-        ForEach(items, (item: AppGridItem) => {
-          GridItem() {
-            Column() {
-              Image(item.icon)
-                .width(34)
-                .height(34)
-                .objectFit(ImageFit.Contain)
-              Text(item.name)
-                .fontSize(12)
-                .fontColor($r('app.color.common_color_1'))
-                .maxLines(1)
-                .textOverflow({ overflow: TextOverflow.Ellipsis })
-                .margin({ top: 8 })
-            }
-            .width('100%')
-            .padding({ top: 14, bottom: 14 })
-            .borderRadius(12)
-            .alignItems(HorizontalAlign.Center)
-            .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.95 })
-            .onClick(() => {
-              if (item.url !== '') {
-                // LX=2 轻应用：直接加载服务端下发的 H5 地址
-                this.dispatchApp(item.name, item.yyid, '2', item.url);
-              } else if (item.yyid !== '') {
-                // LX=1 原生：YYID 映射分发
-                this.dispatchApp(item.name, item.yyid, '1', '');
-              } else {
-                router.pushUrl({ url: item.target });
+      Column() {
+        Grid() {
+          ForEach(items, (item: AppGridItem) => {
+            GridItem() {
+              Column() {
+                Image(item.icon)
+                  .width(34)
+                  .height(34)
+                  .objectFit(ImageFit.Contain)
+                Text(item.name)
+                  .fontSize(12)
+                  .fontColor($r('app.color.common_color_1'))
+                  .maxLines(1)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis })
+                  .margin({ top: 8 })
               }
-            })
-          }
-        }, (item: AppGridItem) => 'app_' + item.name)
+              .width('100%')
+              .padding({ top: 14, bottom: 14 })
+              .borderRadius(12)
+              .alignItems(HorizontalAlign.Center)
+              .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.95 })
+              .onClick(() => {
+                if (item.url !== '') {
+                  // LX=2 轻应用：直接加载服务端下发的 H5 地址
+                  this.dispatchApp(item.name, item.yyid, '2', item.url);
+                } else if (item.yyid !== '') {
+                  // LX=1 原生：YYID 映射分发
+                  this.dispatchApp(item.name, item.yyid, '1', '');
+                } else {
+                  router.pushUrl({ url: item.target });
+                }
+              })
+            }
+          }, (item: AppGridItem) => 'app_' + item.name)
+        }
+        .columnsTemplate(this.gridTemplate())
+        .rowsGap(0)
+        .width('100%')
+        .height(Math.ceil(items.length / BreakpointSystem.getAppGridColumns(this.currentBreakpoint)) * 90)
       }
-      .columnsTemplate(this.gridTemplate())
-      .rowsGap(0)
       .width('100%')
-      .height(Math.ceil(items.length / BreakpointSystem.getAppGridColumns(this.currentBreakpoint)) * 90)
+      .borderRadius(14)
+      .backgroundColor(ImmersiveLightHelper.fallbackBg($r('app.color.white')))
+      .systemMaterial(ImmersiveLightHelper.cardMaterial())
     }
     .width('100%')
-    .borderRadius(14)
-    .margin({ left: 12, right: 12, bottom: 10 })
-    .backgroundColor(ImmersiveLightHelper.fallbackBg($r('app.color.white')))
-    .systemMaterial(ImmersiveLightHelper.cardMaterial())
+    .padding({ left: 12, right: 12, bottom: 10 })
   }
 
   build() {
@@ -340,7 +353,7 @@ struct AppsTab {
             .fontColor($r('app.color.common_color_1'))
             .textAlign(TextAlign.Center)
           Row()
-            .width(210)
+            .width(this.currentBreakpoint === 'xs' ? 120 : 210)
             .height(2)
             .backgroundColor($r('app.color.sdmu_primary'))
             .margin({ top: 6 })
@@ -352,8 +365,10 @@ struct AppsTab {
         SymbolGlyph($r('sys.symbol.magnifyingglass'))
           .fontSize(22)
           .fontColor([$r('app.color.common_color_1')])
+          .symbolEffect(new BounceSymbolEffect(EffectScope.WHOLE, EffectDirection.UP), this.searchTrigger)
           .margin({ right: 20, top: 14 })
           .onClick(() => {
+            this.searchTrigger = this.searchTrigger < 0 ? 1 : this.searchTrigger + 1;
             // WorkFragment$e：搜索图标 → e.a.z=/app/AppSearchActivity（HAP AppSearchPage）
             router.pushUrl({ url: 'pages/AppSearchPage' });
           })
@@ -367,41 +382,44 @@ struct AppsTab {
           if (this.dataSource === 'server') {
             ForEach(this.serverGroups, (group: ServerAppGroup) => {
               Column() {
-                this.groupHeader(group.name)
-                Grid() {
-                  ForEach(group.apps, (item: ServerAppItem) => {
-                    GridItem() {
-                      Column() {
-                        // APK 同款：YYTB UUID 拼服务端图标 URL，失败回落本地占位
-                        ServerIcon({ url: item.yytb === '' ? '' :
-                          Constants.SOCKET_HOST + '/mobileapi_ydxy/open/image/' + item.yytb })
-                        Text(item.yymc)
-                          .fontSize(12)
-                          .fontColor($r('app.color.common_color_1'))
-                          .maxLines(1)
-                          .textOverflow({ overflow: TextOverflow.Ellipsis })
-                          .margin({ top: 8 })
+                Column() {
+                  this.groupHeader(group.name)
+                  Grid() {
+                    ForEach(group.apps, (item: ServerAppItem) => {
+                      GridItem() {
+                        Column() {
+                          // APK 同款：YYTB UUID 拼服务端图标 URL，失败回落本地占位
+                          ServerIcon({ url: item.yytb === '' ? '' :
+                            Constants.SOCKET_HOST + '/mobileapi_ydxy/open/image/' + item.yytb })
+                          Text(item.yymc)
+                            .fontSize(12)
+                            .fontColor($r('app.color.common_color_1'))
+                            .maxLines(1)
+                            .textOverflow({ overflow: TextOverflow.Ellipsis })
+                            .margin({ top: 8 })
+                        }
+                        .width('100%')
+                        .padding({ top: 14, bottom: 14 })
+                        .borderRadius(12)
+                        .alignItems(HorizontalAlign.Center)
+                        .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.95 })
+                        .onClick(() => {
+                          this.dispatchApp(item.yymc, item.yyid, item.lx, item.url);
+                        })
                       }
-                      .width('100%')
-                      .padding({ top: 14, bottom: 14 })
-                      .borderRadius(12)
-                      .alignItems(HorizontalAlign.Center)
-                      .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.95 })
-                      .onClick(() => {
-                        this.dispatchApp(item.yymc, item.yyid, item.lx, item.url);
-                      })
-                    }
-                  }, (item: ServerAppItem) => 'sv_' + item.yyid)
+                    }, (item: ServerAppItem) => 'sv_' + item.yyid)
+                  }
+                  .columnsTemplate(this.gridTemplate())
+                  .width('100%')
+                  .height(Math.ceil(group.apps.length / BreakpointSystem.getAppGridColumns(this.currentBreakpoint)) * 90)
                 }
-                .columnsTemplate(this.gridTemplate())
                 .width('100%')
-                .height(Math.ceil(group.apps.length / BreakpointSystem.getAppGridColumns(this.currentBreakpoint)) * 90)
+                .borderRadius(14)
+                .backgroundColor(ImmersiveLightHelper.fallbackBg($r('app.color.white')))
+                .systemMaterial(ImmersiveLightHelper.cardMaterial())
               }
               .width('100%')
-              .borderRadius(14)
-              .margin({ left: 12, right: 12, bottom: 10 })
-              .backgroundColor(ImmersiveLightHelper.fallbackBg($r('app.color.white')))
-              .systemMaterial(ImmersiveLightHelper.cardMaterial())
+              .padding({ left: 12, right: 12, bottom: 10 })
             }, (group: ServerAppGroup) => 'grp_' + group.name)
           }
 
@@ -459,7 +477,7 @@ struct AppsTab {
           }
         }
         .width('100%')
-        .padding({ bottom: 88 })
+        .padding({ bottom: this.useSideRail() ? 16 : 88 })
       }
       .scrollable(ScrollDirection.Vertical)
       .width('100%')
@@ -483,6 +501,7 @@ struct AppsTab {
 @Component
 struct ReportTab {
   @State subTabIndex: number = 0;
+  @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
 
   @Builder
   subTabLabel(label: string | Resource, index: number) {
@@ -500,7 +519,7 @@ struct ReportTab {
         .backgroundColor($r('app.color.mobile_campus_primary_color'))
         .margin({ top: 4 })
     }
-    .height(44)
+    .height(this.isCompactHeight ? 36 : 44)
     .justifyContent(FlexAlign.Center)
     .alignItems(HorizontalAlign.Center)
     .onClick(() => {
@@ -522,7 +541,7 @@ struct ReportTab {
         .height(3)
         .margin({ top: 4 })
     }
-    .height(44)
+    .height(this.isCompactHeight ? 36 : 44)
     .justifyContent(FlexAlign.Center)
     .alignItems(HorizontalAlign.Center)
     .onClick(() => {
@@ -532,15 +551,15 @@ struct ReportTab {
 
   build() {
     Column() {
-      // 顶部校名横幅：固定比例居中，避免宽屏被横向压扁
+      // 顶部校名横幅：固定比例居中，紧凑高屏自动收紧高度
       Row() {
         Image($r('app.media.mobile_campus_main_head_logo'))
-          .height(34)
+          .height(this.isCompactHeight ? 24 : 34)
           .constraintSize({ maxWidth: 320 })
           .objectFit(ImageFit.Contain)
       }
       .width('100%')
-      .height(44)
+      .height(this.isCompactHeight ? 32 : 44)
       .justifyContent(FlexAlign.Center)
       .backgroundColor($r('app.color.main_bg'))
 
@@ -563,7 +582,7 @@ struct ReportTab {
         }
       }
       .width('100%')
-      .height(44)
+      .height(this.isCompactHeight ? 36 : 44)
       .justifyContent(FlexAlign.Center)
 
       // ViewPager 内容
@@ -599,9 +618,23 @@ struct Index {
   @State isReady: boolean = false;
   @State isLogged: boolean = false;
   @State currentTabIndex: number = 0;
-  /** [tablet-adapt] 多形态断点：sm(<600) / md(600~839) / lg(>=840) */
+  /** [tablet-adapt] 多形态断点：xs/sm / md / lg / xl + 高度断点 */
   @StorageProp('isWideScreen') isWideScreen: boolean = false;
   @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('heightBreakpoint') heightBreakpoint: string = 'lg';
+  @StorageProp('isLandscape') isLandscape: boolean = false;
+  @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
+  @State tabTriggers: number[] = [-1, -1, -1];
+
+  private useSideRail(): boolean {
+    return BreakpointSystem.shouldUseSideRail(
+      this.currentBreakpoint,
+      this.heightBreakpoint,
+      this.isLandscape
+    );
+  }
 
   aboutToAppear(): void {
     // 启动即恢复持久化会话（UC/aesKey/sessionKey），业务请求免重新协商
@@ -647,45 +680,51 @@ struct Index {
   }
 
   @Builder
-  bottomTab(iconNormal: Resource, iconChecked: Resource, label: string | Resource, index: number) {
-    // APK 实拍：选中色为主题红 #97000C（main_bottom_bar 红色选中态），非蓝色
+  bottomTab(glyphNormal: Resource, glyphSelected: Resource, label: string | Resource, index: number) {
+    // APK 实拍：选中色为主题红 #97000C（main_bottom_bar 红色选中态）
     if (this.currentTabIndex === index) {
       Column() {
-        Image(iconChecked)
-          .width(26)
-          .height(26)
-          .colorFilter(ThemeConstants.TINT_RED)
+        SymbolGlyph(glyphSelected)
+          .fontSize(24)
+          .fontColor([$r('app.color.sdmu_primary')])
+          .symbolEffect(
+            new BounceSymbolEffect(EffectScope.LAYER, EffectDirection.UP),
+            this.tabTriggers[index]
+          )
         Text(label)
           .fontSize(12)
           .fontColor($r('app.color.sdmu_primary'))
           .margin({ top: 2 })
       }
-      .width(this.currentBreakpoint === 'lg' ? 60 : '100%')
+      .width(this.useSideRail() ? 60 : '100%')
       .height(52)
-      .borderRadius(this.currentBreakpoint === 'lg' ? 14 : 0)
+      .borderRadius(this.useSideRail() ? 14 : 0)
       .justifyContent(FlexAlign.Center)
       .alignItems(HorizontalAlign.Center)
-      .backgroundColor(this.currentBreakpoint === 'lg' ?
+      .backgroundColor(this.useSideRail() ?
         ImmersiveLightHelper.fallbackBg('#FFF0F0') : Color.Transparent)
-      .systemMaterial(this.currentBreakpoint === 'lg' ? ImmersiveLightHelper.pillMaterial() : undefined)
+      .systemMaterial(this.useSideRail() ? ImmersiveLightHelper.pillMaterial() : undefined)
       .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.94 })
     } else {
       Column() {
-        Image(iconNormal)
-          .width(26)
-          .height(26)
-          .colorFilter(ThemeConstants.TINT_GREY)
+        SymbolGlyph(glyphNormal)
+          .fontSize(24)
+          .fontColor([$r('app.color.common_color_2')])
+          .symbolEffect(
+            new BounceSymbolEffect(EffectScope.LAYER, EffectDirection.UP),
+            this.tabTriggers[index]
+          )
         Text(label)
           .fontSize(12)
           .fontColor($r('app.color.common_color_2'))
           .margin({ top: 2 })
       }
-      .width(this.currentBreakpoint === 'lg' ? 60 : '100%')
+      .width(this.useSideRail() ? 60 : '100%')
       .height(52)
-      .borderRadius(this.currentBreakpoint === 'lg' ? 14 : 0)
+      .borderRadius(this.useSideRail() ? 14 : 0)
       .justifyContent(FlexAlign.Center)
       .alignItems(HorizontalAlign.Center)
-      .backgroundColor(this.currentBreakpoint === 'lg' ? $r('app.color.main_bg') : Color.Transparent)
+      .backgroundColor(this.useSideRail() ? $r('app.color.main_bg') : Color.Transparent)
       .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.94 })
     }
   }
@@ -693,11 +732,9 @@ struct Index {
   build() {
     Column() {
       if (this.isReady && this.isLogged) {
-        // APK 实拍：学生端底栏 3 个按钮（首页/应用/我的）——BadgeLayout 中
-        // cbNews 仅教师(userType=2)可见、cbContact 由 isHideContactTab 隐藏、
-        // cbYiban 由 mobile_campus_yiban_visibility=false 隐藏、cbDaiBan/cbXueGong 未启用。
-        Tabs({ barPosition: this.currentBreakpoint === 'lg' ? BarPosition.Start : BarPosition.End }) {
-          // [tablet-adapt] sm:100% / md:720vp(阔直板/折叠屏) / lg:1080vp+左侧导航栏(平板/三折叠)
+        // APK 实拍：学生端底栏 3 个按钮（首页/应用/我的）
+        Tabs({ barPosition: this.useSideRail() ? BarPosition.Start : BarPosition.End }) {
+          // [tablet-adapt] xs/sm:100% / md:720vp / lg:1080vp / xl:1200vp + 侧边导航栏
           TabContent() {
             Row() {
               ReportTab()
@@ -708,7 +745,7 @@ struct Index {
             .height('100%')
             .justifyContent(FlexAlign.Center)
           }
-          .tabBar(this.bottomTab($r('app.media.mobile_campus_home'), $r('app.media.mobile_campus_home_select'),
+          .tabBar(this.bottomTab($r('sys.symbol.house'), $r('sys.symbol.house_fill'),
             '首页', 0))
           TabContent() {
             Row() {
@@ -720,7 +757,7 @@ struct Index {
             .height('100%')
             .justifyContent(FlexAlign.Center)
           }
-          .tabBar(this.bottomTab($r('app.media.mobile_campus_work'), $r('app.media.mobile_campus_work_select'),
+          .tabBar(this.bottomTab($r('sys.symbol.square_grid_2x2'), $r('sys.symbol.square_grid_2x2'),
             '应用', 1))
           TabContent() {
             Row() {
@@ -732,28 +769,37 @@ struct Index {
             .height('100%')
             .justifyContent(FlexAlign.Center)
           }
-          .tabBar(this.bottomTab($r('app.media.mobile_campus_my'), $r('app.media.mobile_campus_my_select'),
+          .tabBar(this.bottomTab($r('sys.symbol.person'), $r('sys.symbol.person_fill'),
             '我的', 2))
         }
-        .vertical(this.currentBreakpoint === 'lg')
-        .barWidth(this.currentBreakpoint === 'lg' ? 76 : '100%')
-        .barHeight(this.currentBreakpoint === 'lg' ? '100%' : 62)
-        .barOverlap(this.currentBreakpoint !== 'lg')
-        .barBackgroundColor(this.currentBreakpoint !== 'lg' ? Color.Transparent : $r('app.color.main_bg'))
-        .barFloatingStyle(this.currentBreakpoint !== 'lg' && ImmersiveLightHelper.isSupported() ? {
+        .vertical(this.useSideRail())
+        .barWidth(this.useSideRail() ? 76 : '100%')
+        .barHeight(this.useSideRail() ? '100%' : 62)
+        .barOverlap(!this.useSideRail())
+        .barBackgroundColor(!this.useSideRail() ? Color.Transparent : $r('app.color.main_bg'))
+        .barFloatingStyle(!this.useSideRail() && ImmersiveLightHelper.isSupported() ? {
           barSideMargin: 16,
           barBottomMargin: 10,
           systemMaterial: ImmersiveLightHelper.tabBarMaterial()
         } : undefined)
-        .scrollable(true)
+        .scrollable(!this.useSideRail())
         .barMode(BarMode.Fixed)
         .onChange((index: number) => {
           this.currentTabIndex = index;
+          const next: number[] = this.tabTriggers.slice();
+          if (index >= 0 && index < next.length) {
+            next[index] = next[index] < 0 ? 1 : next[index] + 1;
+            this.tabTriggers = next;
+          }
         })
       }
     }
     .width('100%')
     .height('100%')
+    .padding({
+      left: this.avoidAreaLeftVp > 0 ? this.avoidAreaLeftVp : 0,
+      right: this.avoidAreaRightVp > 0 ? this.avoidAreaRightVp : 0
+    })
     .backgroundColor($r('app.color.main_bg'))
   }
 }

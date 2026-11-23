@@ -1,8 +1,10 @@
 import { router } from '@kit.ArkUI';
+import { common } from '@kit.AbilityKit';
 import { TitleBar } from '../components/TitleBar';
 import { ApiService } from '../network/ApiService';
 import { LoginSession } from '../network/LoginSession';
 import { PreferencesUtil } from '../data/PreferencesUtil';
+import { PrivacyWindowHelper } from '../common/PrivacyWindowHelper';
 
 /**
  * 修改密码页 — 1:1 复刻 ModifyPwdActivity.java + mobile_campus_activity_modify_pwd.xml
@@ -40,6 +42,21 @@ struct ModifyPasswordPage {
 
   aboutToAppear(): void {
     // 源码 f1()：tvName.setText(d.a.c().getUserName())
+  }
+
+  onPageShow(): void {
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    PrivacyWindowHelper.enterSensitivePage('ModifyPasswordPage', ctx);
+  }
+
+  onPageHide(): void {
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    PrivacyWindowHelper.leaveSensitivePage('ModifyPasswordPage', ctx);
+  }
+
+  aboutToDisappear(): void {
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    PrivacyWindowHelper.leaveSensitivePage('ModifyPasswordPage', ctx);
   }
 
   /** 登录用户名（f1：d.a.c().getUserName()；会话空则回退 preferences 缓存） */

@@ -1,5 +1,6 @@
 import { router } from '@kit.ArkUI';
 import { TitleBar } from '../components/TitleBar';
+import { PasteHelper } from '../common/PasteHelper';
 
 /**
  * 扫码结果页 — 源码级翻译（QrCodeScanResultActivity.java 逐行 → ArkTS，[W25 misc-b]）：
@@ -33,12 +34,78 @@ struct QrCodeScanResultPage {
       // 源码 toolbar 无标题（H0()=null 且 T1 无 gVar.n()）
       TitleBar({ title: '', showBack: true })
 
-      Text(this.resultContent)
-        .fontSize(16)
-        .fontColor($r('app.color.black'))
-        .padding(15)
+      Scroll() {
+        Column() {
+          Column() {
+            Text(this.resultContent)
+              .fontSize(16)
+              .fontColor($r('app.color.black'))
+              .width('100%')
+              .copyOption(CopyOptions.InApp)
+          }
+          .width('100%')
+          .padding(15)
+          .backgroundColor($r('app.color.white'))
+
+          Row({ space: 12 }) {
+            PasteButton({
+              icon: PasteIconStyle.LINES,
+              text: PasteDescription.PASTE,
+              buttonType: ButtonType.Capsule
+            })
+              .height(34)
+              .fontSize(13)
+              .iconSize(13)
+              .fontColor($r('app.color.white'))
+              .iconColor($r('app.color.white'))
+              .backgroundColor($r('app.color.sdmu_primary'))
+              .padding({ left: 14, right: 14, top: 6, bottom: 6 })
+              .onClick(async (_event: ClickEvent, result: PasteButtonOnClickResult) => {
+                if (result !== PasteButtonOnClickResult.SUCCESS) {
+                  this.getUIContext().getPromptAction().showToast({ message: '未获得剪贴板授权' });
+                  return;
+                }
+                const res = await PasteHelper.readPlainTextFromSystemPasteboard();
+                if (!res.success) {
+                  this.getUIContext().getPromptAction().showToast({ message: res.message });
+                  return;
+                }
+                this.resultContent = res.text;
+                this.getUIContext().getPromptAction().showToast({ message: '已从剪贴板导入内容' });
+              })
+
+            if (PasteHelper.isHttpUrl(this.resultContent)) {
+              Text('打开链接')
+                .fontSize(13)
+                .fontColor($r('app.color.white'))
+                .backgroundColor('#18B4ED')
+                .borderRadius(17)
+                .height(34)
+                .textAlign(TextAlign.Center)
+                .padding({ left: 16, right: 16 })
+                .onClick(() => {
+                  router.pushUrl({
+                    url: 'pages/WebViewPage',
+                    params: {
+                      navigationBarTitle: '扫码结果',
+                      url: this.resultContent.trim(),
+                      isZoom: true
+                    }
+                  });
+                })
+            }
+          }
+          .width('100%')
+          .padding({ left: 15, right: 15, top: 12, bottom: 16 })
+          .alignItems(VerticalAlign.Center)
+        }
         .width('100%')
-        .copyOption(CopyOptions.InApp)
+        .alignItems(HorizontalAlign.Start)
+      }
+      .width('100%')
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
+      .align(Alignment.Top)
     }
     .width('100%')
     .height('100%')

@@ -37,6 +37,14 @@
       "value": "用于将联系人保存到本地通讯录"
     },
     {
+      "name": "read_calendar_reason",
+      "value": "用于读取系统日历以同步课程与考试安排"
+    },
+    {
+      "name": "write_calendar_reason",
+      "value": "用于将课程、日程与考试安排写入系统日历"
+    },
+    {
       "name": "school_account",
       "value": "请输入您的账号"
     },

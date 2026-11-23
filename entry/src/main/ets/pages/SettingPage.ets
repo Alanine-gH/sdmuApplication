@@ -6,6 +6,7 @@ import { ApiService } from '../network/ApiService';
 import { LoginSession } from '../network/LoginSession';
 import { ApiResponse } from '../model/ResponseModel';
 import { GestureManager, GesturePwdBean } from '../model/GestureManager';
+import { PrivacyWindowHelper } from '../common/PrivacyWindowHelper';
 
 /**
  * 设置页 — 1:1 复刻 mobile_campus_activity_setting.xml
@@ -26,6 +27,10 @@ struct SettingPage {
 
   aboutToAppear(): void {
     this.calcCacheSize();
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    PrivacyWindowHelper.isEnabled(ctx).then((enabled: boolean) => {
+      this.privacyWindowEnabled = enabled;
+    });
   }
 
   /** 源码 f1：Math.round(g.e(cacheDir))，>1MB 显示 MB 否则 KB */
@@ -61,6 +66,8 @@ struct SettingPage {
     return total;
   }
   @State pushEnabled: boolean = true;
+  @StorageLink(PrivacyWindowHelper.KEY_PRIVACY_WINDOW) privacyWindowEnabled: boolean =
+    PrivacyWindowHelper.DEFAULT_PRIVACY_ENABLED;
   @State showUpdateDialog: boolean = false;
   /** [W22 launch-chain] SettingActivity h() 手势密码链：校验密码弹窗态 + 输入值 */
   @State showGesturePwdDialog: boolean = false;
@@ -323,6 +330,59 @@ struct SettingPage {
           .backgroundColor($r('app.color.white'))
           .onClick(() => {
             this.onGestureRow();
+          })
+
+          this.settingDivider()
+
+          // 防截屏隐私保护 + Switch
+          Row() {
+            Column() {
+              Text('防截屏隐私保护')
+                .fontSize(16)
+                .fontColor($r('app.color.common_color_1'))
+              Text('登录、手势密码、个人资料等页面禁止截屏录屏')
+                .fontSize(12)
+                .fontColor($r('app.color.common_color_3'))
+                .margin({ top: 2 })
+            }
+            .layoutWeight(1)
+            .alignItems(HorizontalAlign.Start)
+
+            Toggle({ type: ToggleType.Switch, isOn: this.privacyWindowEnabled })
+              .selectedColor($r('app.color.blue_default'))
+              .switchPointColor($r('app.color.white'))
+              .onChange((isOn: boolean) => {
+                if (this.privacyWindowEnabled === isOn) {
+                  return;
+                }
+                this.privacyWindowEnabled = isOn;
+                const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+                PrivacyWindowHelper.setEnabled(isOn, ctx);
+              })
+          }
+          .width('100%')
+          .constraintSize({ minHeight: 56 })
+          .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+          .alignItems(VerticalAlign.Center)
+          .backgroundColor($r('app.color.white'))
+
+          this.settingDivider()
+
+          // 隐私设置入口（打通 PrivacySettingsPage）
+          Row() {
+            Text('隐私设置')
+              .fontSize(16)
+              .fontColor($r('app.color.common_color_1'))
+              .layoutWeight(1)
+            this.arrowIcon()
+          }
+          .width('100%')
+          .height(48)
+          .padding({ left: 12, right: 12 })
+          .alignItems(VerticalAlign.Center)
+          .backgroundColor($r('app.color.white'))
+          .onClick(() => {
+            router.pushUrl({ url: 'pages/PrivacySettingsPage' });
           })
 
           // 组间空隙 12vp

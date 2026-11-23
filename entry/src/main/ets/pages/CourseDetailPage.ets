@@ -1,9 +1,11 @@
 import { router } from '@kit.ArkUI';
+import { common } from '@kit.AbilityKit';
 import { TitleBar } from '../components/TitleBar';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { CourseDetailEntry, LeaveStudentEntry } from '../model/CourseModel';
 import { LoginSession } from '../network/LoginSession';
+import { ReminderCalendarHelper } from '../common/ReminderCalendarHelper';
 
 /**
  * 课程详情页 — 1:1 复刻 timetable/view/CourseDetailActivity.java（页名 course_detail）
@@ -153,6 +155,9 @@ struct CourseDetailPage {
     this.detail = detail;
     this.showExtraBlock = true;
     this.courseName = detail.kcmc;
+    if (this.xqj === '' && detail.xqj !== '') {
+      this.xqj = detail.xqj;
+    }
     // J0：q.setText(getQsjsz()) —— 周数以响应 qsjsz 为准（term 模式源码无 dsz 后缀，后缀仅 Ex.T2）
     this.weekTime = detail.qsjsz;
     const weekChar: string = weekdayChar(detail.xqj);
@@ -212,6 +217,61 @@ struct CourseDetailPage {
         'pagetype': pagetype
       }
     });
+  }
+
+  private toast(message: string): void {
+    this.getUIContext().getPromptAction().showToast({ message: message, duration: 2000 });
+  }
+
+  private async scheduleCourseReminder(): Promise<void> {
+    const win = ReminderCalendarHelper.computeNextCourseWindow(this.xqj, this.session, this.classtime);
+    if (win === null) {
+      this.toast('当前课程缺少具体上课时间，无法创建提醒');
+      return;
+    }
+    const nowMs: number = Date.now();
+    const triggerMs: number = win.reminderMs > nowMs
+      ? win.reminderMs
+      : (win.startMs > nowMs + 60000 ? nowMs + 60000 : win.startMs);
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    const contentParts: string[] = [];
+    if (this.place !== '') { contentParts.push(this.place); }
+    if (this.session !== '') { contentParts.push(this.session); }
+    const res = await ReminderCalendarHelper.publishCalendarReminderWithResult(
+      `上课提醒：${this.courseName}`,
+      contentParts.join(' · '),
+      new Date(triggerMs),
+      ctx
+    );
+    if (res.success) {
+      this.toast(`已设置上课提醒（${win.label} 前）`);
+    } else {
+      this.toast(res.message);
+    }
+  }
+
+  private async addCourseToCalendar(): Promise<void> {
+    const win = ReminderCalendarHelper.computeNextCourseWindow(this.xqj, this.session, this.classtime);
+    if (win === null) {
+      this.toast('当前课程缺少具体上课时间，无法写入日历');
+      return;
+    }
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    const descParts: string[] = [];
+    if (this.weekTime !== '') { descParts.push('周数：' + this.weekTime); }
+    if (this.session !== '') { descParts.push('节数：' + this.session); }
+    const teacherName: string = this.teacher !== '' ? this.teacher : this.topTeacher;
+    if (teacherName !== '') { descParts.push('授课教师：' + teacherName); }
+    const res = await ReminderCalendarHelper.addCalendarEventWithResult(
+      ctx,
+      this.courseName,
+      descParts.join('  '),
+      win.startMs,
+      win.endMs,
+      this.place,
+      [15]
+    );
+    this.toast(res.message);
   }
 
   @Builder
@@ -395,6 +455,36 @@ struct CourseDetailPage {
             .padding(15)
             .alignItems(VerticalAlign.Center)
             .backgroundColor($r('app.color.ybg_white'))
+            if (this.courseName !== '') {
+              Divider()
+                .color($r('app.color.common_color_5'))
+                .strokeWidth(0.5)
+                .width('100%')
+              Row({ space: 10 }) {
+                Text('上课提醒')
+                  .fontSize(14)
+                  .fontColor('#18B4ED')
+                  .backgroundColor('#E8F7FD')
+                  .borderRadius(16)
+                  .padding({ left: 14, right: 14, top: 7, bottom: 7 })
+                  .onClick(() => {
+                    this.scheduleCourseReminder();
+                  })
+                Text('加入系统日历')
+                  .fontSize(14)
+                  .fontColor($r('app.color.sdmu_primary'))
+                  .backgroundColor('#FDECEE')
+                  .borderRadius(16)
+                  .padding({ left: 14, right: 14, top: 7, bottom: 7 })
+                  .onClick(() => {
+                    this.addCourseToCalendar();
+                  })
+              }
+              .width('100%')
+              .padding({ left: 15, right: 15, top: 10, bottom: 10 })
+              .justifyContent(FlexAlign.End)
+              .backgroundColor($r('app.color.ybg_white'))
+            }
             // course_detail_teacher（custom 模式 / term-i3 教师=skdx）
             if (this.showTopTeacherRow) {
               Divider()

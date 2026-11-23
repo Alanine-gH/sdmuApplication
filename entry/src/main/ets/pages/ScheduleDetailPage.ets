@@ -164,27 +164,41 @@ struct ScheduleDetailPage {
     ApiService.updateSchedule(this.xlh, this.startTime, this.endTime, this.title, this.content,
       this.importanceB, String(this.notifyIndex), this.location,
       this.notifyIndex === 2 ? this.notifyTime : '')
-      .then((response: ApiResponse<string>) => {
+      .then(async (response: ApiResponse<string>) => {
         if (response.code !== 0 || response.data !== '1') {
           this.getUIContext().getPromptAction().showToast({ message: '保存失败' });
           return;
         }
+        const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+        const warnings: string[] = [];
         // 源码 p tag==0（同步到系统日历）→ 接入系统日历写入与代理提醒
         if (this.syncIndex === 0) {
-          const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
           const startMs: number = this.parseTime(this.startTime);
           const endMs: number = this.endTime !== '' ? this.parseTime(this.endTime) : startMs + 3600000;
           if (startMs > 0) {
-            ReminderCalendarHelper.addCalendarEvent(ctx, this.title, this.content, startMs, endMs, this.location);
+            const calRes = await ReminderCalendarHelper.addCalendarEventWithResult(
+              ctx, this.title, this.content, startMs, endMs, this.location
+            );
+            if (!calRes.success) {
+              warnings.push(calRes.message);
+            }
           }
         }
         if (this.notifyIndex === 2 && this.notifyTime !== '') {
           const remindMs: number = this.parseTime(this.notifyTime);
           if (remindMs > Date.now()) {
-            ReminderCalendarHelper.publishCalendarReminder(this.title, this.location || this.content, new Date(remindMs));
+            const remRes = await ReminderCalendarHelper.publishCalendarReminderWithResult(
+              this.title, this.location || this.content, new Date(remindMs), ctx
+            );
+            if (!remRes.success) {
+              warnings.push(remRes.message);
+            }
           }
         }
-        this.getUIContext().getPromptAction().showToast({ message: '保存成功' });
+        const finalMsg: string = warnings.length > 0
+          ? `保存成功（${warnings[0]}）`
+          : '保存成功';
+        this.getUIContext().getPromptAction().showToast({ message: finalMsg });
         AppStorage.setOrCreate<string>('schedule_detail_changed', String(Date.now()));
       });
   }

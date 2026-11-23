@@ -1,10 +1,12 @@
 import { router } from '@kit.ArkUI';
+import { common } from '@kit.AbilityKit';
 import { ApiService } from '../network/ApiService';
 import { LoginSession } from '../network/LoginSession';
 import { PreferencesUtil } from '../data/PreferencesUtil';
 import { Constants } from '../data/Constants';
 import { ImmersiveLightHelper } from '../common/ImmersiveLightHelper';
 import { BreakpointSystem } from '../common/BreakpointSystem';
+import { PrivacyWindowHelper } from '../common/PrivacyWindowHelper';
 
 /**
  * 登录页 — 按 APK 实拍（900x1600/240dpi 逐像素映射 600dp 宽）重构：
@@ -25,6 +27,21 @@ struct LoginPage {
   @State privacyAgreed: boolean = false;
   @State isLogging: boolean = false;
   @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+
+  onPageShow(): void {
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    PrivacyWindowHelper.enterSensitivePage('LoginPage', ctx);
+  }
+
+  onPageHide(): void {
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    PrivacyWindowHelper.leaveSensitivePage('LoginPage', ctx);
+  }
+
+  aboutToDisappear(): void {
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    PrivacyWindowHelper.leaveSensitivePage('LoginPage', ctx);
+  }
 
   private async doLogin(): Promise<void> {
     if (!this.privacyAgreed) {
@@ -214,7 +231,7 @@ struct LoginPage {
             })
         }
         .width('100%')
-        .constraintSize({ maxWidth: this.currentBreakpoint === 'sm' ? '100%' : 480 })
+        .constraintSize({ maxWidth: BreakpointSystem.isCompactWidth(this.currentBreakpoint) ? '100%' : 480 })
         .padding({ left: 33, right: 33 })
         .margin({ top: 14 })
 
@@ -240,7 +257,7 @@ struct LoginPage {
             })
         }
         .width('100%')
-        .constraintSize({ maxWidth: this.currentBreakpoint === 'sm' ? '100%' : 480 })
+        .constraintSize({ maxWidth: BreakpointSystem.isCompactWidth(this.currentBreakpoint) ? '100%' : 480 })
         .padding({ left: 33, right: 33 })
         .margin({ top: 14 })
 

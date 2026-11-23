@@ -3,6 +3,7 @@ import { photoAccessHelper } from '@kit.MediaLibraryKit';
 import { TitleBar } from '../components/TitleBar';
 import { ApiService, FeedbackTypeEntry } from '../network/ApiService';
 import { LoginSession } from '../network/LoginSession';
+import { PasteHelper } from '../common/PasteHelper';
 
 /**
  * 意见反馈页 — 1:1 复刻 FeedbackActivity.java + mobile_campus_feedback_activity.xml(v22)
@@ -200,12 +201,44 @@ struct FeedbackPage {
                 this.content = value;
               })
 
-            // TextInputLayout counter：n/300（feedback_text 16fp common_color_3 右对齐）
-            Text(this.content.length + '/300')
-              .fontSize(16)
-              .fontColor($r('app.color.common_color_3'))
-              .width('100%')
-              .textAlign(TextAlign.End)
+            // TextInputLayout counter：左侧快捷粘贴 + 右侧 n/300
+            Row() {
+              PasteButton({
+                icon: PasteIconStyle.LINES,
+                text: PasteDescription.PASTE,
+                buttonType: ButtonType.Capsule
+              })
+                .height(28)
+                .fontSize(12)
+                .iconSize(12)
+                .fontColor($r('app.color.white'))
+                .iconColor($r('app.color.white'))
+                .backgroundColor($r('app.color.mobile_campus_primary_color'))
+                .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+                .onClick(async (_event: ClickEvent, result: PasteButtonOnClickResult) => {
+                  if (result !== PasteButtonOnClickResult.SUCCESS) {
+                    this.getUIContext().getPromptAction().showToast({ message: '未获得剪贴板授权' });
+                    return;
+                  }
+                  const res = await PasteHelper.readPlainTextFromSystemPasteboard();
+                  if (!res.success) {
+                    this.getUIContext().getPromptAction().showToast({ message: res.message });
+                    return;
+                  }
+                  const merged = PasteHelper.mergeContentWithLimit(this.content, res.text, 300);
+                  this.content = merged.text;
+                  this.getUIContext().getPromptAction().showToast({
+                    message: merged.truncated ? '已粘贴（超出300字部分已截断）' : '已粘贴到反馈内容'
+                  });
+                })
+              Blank().layoutWeight(1)
+              Text(this.content.length + '/300')
+                .fontSize(16)
+                .fontColor($r('app.color.common_color_3'))
+            }
+            .width('100%')
+            .margin({ top: 8 })
+            .alignItems(VerticalAlign.Center)
           }
           .width('100%')
           .padding(16)
@@ -282,9 +315,44 @@ struct FeedbackPage {
               .onChange((value: string) => {
                 this.contact = value;
               })
+
+            Row() {
+              PasteButton({
+                icon: PasteIconStyle.LINES,
+                text: PasteDescription.PASTE,
+                buttonType: ButtonType.Capsule
+              })
+                .height(28)
+                .fontSize(12)
+                .iconSize(12)
+                .fontColor($r('app.color.white'))
+                .iconColor($r('app.color.white'))
+                .backgroundColor($r('app.color.blue_default'))
+                .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+                .onClick(async (_event: ClickEvent, result: PasteButtonOnClickResult) => {
+                  if (result !== PasteButtonOnClickResult.SUCCESS) {
+                    this.getUIContext().getPromptAction().showToast({ message: '未获得剪贴板授权' });
+                    return;
+                  }
+                  const res = await PasteHelper.readPlainTextFromSystemPasteboard();
+                  if (!res.success) {
+                    this.getUIContext().getPromptAction().showToast({ message: res.message });
+                    return;
+                  }
+                  const single: string = PasteHelper.normalizeSingleLine(res.text, 30);
+                  if (single === '') {
+                    this.getUIContext().getPromptAction().showToast({ message: '剪贴板暂无文本内容' });
+                    return;
+                  }
+                  this.contact = single;
+                  this.getUIContext().getPromptAction().showToast({ message: '已粘贴联系方式' });
+                })
+            }
+            .margin({ left: 8 })
           }
           .width('100%')
           .padding({ left: 16, right: 16, top: 14, bottom: 14 })
+          .alignItems(VerticalAlign.Center)
           .backgroundColor($r('app.color.white'))
 
           // divider_horizontal_grey_normal

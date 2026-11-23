@@ -1,11 +1,13 @@
 import { router } from '@kit.ArkUI';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { common } from '@kit.AbilityKit';
 import { TitleBar } from '../components/TitleBar';
 import { EmptyView } from '../components/EmptyView';
 import { LoadingView } from '../components/LoadingView';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { ComingExamEntity, FinishExamEntity } from '../model/ScoreModel';
+import { ReminderCalendarHelper } from '../common/ReminderCalendarHelper';
 
 /**
  * 考试信息 — ExamListActivity + ExamComingFragment + ExamFinishFragment +
@@ -184,6 +186,64 @@ struct ExamPage {
     return remainingDays(item.KSSJ);
   }
 
+  private async scheduleExamReminder(item: ComingExamEntity): Promise<void> {
+    const startDate: Date | null = parseDate(item.KSSJ);
+    if (startDate === null) {
+      this.toast('考试时间格式暂不支持设置提醒');
+      return;
+    }
+    const triggerMs: number = ReminderCalendarHelper.computeExamReminderTriggerMs(startDate.getTime(), 60, Date.now());
+    if (triggerMs < 0) {
+      this.toast('该场考试已临近或已结束，无法设置考前提醒');
+      return;
+    }
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    const parts: string[] = [];
+    if (item.KSSJ !== '') { parts.push(item.KSSJ); }
+    if (item.KSDD !== '') { parts.push(item.KSDD); }
+    if (item.ZWH !== '') { parts.push('座位 ' + item.ZWH); }
+    const content: string = parts.length > 0 ? parts.join(' · ') : '请提前做好考试准备';
+    const res = await ReminderCalendarHelper.publishCalendarReminderWithResult(
+      `考试提醒：${item.KMMC}`,
+      content,
+      new Date(triggerMs),
+      ctx
+    );
+    if (res.success) {
+      const triggerDate: Date = new Date(triggerMs);
+      this.toast(`已设置考前提醒（${pad2(triggerDate.getHours())}:${pad2(triggerDate.getMinutes())}）`);
+    } else {
+      this.toast(res.message);
+    }
+  }
+
+  private async addExamToCalendar(item: ComingExamEntity): Promise<void> {
+    const startDate: Date | null = parseDate(item.KSSJ);
+    if (startDate === null) {
+      this.toast('考试时间格式暂不支持写入日历');
+      return;
+    }
+    const endDate: Date | null = item.JSSJ !== '' ? parseDate(item.JSSJ) : null;
+    const startMs: number = startDate.getTime();
+    const endMs: number = endDate !== null && endDate.getTime() > startMs
+      ? endDate.getTime()
+      : startMs + 2 * 3600 * 1000;
+    const descParts: string[] = [];
+    if (item.ZWH !== '') { descParts.push('座位号：' + item.ZWH); }
+    if (item.ZKZH !== '') { descParts.push('准考证号：' + item.ZKZH); }
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    const res = await ReminderCalendarHelper.addCalendarEventWithResult(
+      ctx,
+      `考试：${item.KMMC}`,
+      descParts.join('  '),
+      startMs,
+      endMs,
+      item.KSDD,
+      [60, 15]
+    );
+    this.toast(res.message);
+  }
+
   /** 源码 ExamComingPresenter.d → ExamModel.w deleteExam{kslx,kmmc}；成功后刷新未考 */
   private confirmDelete(item: ComingExamEntity): void {
     this.getUIContext().showAlertDialog({
@@ -359,6 +419,31 @@ struct ExamPage {
           .width('100%')
           .margin({ top: 6 })
           .alignItems(VerticalAlign.Center)
+        }
+        if (parseDate(item.KSSJ) !== null) {
+          Row({ space: 8 }) {
+            Text('考前提醒')
+              .fontSize(12)
+              .fontColor('#18B4ED')
+              .backgroundColor('#E8F7FD')
+              .borderRadius(14)
+              .padding({ left: 10, right: 10, top: 5, bottom: 5 })
+              .onClick((): void => {
+                this.scheduleExamReminder(item);
+              })
+            Text('加入日历')
+              .fontSize(12)
+              .fontColor($r('app.color.sdmu_primary'))
+              .backgroundColor('#FDECEE')
+              .borderRadius(14)
+              .padding({ left: 10, right: 10, top: 5, bottom: 5 })
+              .onClick((): void => {
+                this.addExamToCalendar(item);
+              })
+          }
+          .width('100%')
+          .margin({ top: 10 })
+          .justifyContent(FlexAlign.End)
         }
       }
     }
