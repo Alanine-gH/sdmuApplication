@@ -13,7 +13,7 @@ export interface SplitPaneConfig {
 export class AdaptiveLayoutHelper {
   /** 构建 Grid columnsTemplate 字符串 */
   public static buildColumnsTemplate(cols: number): string {
-    const safeCols: number = cols > 0 ? Math.floor(cols) : 1;
+    const safeCols: number = Number.isFinite(cols) && cols > 0 ? Math.min(24, Math.floor(cols)) : 1;
     let tpl: string = '1fr';
     for (let i = 1; i < safeCols; i++) {
       tpl += ' 1fr';
@@ -77,7 +77,7 @@ export class AdaptiveLayoutHelper {
 
   /** 判断是否处于半折叠悬停态（含单折叠与双折叠枚举值） */
   public static isHalfFoldedStatus(foldStatus: number): boolean {
-    return foldStatus === 3 || foldStatus === 13 || foldStatus === 21 || foldStatus === 23;
+    return foldStatus === 3 || foldStatus === 13 || foldStatus === 21 || foldStatus === 22 || foldStatus === 23;
   }
 
   /** 判断当前是否需要避让折痕区 */

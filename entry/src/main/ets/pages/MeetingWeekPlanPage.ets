@@ -261,7 +261,7 @@ struct MeetingWeekPlanPage {
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
         .width('100%')
-        .margin({ left: 18, top: 19, bottom: 15 })
+        .padding({ left: 18, right: 18, top: 19, bottom: 15 })
       Divider()
         .color($r('app.color.mobile_campus_bg_color'))
         .strokeWidth(0.5)

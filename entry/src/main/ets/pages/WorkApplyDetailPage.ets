@@ -1,4 +1,6 @@
 import { router } from '@kit.ArkUI';
+import { common } from '@kit.AbilityKit';
+import { PdfView, pdfService, pdfViewManager } from '@kit.PDFKit';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { OaTodoDetail, OaWorkApplyRow, OaWorkApplyFlowNode, OaWorkApplyAttach,
@@ -7,6 +9,9 @@ import { LoginSession } from '../network/LoginSession';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { LoadingView } from '../components/LoadingView';
 import { EmptyView } from '../components/EmptyView';
+import { FilePreviewHelper } from '../common/FilePreviewHelper';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 业务申请详情页 — 1:1 翻译原 APK WorkApplyDetailActivity.java(712行)：
@@ -87,9 +92,32 @@ struct WorkApplyDetailPage {
   /** 源码 btn_cuiban：bussStatus=="1" 或催办成功后 → "已催办"禁用 */
   @State urged: boolean = false;
   @State urging: boolean = false;
+  @State downloadingAttach: boolean = false;
+  @State showPdfModal: boolean = false;
+  @State pdfTitle: string = '';
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 780;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   /** 源码 u3/t3：催办 property/message JSON（详情回调后生成） */
   private urgeProperty: string = '';
   private urgeMessage: string = '';
+  private pdfController: pdfViewManager.PdfController = new pdfViewManager.PdfController();
+
+  aboutToDisappear(): void {
+    this.closePdfModal();
+  }
+
+  private closePdfModal(): void {
+    if (this.showPdfModal) {
+      this.showPdfModal = false;
+      try {
+        this.pdfController.releaseDocument();
+      } catch {
+        // 忽略释放异常
+      }
+    }
+  }
 
   aboutToAppear(): void {
     const raw: string | undefined = AppStorage.get<string>('workapply_detail_row');
@@ -176,7 +204,7 @@ struct WorkApplyDetailPage {
       });
   }
 
-  /** 源码 i 回调：R_convertPDF_B011 → WebView；其余条目展示（本地预览基建未建） */
+  /** 源码 i 回调：R_convertPDF_B011 → WebView；其余条目下载缓存后通过 PreviewKit / PdfView / Want 预览 */
   private openAttach(attach: OaWorkApplyAttach): void {
     if (attach.realFileName === '' || attach.downloadUrl === '') {
       this.getUIContext().getPromptAction().showToast({ message: '文件名或下载地址为空~' });
@@ -192,7 +220,39 @@ struct WorkApplyDetailPage {
       });
       return;
     }
-    this.getUIContext().getPromptAction().showToast({ message: attach.realFileName });
+    this.previewAttach(attach);
+  }
+
+  private async previewAttach(attach: OaWorkApplyAttach): Promise<void> {
+    if (this.downloadingAttach) {
+      return;
+    }
+    this.downloadingAttach = true;
+    this.toast('正在加载附件...');
+    try {
+      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      const res = await FilePreviewHelper.downloadAndPreview(ctx, attach.downloadUrl, attach.realFileName, 'todo');
+      if (res.success) {
+        return;
+      }
+      if (res.method === 'pdfView' && res.localPath !== '') {
+        try {
+          const parseRes = await this.pdfController.loadDocument(res.localPath);
+          if (parseRes === pdfService.ParseResult.PARSE_SUCCESS) {
+            this.pdfTitle = attach.realFileName;
+            this.showPdfModal = true;
+            return;
+          }
+        } catch {
+          // 降级提示
+        }
+      }
+      if (res.message !== '') {
+        this.toast(res.message);
+      }
+    } finally {
+      this.downloadingAttach = false;
+    }
   }
 
   private toast(message: string): void {
@@ -200,49 +260,114 @@ struct WorkApplyDetailPage {
   }
 
   build() {
-    Column() {
-      this.topBar()
-      if (this.loading) {
-        LoadingView()
-      } else if (this.failed) {
-        Column() {
-          EmptyView({ tipText: this.loadErrMsg === '' ? '加载失败，点击重试' : this.loadErrMsg })
-        }
-        .width('100%')
-        .layoutWeight(1)
-        .onClick(() => {
-          this.loading = true;
-          this.failed = false;
-          this.fetchDetail();
-        })
-      } else {
-        Scroll() {
+    Stack() {
+      Column() {
+        this.topBar()
+        if (this.loading) {
+          LoadingView()
+        } else if (this.failed) {
           Column() {
-            this.detailHeader()
-            Row()
-              .width('100%')
-              .height(12)
-              .backgroundColor($r('app.color.common_color_6'))
-            // name2："当前节点"（源码未赋值内容，16fp common_color_3 高36vp px12）
-            Text('当前节点')
-              .fontSize(16)
-              .fontColor($r('app.color.common_color_3'))
-              .width('100%')
-              .height(36)
-              .padding({ left: 12, right: 12 })
-            Divider().color($r('app.color.common_color_5')).strokeWidth(0.5).width('100%')
-            this.dynamicBody()
+            EmptyView({ tipText: this.loadErrMsg === '' ? '加载失败，点击重试' : this.loadErrMsg })
           }
           .width('100%')
+          .layoutWeight(1)
+          .onClick(() => {
+            this.loading = true;
+            this.failed = false;
+            this.fetchDetail();
+          })
+        } else {
+          Scroll() {
+            Column() {
+              this.detailHeader()
+              Row()
+                .width('100%')
+                .height(12)
+                .backgroundColor($r('app.color.common_color_6'))
+              // name2："当前节点"（源码未赋值内容，16fp common_color_3 高36vp px12）
+              Text('当前节点')
+                .fontSize(16)
+                .fontColor($r('app.color.common_color_3'))
+                .width('100%')
+                .height(36)
+                .padding({ left: 12, right: 12 })
+              Divider().color($r('app.color.common_color_5')).strokeWidth(0.5).width('100%')
+              this.dynamicBody()
+            }
+            .width('100%')
+            .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+            .padding({ bottom: this.avoidAreaBottomVp })
+          }
+          .layoutWeight(1)
+          .scrollBar(BarState.Off)
+          .backgroundColor($r('app.color.common_color_6'))
         }
-        .layoutWeight(1)
-        .scrollBar(BarState.Off)
-        .backgroundColor($r('app.color.common_color_6'))
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor($r('app.color.white'))
+
+      if (this.showPdfModal) {
+        this.pdfPreviewOverlay()
       }
     }
     .width('100%')
     .height('100%')
-    .backgroundColor($r('app.color.white'))
+  }
+
+  @Builder
+  pdfPreviewOverlay() {
+    Column() {
+      Column() {
+        Row() {
+          Text(this.pdfTitle)
+            .fontSize(15)
+            .fontWeight(FontWeight.Medium)
+            .fontColor($r('app.color.common_color_1'))
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+            .layoutWeight(1)
+          Text('关闭')
+            .fontSize(14)
+            .fontColor('#3A92ED')
+            .padding({ left: 10, right: 4, top: 4, bottom: 4 })
+            .onClick(() => {
+              this.closePdfModal();
+            })
+        }
+        .width('100%')
+        .padding({ left: 14, right: 14, top: 10, bottom: 10 })
+        .backgroundColor($r('app.color.white'))
+
+        Divider().color($r('app.color.common_color_5')).strokeWidth(0.5).width('100%')
+
+        PdfView({
+          controller: this.pdfController,
+          pageLayout: pdfService.PageLayout.LAYOUT_SINGLE,
+          isContinuous: true,
+          showScroll: true
+        })
+          .width('100%')
+          .layoutWeight(1)
+      }
+      .width(AdaptiveLayoutHelper.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp))
+      .height(AdaptiveLayoutHelper.getDialogMaxHeight(this.windowHeightVp))
+      .backgroundColor($r('app.color.white'))
+      .borderRadius(10)
+      .clip(true)
+      .onClick(() => {
+        // 拦截点击
+      })
+    }
+    .width('100%')
+    .height('100%')
+    .padding({ left: 16, right: 16 })
+    .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
+    .backgroundColor('#66000000')
+    .onClick(() => {
+      this.closePdfModal();
+    })
   }
 
   /** 自定义头 44vp：back + toolBar_title（源码 invisible，保真透明占位） */
@@ -526,7 +651,10 @@ struct WorkApplyDetailPage {
     .onClick(() => {
       this.openAttach(attach);
     })
-    Divider().color($r('app.color.common_color_5')).strokeWidth(0.5).width('100%')
-      .margin({ left: 12 })
+    Row() {
+      Divider().color($r('app.color.common_color_5')).strokeWidth(0.5).width('100%')
+    }
+    .width('100%')
+    .padding({ left: 12 })
   }
 }

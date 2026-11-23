@@ -1,4 +1,5 @@
 import { router } from '@kit.ArkUI';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 图片翻页选择页 — 源码级复刻 PhotoPagerActivity（baselibrary PhotoPicker 包）。
@@ -27,6 +28,10 @@ struct PhotoPagerPage {
   @State selectedUrls: string[] = [];
   @State currentIndex: number = 0;
   @State barsVisible: boolean = true;
+  @StorageProp('avoidAreaTopVp') avoidAreaTopVp: number = 0;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
   private maxCount: number = 9;
   private barsAnim: number = 0;
 
@@ -142,6 +147,20 @@ struct PhotoPagerPage {
         .onChange((index: number) => {
           this.currentIndex = index;
         })
+      } else {
+        Scroll() {
+          Column() {
+            Text('暂无图片')
+              .fontSize(14)
+              .fontColor($r('app.color.white'))
+          }
+          .width('100%')
+          .padding({ top: 120, bottom: 24 })
+          .alignItems(HorizontalAlign.Center)
+        }
+        .width('100%')
+        .height('100%')
+        .scrollBar(BarState.Off)
       }
 
       // photo_pager_navigation_bar：#99000000 + 白返回 + N/total + 完成(N/M)
@@ -173,7 +192,12 @@ struct PhotoPagerPage {
           })
       }
       .width('100%')
-      .height(48)
+      .height(48 + this.avoidAreaTopVp)
+      .padding({
+        top: this.avoidAreaTopVp,
+        left: this.avoidAreaLeftVp,
+        right: this.avoidAreaRightVp
+      })
       .alignItems(VerticalAlign.Center)
       .backgroundColor('#99000000')
       .margin({ top: 0 })
@@ -214,13 +238,20 @@ struct PhotoPagerPage {
         })
       }
       .width('100%')
+      .padding({
+        left: this.avoidAreaLeftVp,
+        right: this.avoidAreaRightVp,
+        bottom: this.avoidAreaBottomVp
+      })
       .alignItems(VerticalAlign.Center)
       .backgroundColor('#99000000')
       .opacity(this.barsAnim)
       .visibility(this.barsVisible ? Visibility.Visible : Visibility.Hidden)
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
     }
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.black'))
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 }

@@ -182,7 +182,7 @@ export class BreakpointSystem {
 
   /** 纯函数：根据断点及手机基准列数推算通用宫格列数 */
   public static getGridColumns(bp: string, basePhoneCols: number = 4): number {
-    const safeBase: number = basePhoneCols > 0 ? basePhoneCols : 4;
+    const safeBase: number = Number.isFinite(basePhoneCols) && basePhoneCols > 0 ? Math.floor(basePhoneCols) : 4;
     if (bp === 'xl') {
       return Math.max(safeBase, Math.round(safeBase * 2.5));
     }
@@ -193,7 +193,7 @@ export class BreakpointSystem {
       return Math.max(safeBase, Math.round(safeBase * 1.5));
     }
     if (bp === 'xs') {
-      return Math.max(2, safeBase - 1);
+      return safeBase <= 1 ? 1 : Math.max(1, safeBase - 1);
     }
     return safeBase;
   }
@@ -219,8 +219,8 @@ export class BreakpointSystem {
 
   /** 纯函数：计算手势密码九宫格自适应尺寸（vp） */
   public static computeGestureGridSize(windowWidthVp: number, windowHeightVp: number): number {
-    const safeW: number = windowWidthVp > 0 ? windowWidthVp : 360;
-    const safeH: number = windowHeightVp > 0 ? windowHeightVp : 640;
+    const safeW: number = Number.isFinite(windowWidthVp) && windowWidthVp > 0 ? windowWidthVp : 360;
+    const safeH: number = Number.isFinite(windowHeightVp) && windowHeightVp > 0 ? windowHeightVp : 640;
     const availW: number = Math.max(180, safeW - 48);
     const availH: number = Math.max(180, safeH * 0.45);
     return Math.round(Math.min(340, availW, availH));
@@ -243,7 +243,16 @@ export class BreakpointSystem {
     heightPx: number,
     density: number
   ): CreaseRegionVp | null {
-    if (widthPx <= 0 || heightPx <= 0) {
+    if (
+      !Number.isFinite(leftPx) ||
+      !Number.isFinite(topPx) ||
+      !Number.isFinite(widthPx) ||
+      !Number.isFinite(heightPx) ||
+      !Number.isFinite(density) ||
+      widthPx <= 0 ||
+      heightPx <= 0 ||
+      density <= 0
+    ) {
       return null;
     }
     return {

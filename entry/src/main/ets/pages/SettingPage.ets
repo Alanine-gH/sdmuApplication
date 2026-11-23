@@ -1,6 +1,7 @@
 import { router } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import fs from '@ohos.file.fs';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 import { TitleBar } from '../components/TitleBar';
 import { ApiService } from '../network/ApiService';
 import { LoginSession } from '../network/LoginSession';
@@ -72,6 +73,8 @@ struct SettingPage {
   /** [W22 launch-chain] SettingActivity h() 手势密码链：校验密码弹窗态 + 输入值 */
   @State showGesturePwdDialog: boolean = false;
   @State checkPassword: string = '';
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
 
   /** 源码 h.onClick（llGesturePwdLayout）：GestureManager.b(userId) 有已存手势 →
    *  g2(e.a.k=/my/GesturePwdVerifyActivity){jsonStr}；无 → "校验密码"弹窗。 */
@@ -207,11 +210,14 @@ struct SettingPage {
 
   @Builder
   settingDivider() {
-    Divider()
-      .color($r('app.color.menu_divider'))
-      .strokeWidth(0.5)
-      .width('100%')
-      .margin({ left: 12 })
+    Row() {
+      Divider()
+        .color($r('app.color.menu_divider'))
+        .strokeWidth(0.5)
+        .width('100%')
+    }
+    .width('100%')
+    .padding({ left: 12 })
   }
 
   @Builder
@@ -455,6 +461,8 @@ struct SettingPage {
           })
         }
         .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .padding({ bottom: Math.max(24, this.avoidAreaBottomVp) })
       }
       .width('100%')
       .layoutWeight(1)

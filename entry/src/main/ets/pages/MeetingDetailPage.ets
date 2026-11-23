@@ -1,10 +1,15 @@
 import { router } from '@kit.ArkUI';
+import { common } from '@kit.AbilityKit';
 import { scanBarcode, scanCore } from '@kit.ScanKit';
+import { PdfView, pdfService, pdfViewManager } from '@kit.PDFKit';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { BusinessError } from '@kit.BasicServicesKit';
-import { TitleBar } from '../components/TitleBar';
 import { LiveViewIntentHelper } from '../common/LiveViewIntentHelper';
+import { FilePreviewHelper } from '../common/FilePreviewHelper';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
+import { ImmersiveLightHelper } from '../common/ImmersiveLightHelper';
 import { LoadingView } from '../components/LoadingView';
 import { EmptyView } from '../components/EmptyView';
 import { MeetingObjEntity, MeetingAttachmentEntity, MeetingExtraEntity,
@@ -51,8 +56,70 @@ struct MeetingDetailPage {
   /** 不参会理由弹窗 */
   @State showNoAttendDialog: boolean = false;
   @State noAttendReason: string = '';
+  @State downloadingAttach: boolean = false;
+  @State showPdfModal: boolean = false;
+  @State pdfTitle: string = '';
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 780;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   private xlh: string = '';
   private taskType: string = '';
+  private pdfController: pdfViewManager.PdfController = new pdfViewManager.PdfController();
+
+  aboutToDisappear(): void {
+    this.closePdfModal();
+  }
+
+  private closePdfModal(): void {
+    if (this.showPdfModal) {
+      this.showPdfModal = false;
+      try {
+        this.pdfController.releaseDocument();
+      } catch {
+        // 忽略释放异常
+      }
+    }
+  }
+
+  private async openAttachment(att: MeetingAttachmentEntity): Promise<void> {
+    if (att.DOWNLOAD_URL === '') {
+      this.toast('附件下载地址为空');
+      return;
+    }
+    if (this.downloadingAttach) {
+      return;
+    }
+    this.downloadingAttach = true;
+    this.toast('正在加载附件...');
+    try {
+      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      const res = await FilePreviewHelper.downloadAndPreview(ctx, att.DOWNLOAD_URL, att.FILENAME, 'meeting');
+      if (res.success) {
+        return;
+      }
+      if (res.method === 'pdfView' && res.localPath !== '') {
+        try {
+          const parseRes = await this.pdfController.loadDocument(res.localPath);
+          if (parseRes === pdfService.ParseResult.PARSE_SUCCESS) {
+            this.pdfTitle = att.FILENAME;
+            this.showPdfModal = true;
+            return;
+          }
+        } catch {
+          // 降级提示
+        }
+      }
+      if (res.message !== '') {
+        this.toast(res.message);
+      }
+    } finally {
+      this.downloadingAttach = false;
+    }
+  }
 
   aboutToAppear(): void {
     // 源码 y(intent)：p = intent "xlh"（无 appInfo 序列化通道，HAP 直传 xlh）
@@ -322,31 +389,7 @@ struct MeetingDetailPage {
   build() {
     Stack() {
       Column() {
-        TitleBar({
-          title: '会议详情',
-          showBack: true,
-          rightText: '实况窗',
-          onRightClick: () => {
-            LiveViewIntentHelper.startLocalLiveView(
-              1001,
-              this.obj.TITLE || '会议提醒',
-              (this.obj.KSSJ || '') + ' ' + (this.obj.ADDRESS || '')
-            ).then((ok: boolean) => {
-              this.toast(ok ? '已开启会议实况窗' : '当前设备暂不支持实况窗');
-            });
-          }
-        })
-        // 右上图标（toolbar gVar.d()）：qrcode/scan，绝对定位在标题栏右端
-        if (this.showToolbarIcon() && !this.loading && !this.loadFail) {
-          Image(this.isCreator ? $r('app.media.mobile_campus_meeting_qrcode')
-            : $r('app.media.mobile_campus_meeting_scan'))
-            .width(20)
-            .height(20)
-            .margin({ right: 15 })
-            .onClick(() => {
-              this.onToolbarIconClick();
-            })
-        }
+        this.topBar()
         if (this.loading) {
           LoadingView()
         } else if (this.loadFail || this.obj.TITLE === '') {
@@ -357,17 +400,99 @@ struct MeetingDetailPage {
       }
       .width('100%')
       .height('100%')
-      .alignItems(HorizontalAlign.Start)
+      .alignItems(HorizontalAlign.Center)
 
-      // MeetingEditeDialog 复刻：白圆角 270dip 宽，tvTitle + ed(#F2F2F2 123×34 maxLength 50) + 提交
+      // MeetingEditeDialog 复刻：带遮罩与自适应宽度
       if (this.showCancelDialog || this.showNoAttendDialog) {
         this.editDialog()
+      }
+
+      if (this.showPdfModal) {
+        this.pdfPreviewOverlay()
       }
     }
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.mobile_campus_bg_color'))
     .alignContent(Alignment.Center)
+  }
+
+  @Builder
+  topBar() {
+    Column() {
+      Row() {
+        Text('＜')
+          .fontSize(17)
+          .fontColor($r('app.color.common_color_1'))
+          .width(34)
+          .height(34)
+          .textAlign(TextAlign.Center)
+          .margin({ left: 15 })
+          .borderRadius(17)
+          .systemMaterial(ImmersiveLightHelper.pillMaterial())
+          .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.94 })
+          .onClick(() => {
+            router.back();
+          })
+        Text('会议详情')
+          .fontSize(17)
+          .fontColor($r('app.color.common_color_1'))
+          .layoutWeight(1)
+          .textAlign(TextAlign.Center)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        Row({ space: 6 }) {
+          Text('实况窗')
+            .fontSize(14)
+            .fontColor($r('app.color.black'))
+            .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+            .borderRadius(14)
+            .systemMaterial(ImmersiveLightHelper.pillMaterial())
+            .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.95 })
+            .onClick(() => {
+              LiveViewIntentHelper.startLocalLiveView(
+                1001,
+                this.obj.TITLE || '会议提醒',
+                (this.obj.KSSJ || '') + ' ' + (this.obj.ADDRESS || '')
+              ).then((ok: boolean) => {
+                this.toast(ok ? '已开启会议实况窗' : '当前设备暂不支持实况窗');
+              });
+            })
+          if (this.showToolbarIcon() && !this.loading && !this.loadFail) {
+            Image(this.isCreator ? $r('app.media.mobile_campus_meeting_qrcode')
+              : $r('app.media.mobile_campus_meeting_scan'))
+              .width(22)
+              .height(22)
+              .onClick(() => {
+                this.onToolbarIconClick();
+              })
+          }
+        }
+        .margin({ right: 12 })
+        .alignItems(VerticalAlign.Center)
+      }
+      .width('100%')
+      .height(this.isCompactHeight ? 37 : 44)
+      .padding({
+        left: this.avoidAreaLeftVp > 0 ? this.avoidAreaLeftVp : 0,
+        right: this.avoidAreaRightVp > 0 ? this.avoidAreaRightVp : 0
+      })
+      .alignItems(VerticalAlign.Center)
+      .backgroundColor($r('app.color.main_bg'))
+      .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+      .alignSelf(ItemAlign.Center)
+
+      Divider()
+        .color($r('app.color.common_color_5'))
+        .strokeWidth(0.5)
+        .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
+    }
+    .width('100%')
+    .height(this.isCompactHeight ? 38 : 45)
+    .backgroundColor($r('app.color.main_bg'))
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
   }
 
   /** mobile_campus_meeting_activity_detail.xml：ScrollView(detailView+detailFileView) + layoutBottom */
@@ -380,6 +505,8 @@ struct MeetingDetailPage {
           this.fileView()
         }
         .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .padding({ bottom: 12 })
         .alignItems(HorizontalAlign.Start)
       }
       .width('100%')
@@ -396,7 +523,8 @@ struct MeetingDetailPage {
       }
     }
     .width('100%')
-    .height('100%')
+    .layoutWeight(1)
+    .alignItems(HorizontalAlign.Center)
   }
 
   /** mobile_campus_meeting_view_weekplan_detail.xml：标题区（≤50 行规范拆分入口） */
@@ -416,41 +544,51 @@ struct MeetingDetailPage {
   /** 标题 + 取消态（STATUS=0 → imgCancel+QXLY）/ 取消按钮（STATUS=1 本人发起） */
   @Builder
   detailHeader() {
-    Column() {
-      Text(this.obj.TITLE)
-        .fontSize(19)
-        .fontColor($r('app.color.common_color_1'))
-        .maxLines(1)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
+    Stack({ alignContent: Alignment.TopEnd }) {
+      Column() {
+        Row() {
+          Text(this.obj.TITLE)
+            .fontSize(19)
+            .fontColor($r('app.color.common_color_1'))
+            .maxLines(2)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+            .layoutWeight(1)
+          if (this.obj.STATUS === '1' && this.isCreator) {
+            Text('取消')
+              .fontSize(14)
+              .fontColor('#C80D28')
+              .padding({ left: 12, right: 12, top: 5, bottom: 5 })
+              .margin({ left: 10 })
+              .borderRadius(16)
+              .border({ width: 0.5, color: '#C80D28' })
+              .onClick(() => {
+                this.showCancelDialogIfAllowed();
+              })
+          }
+        }
         .width('100%')
-        .alignSelf(ItemAlign.Start)
-        .margin({ left: 18, top: 19, bottom: 15 })
+        .padding({ left: 18, right: 18, top: 19, bottom: 15 })
+        .alignItems(VerticalAlign.Center)
+
+        if (this.obj.STATUS === '0') {
+          Text(this.obj.QXLY)
+            .fontSize(13)
+            .fontColor('#FF6666')
+            .padding({ left: 18, right: 76, bottom: 12 })
+        }
+      }
+      .width('100%')
+      .alignItems(HorizontalAlign.Start)
+
       if (this.obj.STATUS === '0') {
-        // STATUS=0：imgCancel + tvCancelContent=QXLY（源码 setData setText(QXLY)）
         Image($r('app.media.mobile_campus_meeting_cancel'))
           .width(61)
           .height(61)
-          .position({ x: '92%', y: 0 })
-        Text(this.obj.QXLY)
-          .fontSize(13)
-          .fontColor('#FF6666')
-          .margin({ left: 18, bottom: 12 })
-      } else if (this.obj.STATUS === '1' && this.isCreator) {
-        Text('取消')
-          .fontSize(14)
-          .fontColor('#C80D28')
-          .padding({ left: 12, right: 12, top: 5, bottom: 5 })
-          .borderRadius(16)
-          .border({ width: 0.5, color: '#C80D28' })
-          .position({ x: '88%', y: 14 })
-          .onClick(() => {
-            this.showCancelDialogIfAllowed();
-          })
+          .margin({ right: 12, top: 4 })
       }
     }
     .width('100%')
     .backgroundColor($r('app.color.white'))
-    .alignItems(HorizontalAlign.Start)
   }
 
   /** 行项列表（非空才加）：地点/时间/举办单位/主持人/联系人/电话/参会领导/参会人员/外部人员 */
@@ -558,12 +696,7 @@ struct MeetingDetailPage {
           .width('100%')
           .padding({ left: 18, right: 18, top: 8, bottom: 8 })
           .onClick(() => {
-            // 源码 m3/n3：下载后 openFile 预览；HAP 侧跳系统浏览器打开下载链接
-            if (att.DOWNLOAD_URL !== '') {
-              this.toast('开始下载：' + att.FILENAME);
-            } else {
-              this.toast('附件下载地址为空');
-            }
+            this.openAttachment(att);
           })
         }, (att: MeetingAttachmentEntity) => 'att_' + att.FILENAME)
       }
@@ -605,7 +738,9 @@ struct MeetingDetailPage {
         })
     }
     .width('100%')
-    .height(48)
+    .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+    .height(48 + this.avoidAreaBottomVp)
+    .padding({ bottom: this.avoidAreaBottomVp })
     .backgroundColor($r('app.color.mobile_campus_primary_color_default'))
     .alignItems(VerticalAlign.Center)
   }
@@ -670,7 +805,9 @@ struct MeetingDetailPage {
       }
     }
     .width('100%')
-    .height(48)
+    .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+    .height(48 + this.avoidAreaBottomVp)
+    .padding({ bottom: this.avoidAreaBottomVp })
     .backgroundColor($r('app.color.white'))
     .alignItems(VerticalAlign.Center)
   }
@@ -679,50 +816,122 @@ struct MeetingDetailPage {
   @Builder
   editDialog() {
     Column() {
-      Text(this.showCancelDialog ? '取消会议理由' : '不参与会议的原因')
-        .fontSize(17)
-        .fontColor($r('app.color.common_color_1'))
-        .margin({ top: 8 })
-      TextArea({
-        text: this.showCancelDialog ? this.cancelReason : this.noAttendReason,
-        placeholder: this.showCancelDialog ? '请输入取消会议理由，所有拟参会人均可见。' : '请输入不参与会议原因'
+      Column() {
+        Text(this.showCancelDialog ? '取消会议理由' : '不参与会议的原因')
+          .fontSize(17)
+          .fontColor($r('app.color.common_color_1'))
+          .margin({ top: 12 })
+        TextArea({
+          text: this.showCancelDialog ? this.cancelReason : this.noAttendReason,
+          placeholder: this.showCancelDialog ? '请输入取消会议理由，所有拟参会人均可见。' : '请输入不参与会议原因'
+        })
+          .fontSize(16)
+          .fontColor($r('app.color.common_color_1'))
+          .backgroundColor($r('app.color.mobile_campus_bg_color'))
+          .width('100%')
+          .height(68)
+          .margin({ top: 10, bottom: 10 })
+          .maxLength(50)
+          .onChange((value: string) => {
+            if (this.showCancelDialog) {
+              this.cancelReason = value;
+            } else {
+              this.noAttendReason = value;
+            }
+          })
+        Divider()
+          .color($r('app.color.common_color_5'))
+          .strokeWidth(0.5)
+          .width('100%')
+        Text('提交')
+          .fontSize(17)
+          .fontColor($r('app.color.mobile_campus_primary_color_default'))
+          .textAlign(TextAlign.Center)
+          .width('100%')
+          .height(44)
+          .onClick(() => {
+            if (this.showCancelDialog) {
+              this.submitCancelMeeting();
+            } else {
+              this.submitNoAttend();
+            }
+          })
+      }
+      .width(AdaptiveLayoutHelper.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp))
+      .constraintSize({ maxHeight: AdaptiveLayoutHelper.getDialogMaxHeight(this.windowHeightVp) })
+      .padding({ left: 12, right: 12 })
+      .borderRadius(8)
+      .backgroundColor($r('app.color.white'))
+      .alignItems(HorizontalAlign.Center)
+      .clip(true)
+      .onClick(() => {
+        // 拦截点击
       })
-        .fontSize(16)
-        .fontColor($r('app.color.common_color_1'))
-        .backgroundColor($r('app.color.mobile_campus_bg_color'))
-        .width(246)
-        .height(68)
-        .margin({ top: 8, bottom: 8 })
-        .maxLength(50)
-        .onChange((value: string) => {
-          if (this.showCancelDialog) {
-            this.cancelReason = value;
-          } else {
-            this.noAttendReason = value;
-          }
-        })
-      Divider()
-        .color($r('app.color.common_color_5'))
-        .strokeWidth(0.5)
-        .width('100%')
-      Text('提交')
-        .fontSize(17)
-        .fontColor($r('app.color.mobile_campus_primary_color_default'))
-        .textAlign(TextAlign.Center)
-        .width('100%')
-        .height(44)
-        .onClick(() => {
-          if (this.showCancelDialog) {
-            this.submitCancelMeeting();
-          } else {
-            this.submitNoAttend();
-          }
-        })
     }
-    .width(270)
-    .borderRadius(8)
-    .backgroundColor($r('app.color.white'))
+    .width('100%')
+    .height('100%')
+    .padding({ left: 16, right: 16 })
+    .justifyContent(FlexAlign.Center)
     .alignItems(HorizontalAlign.Center)
-    .clip(true)
+    .backgroundColor('#66000000')
+    .onClick(() => {
+      this.showCancelDialog = false;
+      this.showNoAttendDialog = false;
+    })
+  }
+
+  @Builder
+  pdfPreviewOverlay() {
+    Column() {
+      Column() {
+        Row() {
+          Text(this.pdfTitle)
+            .fontSize(15)
+            .fontWeight(FontWeight.Medium)
+            .fontColor($r('app.color.common_color_1'))
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+            .layoutWeight(1)
+          Text('关闭')
+            .fontSize(14)
+            .fontColor('#3A92ED')
+            .padding({ left: 10, right: 4, top: 4, bottom: 4 })
+            .onClick(() => {
+              this.closePdfModal();
+            })
+        }
+        .width('100%')
+        .padding({ left: 14, right: 14, top: 10, bottom: 10 })
+        .backgroundColor($r('app.color.white'))
+
+        Divider().color($r('app.color.common_color_5')).strokeWidth(0.5).width('100%')
+
+        PdfView({
+          controller: this.pdfController,
+          pageLayout: pdfService.PageLayout.LAYOUT_SINGLE,
+          isContinuous: true,
+          showScroll: true
+        })
+          .width('100%')
+          .layoutWeight(1)
+      }
+      .width(AdaptiveLayoutHelper.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp))
+      .height(AdaptiveLayoutHelper.getDialogMaxHeight(this.windowHeightVp))
+      .backgroundColor($r('app.color.white'))
+      .borderRadius(10)
+      .clip(true)
+      .onClick(() => {
+        // 拦截点击
+      })
+    }
+    .width('100%')
+    .height('100%')
+    .padding({ left: 16, right: 16 })
+    .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
+    .backgroundColor('#66000000')
+    .onClick(() => {
+      this.closePdfModal();
+    })
   }
 }

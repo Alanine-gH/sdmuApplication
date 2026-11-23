@@ -1,4 +1,5 @@
 import { router } from '@kit.ArkUI';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 下载进度弹窗页 — 1:1 复刻源布局 dialog_download.xml 与 new_download_dialog.xml
@@ -15,6 +16,13 @@ struct DownloadDialogPage {
   @State dialogStyle: string = 'classic';
   @State progressValue: number = 0;
   @State paused: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 640;
+  @StorageProp('avoidAreaTopVp') avoidAreaTopVp: number = 0;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
   private timerId: number = -1;
 
   aboutToAppear(): void {
@@ -71,31 +79,38 @@ struct DownloadDialogPage {
         .width('100%')
         .padding({ top: 24 })
 
-      Text(DOWNLOAD_MSG)
-        .fontSize(16)
-        .fontColor($r('app.color.textColor'))
-        .textAlign(TextAlign.Center)
-        .lineHeight(24)
-        .padding({ left: 20, right: 20, top: 24 })
+      Scroll() {
+        Column() {
+          Text(DOWNLOAD_MSG)
+            .fontSize(16)
+            .fontColor($r('app.color.textColor'))
+            .textAlign(TextAlign.Center)
+            .lineHeight(24)
+            .padding({ left: 20, right: 20, top: 24 })
+            .width('100%')
+
+          // 下载进度行：5vp 线性进度条 + 百分比
+          Row() {
+            Progress({ value: this.progressValue, total: 100, type: ProgressType.Linear })
+              .value(this.progressValue)
+              .style({ strokeWidth: 5 })
+              .color($r('app.color.mobile_campus_primary_color'))
+              .backgroundColor('#FFE0E0E0')
+              .layoutWeight(1)
+              .margin({ right: 20 })
+
+            Text(`${this.progressValue}%`)
+              .fontSize(14)
+              .fontColor($r('app.color.textColor'))
+          }
+          .width('100%')
+          .padding({ left: 20, right: 20, top: 15, bottom: 24 })
+        }
         .width('100%')
-
-      // 下载进度行：5vp 线性进度条 + 百分比
-      Row() {
-        Progress({ value: this.progressValue, total: 100, type: ProgressType.Linear })
-          .value(this.progressValue)
-          .style({ strokeWidth: 5 })
-          .color($r('app.color.mobile_campus_primary_color'))
-          .backgroundColor('#FFE0E0E0')
-          .layoutWeight(1)
-          .margin({ right: 20 })
-
-        Text(`${this.progressValue}%`)
-          .fontSize(14)
-          .fontColor($r('app.color.textColor'))
       }
       .width('100%')
-      .margin({ left: 20, right: 20, top: 15 })
-      .padding({ bottom: 24 })
+      .constraintSize({ maxHeight: Math.max(100, BreakpointSystem.getDialogMaxHeight(this.windowHeightVp) - 130) })
+      .scrollBar(BarState.Off)
 
       Divider()
         .color($r('app.color.update_dialog_divider'))
@@ -195,14 +210,17 @@ struct DownloadDialogPage {
       .justifyContent(FlexAlign.Center)
       .layoutWeight(4)
 
-      Text(DOWNLOAD_MSG)
-        .fontSize(12)
-        .fontColor($r('app.color.download_msg_gray'))
-        .maxLines(5)
-        .lineHeight(18)
-        .padding({ left: 22, top: 22 })
-        .width('100%')
-        .layoutWeight(4)
+      Scroll() {
+        Text(DOWNLOAD_MSG)
+          .fontSize(12)
+          .fontColor($r('app.color.download_msg_gray'))
+          .lineHeight(18)
+          .padding({ left: 22, right: 22, top: 12, bottom: 12 })
+          .width('100%')
+      }
+      .width('100%')
+      .layoutWeight(4)
+      .scrollBar(BarState.Off)
 
       Divider()
         .color($r('app.color.download_divider'))
@@ -255,20 +273,37 @@ struct DownloadDialogPage {
           .height('100%')
           .backgroundColor($r('app.color.alpha_20'))
 
-        Stack() {
-          Image($r('app.media.dialog_bg'))
-            .objectFit(ImageFit.Fill)
-            .width('100%')
-            .height('100%')
+        Column() {
+          Stack() {
+            Image($r('app.media.dialog_bg'))
+              .objectFit(ImageFit.Fill)
+              .width('100%')
+              .height('100%')
 
-          this.newCard()
+            this.newCard()
+          }
+          .width('82%')
+          .height(Math.min(420, BreakpointSystem.getDialogMaxHeight(this.windowHeightVp)))
+          .constraintSize({
+            maxWidth: BreakpointSystem.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp),
+            maxHeight: BreakpointSystem.getDialogMaxHeight(this.windowHeightVp)
+          })
         }
-        .width('82%')
-        .height(420)
+        .width('100%')
+        .height('100%')
+        .padding({
+          top: this.avoidAreaTopVp,
+          bottom: this.avoidAreaBottomVp,
+          left: this.avoidAreaLeftVp,
+          right: this.avoidAreaRightVp
+        })
+        .justifyContent(FlexAlign.Center)
+        .alignItems(HorizontalAlign.Center)
       }
       .width('100%')
       .height('100%')
       .backgroundColor('#FF1A1A1A')
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
     } else {
       // dialog_download：白卡居中
       Stack() {
@@ -278,15 +313,32 @@ struct DownloadDialogPage {
           .backgroundColor($r('app.color.alpha_20'))
 
         Column() {
-          this.classicCard()
+          Column() {
+            this.classicCard()
+          }
+          .width('86%')
+          .constraintSize({
+            maxWidth: BreakpointSystem.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp),
+            maxHeight: BreakpointSystem.getDialogMaxHeight(this.windowHeightVp)
+          })
+          .justifyContent(FlexAlign.Center)
+          .alignItems(HorizontalAlign.Center)
         }
-        .width('86%')
+        .width('100%')
+        .height('100%')
+        .padding({
+          top: this.avoidAreaTopVp,
+          bottom: this.avoidAreaBottomVp,
+          left: this.avoidAreaLeftVp,
+          right: this.avoidAreaRightVp
+        })
         .justifyContent(FlexAlign.Center)
         .alignItems(HorizontalAlign.Center)
       }
       .width('100%')
       .height('100%')
       .backgroundColor('#FF1A1A1A')
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
     }
   }
 }

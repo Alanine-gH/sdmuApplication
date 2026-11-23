@@ -57,8 +57,8 @@ export class PasteHelper {
 
   /** 纯函数：校验是否为 http/https 链接 */
   public static isHttpUrl(text: string): boolean {
-    const trimmed: string = (text || '').trim().toLowerCase();
-    return trimmed.startsWith('http://') || trimmed.startsWith('https://');
+    const trimmed: string = (text || '').trim();
+    return /^https?:\/\/\S+$/i.test(trimmed);
   }
 
   /** 纯函数：按优先级从 PasteData 提取文本 */

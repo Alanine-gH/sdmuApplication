@@ -102,20 +102,23 @@ struct ScheduleAddPage {
         .fontColor($r('app.color.common_color_1'))
         .margin({ top: 6 })
       Column() {
-        ForEach(options, (opt: SelectOption, index: number) => {
-          Text(opt.label)
-            .fontSize(14)
-            .fontColor(index === selected ? $r('app.color.ybg_blue') : $r('app.color.common_color_3'))
-            .padding({ top: 8, bottom: 8 })
-            .width('100%')
-            .onClick(() => {
-              onPick(index);
-            })
-        }, (opt: string) => 'radio_' + opt)
+        Column() {
+          ForEach(options, (opt: SelectOption, index: number) => {
+            Text(opt.label)
+              .fontSize(14)
+              .fontColor(index === selected ? $r('app.color.ybg_blue') : $r('app.color.common_color_3'))
+              .padding({ top: 8, bottom: 8 })
+              .width('100%')
+              .onClick(() => {
+                onPick(index);
+              })
+          }, (opt: string) => 'radio_' + opt)
+        }
+        .width('100%')
       }
       .width('100%')
       .layoutWeight(1)
-      .margin({ left: 12 })
+      .padding({ left: 12 })
     }
     .alignItems(HorizontalAlign.Start)
     .width('100%')
@@ -212,7 +215,6 @@ struct ScheduleAddPage {
                 .alignItems(VerticalAlign.Center)
                 .padding({ right: 12 })
               }
-              .width('100%')
               .layoutWeight(1)
               .margin({ left: 24 })
             }

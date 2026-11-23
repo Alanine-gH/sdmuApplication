@@ -4,6 +4,7 @@ import { TitleBar } from '../components/TitleBar';
 import { ApiService } from '../network/ApiService';
 import { LoginSession } from '../network/LoginSession';
 import { ApiResponse } from '../model/ResponseModel';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 扫码登录页 — 1:1 复刻 ScanLoginActivity（180 行）+ mobile_campus_activity_scan_login.xml
@@ -36,6 +37,8 @@ struct ScanLoginPage {
   @State accountText: string = '';
   /** 提交中防重复 */
   @State submitting: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
 
   aboutToAppear(): void {
     // 源码 y(Intent)：l = intent.getStringExtra("result")
@@ -111,46 +114,55 @@ struct ScanLoginPage {
       TitleBar({ title: '', showBack: true })
 
       // MultiStateView content 区：LinearLayout gravity=center_vertical
-      Column() {
-        // ll_content（初始 invisible，f1 校验通过后可见）
+      Scroll() {
         Column() {
-          Image($r('app.media.mobile_campus_scan_login'))
-            .width(214)
-            .height(144)
+          // ll_content（初始 invisible，f1 校验通过后可见）
+          Column() {
+            Image($r('app.media.mobile_campus_scan_login'))
+              .width(214)
+              .height(144)
 
-          Text('扫码登录')
-            .fontSize(16)
-            .fontColor($r('app.color.black'))
-            .textAlign(TextAlign.Center)
-            .margin({ top: 18 })
+            Text('扫码登录')
+              .fontSize(16)
+              .fontColor($r('app.color.black'))
+              .textAlign(TextAlign.Center)
+              .margin({ top: 18 })
 
-          Text(this.accountText)
+            Text(this.accountText)
+              .fontSize(16)
+              .fontColor($r('app.color.ybg_blue'))
+              .textAlign(TextAlign.Center)
+              .margin({ top: 6 })
+          }
+          .width('100%')
+          .alignItems(HorizontalAlign.Center)
+          .visibility(this.showContent ? Visibility.Visible : Visibility.Hidden)
+
+          // tvSubmit（初始 gone，f1 校验通过后可见）
+          Text('确认登录')
             .fontSize(16)
-            .fontColor($r('app.color.ybg_blue'))
+            .fontColor($r('app.color.white'))
             .textAlign(TextAlign.Center)
-            .margin({ top: 6 })
+            .width(184)
+            .height(40)
+            .backgroundColor($r('app.color.mobile_campus_schedule_confirm_blue'))
+            .margin({ left: 12, right: 12, top: 10, bottom: 10 })
+            .visibility(this.showSubmit ? Visibility.Visible : Visibility.None)
+            .onClick(() => {
+              this.submit();
+            })
         }
         .width('100%')
-        .alignItems(HorizontalAlign.Center)
-        .visibility(this.showContent ? Visibility.Visible : Visibility.Hidden)
-
-        // tvSubmit（初始 gone，f1 校验通过后可见）
-        Text('确认登录')
-          .fontSize(16)
-          .fontColor($r('app.color.white'))
-          .textAlign(TextAlign.Center)
-          .width(184)
-          .height(40)
-          .backgroundColor($r('app.color.mobile_campus_schedule_confirm_blue'))
-          .margin({ left: 12, right: 12, top: 10, bottom: 10 })
-          .visibility(this.showSubmit ? Visibility.Visible : Visibility.None)
-          .onClick(() => {
-            this.submit();
-          })
+        .constraintSize({
+          minHeight: '100%',
+          maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint)
+        })
+        .padding({ bottom: Math.max(16, this.avoidAreaBottomVp) })
+        .justifyContent(FlexAlign.Center)
       }
       .width('100%')
       .layoutWeight(1)
-      .justifyContent(FlexAlign.Center)
+      .scrollBar(BarState.Off)
     }
     .width('100%')
     .height('100%')

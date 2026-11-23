@@ -7,6 +7,7 @@ import { EmptyView } from '../components/EmptyView';
 import { LoadingView } from '../components/LoadingView';
 import { PreferencesUtil } from '../data/PreferencesUtil';
 import { Constants } from '../data/Constants';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 通讯录搜索页 — 源码级翻译（ContactSearchActivity.java 逐行 → ArkTS，禁截图猜测）：
@@ -53,6 +54,11 @@ struct ContactSearchPage {
   @State cacheList: ContactSearchAddressBookItem[] = [];
   @State showCache: boolean = false;
   @State isLoading: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
+  @StorageProp('keyboardHeightVp') keyboardHeightVp: number = 0;
   /** 源码 y：分页页码（新搜索重置 1，成功有数据自增） */
   private pageNum: number = 1;
   /** 源码 x：contactSearchType（独立入口无该 intent 参数，恒空 → t/u 分支） */
@@ -344,6 +350,13 @@ struct ContactSearchPage {
           EmptyView({ tipText: '暂无搜索结果' })
         }
         .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
+        .padding({
+          left: this.avoidAreaLeftVp,
+          right: this.avoidAreaRightVp,
+          bottom: this.keyboardHeightVp + this.avoidAreaBottomVp
+        })
         .layoutWeight(1)
       } else {
         this.resultList()
@@ -401,7 +414,12 @@ struct ContactSearchPage {
       }
       .width('100%')
       .height(44)
-      .padding({ left: 12, right: 12 })
+      .padding({
+        left: Math.max(12, this.avoidAreaLeftVp),
+        right: Math.max(12, this.avoidAreaRightVp)
+      })
+      .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+      .alignSelf(ItemAlign.Center)
       .backgroundColor($r('app.color.main_bg'))
       .alignItems(VerticalAlign.Center)
 
@@ -411,6 +429,8 @@ struct ContactSearchPage {
         .width('100%')
     }
     .width('100%')
+    .backgroundColor($r('app.color.main_bg'))
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
   }
 
   /** 历史缓存 ListView（源码 k3 + header/footer） */
@@ -452,6 +472,10 @@ struct ContactSearchPage {
       }
     }
     .width('100%')
+    .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+    .alignSelf(ItemAlign.Center)
+    .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
+    .contentEndOffset(this.keyboardHeightVp + this.avoidAreaBottomVp)
     .layoutWeight(1)
     .scrollBar(BarState.Off)
     .backgroundColor('#F2F2F2')
@@ -504,6 +528,10 @@ struct ContactSearchPage {
       }, (group: ContactSearchAddressBook) => group.bmdm + '_' + group.bmmc)
     }
     .width('100%')
+    .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+    .alignSelf(ItemAlign.Center)
+    .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
+    .contentEndOffset(this.keyboardHeightVp + this.avoidAreaBottomVp)
     .layoutWeight(1)
     .scrollBar(BarState.Off)
     .onReachEnd(() => {

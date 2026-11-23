@@ -263,14 +263,17 @@ struct SuperviseAddPage {
       }
       .width('100%').alignItems(VerticalAlign.Top).padding({ top: 12 })
 
-      Text('添加听课')
-        .fontSize(14).fontColor($r('app.color.white')).textAlign(TextAlign.Center)
-        .width('100%').padding({ top: 10, bottom: 10 })
-        .margin({ left: 9, right: 9, top: 30 })
-        .borderRadius(4)
-        .backgroundColor(this.submitEnabled ? $r('app.color.mobile_campus_primary_color_default') :
-          $r('app.color.common_color_24'))
-        .onClick(() => { this.submit(); })
+      Column() {
+        Text('添加听课')
+          .fontSize(14).fontColor($r('app.color.white')).textAlign(TextAlign.Center)
+          .width('100%').padding({ top: 10, bottom: 10 })
+          .borderRadius(4)
+          .backgroundColor(this.submitEnabled ? $r('app.color.mobile_campus_primary_color_default') :
+            $r('app.color.common_color_24'))
+          .onClick(() => { this.submit(); })
+      }
+      .width('100%')
+      .padding({ left: 9, right: 9, top: 30 })
     }
     .width('100%')
     .padding({ left: 12, right: 12, bottom: 18 })
@@ -360,7 +363,7 @@ struct SuperviseAddPage {
           Column() {
             this.detailCard(this.detail as SuperviseCourseDetail)
             Column() { this.notifyCard() }
-              .width('100%').margin({ left: 12, right: 12, top: 32 })
+              .width('100%').padding({ left: 12, right: 12, top: 32 })
           }
           .width('100%')
         }

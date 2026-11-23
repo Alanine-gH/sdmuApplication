@@ -1,9 +1,12 @@
 import { common } from '@kit.AbilityKit';
-import { Want } from '@kit.AbilityKit';
 import { fileIo as fs } from '@kit.CoreFileKit';
+import { PdfView, pdfService, pdfViewManager } from '@kit.PDFKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { TitleBar } from '../components/TitleBar';
 import { ApiService } from '../network/ApiService';
+import { FilePreviewHelper } from '../common/FilePreviewHelper';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 下载文件管理页 — 源码级翻译（FileManagerActivity.java + FileListAdapter 逐行 → ArkTS，
@@ -25,27 +28,6 @@ import { ApiService } from '../network/ApiService';
  * 【返回】onBackPressed：选择模式 → 退出选择模式（e(false)+p.clear+U2(false)）；否则默认。
  * 【工具栏】T1：标题 mobile_campus_file_manage + "删除"（初始 setVisibility(8)）。
  */
-/** APK r.n(filePath) MIME 等价（FileUtils 按扩展名推断；未识别交给系统 viewData 裁决） */
-function mimeOf(fileName: string): string {
-  const lower: string = fileName.toLowerCase();
-  if (lower.endsWith('.pdf')) {
-    return 'application/pdf';
-  }
-  if (lower.endsWith('.doc') || lower.endsWith('.docx')) {
-    return 'application/msword';
-  }
-  if (lower.endsWith('.xls') || lower.endsWith('.xlsx')) {
-    return 'application/vnd.ms-excel';
-  }
-  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.png') || lower.endsWith('.gif')) {
-    return 'image/*';
-  }
-  if (lower.endsWith('.txt')) {
-    return 'text/plain';
-  }
-  return '*/*';
-}
-
 /** 源码 FileEntity（fileName/stamp/createTime/filePath/isFile） */
 class DownloadFile {
   name: string = '';
@@ -80,10 +62,33 @@ struct FileManagerPage {
   /** 源码 s.setChecked：全选框状态 */
   @State allSelected: boolean = false;
   /** 源码 U2(z)：删除按钮 + 全选框显隐 */
+  /** 源码 U2：删除按钮 + 全选框显隐 */
   @State showToolbar: boolean = false;
+  @State showPdfModal: boolean = false;
+  @State pdfTitle: string = '';
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 780;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  private pdfController: pdfViewManager.PdfController = new pdfViewManager.PdfController();
 
   aboutToAppear(): void {
     this.rescan();
+  }
+
+  aboutToDisappear(): void {
+    this.closePdfModal();
+  }
+
+  private closePdfModal(): void {
+    if (this.showPdfModal) {
+      this.showPdfModal = false;
+      try {
+        this.pdfController.releaseDocument();
+      } catch {
+        // 忽略释放异常
+      }
+    }
   }
 
   /** 源码 S2()：三目录收集 + stamp 降序 + 空态判定 */
@@ -163,20 +168,26 @@ struct FileManagerPage {
     this.openFile(file);
   }
 
-  /** 源码 r.n(filePath)：MIME Intent 打开；null → toast "不支持打开" */
-  private openFile(file: DownloadFile): void {
+  /** 源码 r.n(filePath)：PreviewKit / PdfView / Want 打开；失败 → toast */
+  private async openFile(file: DownloadFile): Promise<void> {
     const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
-    const want: Want = {
-      action: 'ohos.want.action.viewData',
-      uri: 'file://' + file.filePath,
-      type: mimeOf(file.name),
-      flags: 1 // FLAG_AUTH_READ_URI_PERMISSION
-    };
-    context.startAbility(want)
-      .catch((error: BusinessError) => {
-        ApiService.logError('FileManagerPage open fail: ' + error.message);
-        this.getUIContext().getPromptAction().showToast({ message: '不支持打开' });
-      });
+    const res = await FilePreviewHelper.openLocalFilePreview(context, file.filePath, file.name);
+    if (res.success) {
+      return;
+    }
+    if (res.method === 'pdfView') {
+      try {
+        const parseRes = await this.pdfController.loadDocument(file.filePath);
+        if (parseRes === pdfService.ParseResult.PARSE_SUCCESS) {
+          this.pdfTitle = file.name;
+          this.showPdfModal = true;
+          return;
+        }
+      } catch {
+        // 降级提示
+      }
+    }
+    this.getUIContext().getPromptAction().showToast({ message: res.message !== '' ? res.message : '不支持打开' });
   }
 
   /** 源码 e.onClick 全选：已全选 → 清空；否则全选 */
@@ -241,116 +252,188 @@ struct FileManagerPage {
   }
 
   build() {
-    Column() {
-      TitleBar({ title: '下载文件管理', showBack: true })
+    Stack() {
+      Column() {
+        TitleBar({ title: '下载文件管理', showBack: true })
 
-      // 源码 U2：删除按钮（工具栏右侧 m("删除")）+ 全选框（cb_select_all）
-      Row() {
-        if (this.showToolbar) {
-          Row() {
-            Text('全选')
-              .fontSize(14)
-              .fontColor($r('app.color.common_color_1'))
-              .padding({ left: 15, right: 8 })
-              .onClick(() => {
-                this.toggleSelectAll();
-              })
-            Text('删除')
-              .fontSize(14)
-              .fontColor($r('app.color.ybg_red'))
-              .padding({ left: 8, right: 15 })
-              .onClick(() => {
-                this.onDeleteClick();
-              })
+        // 源码 U2：删除按钮（工具栏右侧 m("删除")）+ 全选框（cb_select_all）
+        Row() {
+          if (this.showToolbar) {
+            Row() {
+              Text('全选')
+                .fontSize(14)
+                .fontColor($r('app.color.common_color_1'))
+                .padding({ left: 15, right: 8 })
+                .onClick(() => {
+                  this.toggleSelectAll();
+                })
+              Text('删除')
+                .fontSize(14)
+                .fontColor($r('app.color.ybg_red'))
+                .padding({ left: 8, right: 15 })
+                .onClick(() => {
+                  this.onDeleteClick();
+                })
+            }
+            .width('100%')
+            .height(44)
+            .justifyContent(FlexAlign.End)
+            .alignItems(VerticalAlign.Center)
+            .backgroundColor($r('app.color.white'))
+            .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+          }
+        }
+        .width('100%')
+        .justifyContent(FlexAlign.Center)
+
+        if (this.files.length === 0) {
+          // 源码 q2(this.r)：MultiStateView 空态（empty_view 12fp #CECECE padding 15）
+          Column() {
+            Text('暂无下载文件')
+              .fontSize(12)
+              .fontColor($r('app.color.common_color_4'))
+              .padding(15)
           }
           .width('100%')
-          .height(44)
-          .justifyContent(FlexAlign.End)
-          .alignItems(VerticalAlign.Center)
-          .backgroundColor($r('app.color.white'))
+          .layoutWeight(1)
+          .justifyContent(FlexAlign.Center)
+          .backgroundColor($r('app.color.main_bg'))
+        } else {
+          List() {
+            ForEach(this.files, (file: DownloadFile) => {
+              ListItem() {
+                Row() {
+                  // rb_select：选择模式下显示 CheckBox
+                  if (this.selectMode) {
+                    Checkbox({ name: file.filePath })
+                      .select(this.selected.has(file.filePath))
+                      .selectedColor($r('app.color.sdmu_primary'))
+                      .width(20)
+                      .height(20)
+                      .margin({ left: 15 })
+                  } else {
+                    Row()
+                      .width(20)
+                      .height(20)
+                      .margin({ left: 15 })
+                  }
+
+                  // 文件类型图标（FileListAdapter 固定 word 图标）
+                  Image($r('app.media.mobile_campus_oa_word'))
+                    .width(32)
+                    .height(32)
+                    .margin({ left: 20, right: 24 })
+
+                  Column() {
+                    Text(file.name)
+                      .fontSize(17.5)
+                      .fontColor($r('app.color.common_color_1'))
+                      .maxLines(1)
+                      .textOverflow({ overflow: TextOverflow.Ellipsis })
+                    Text(file.createTime)
+                      .fontSize(11.5)
+                      .fontColor($r('app.color.common_color_1'))
+                      .margin({ top: 2 })
+                  }
+                  .alignItems(HorizontalAlign.Start)
+                  .layoutWeight(1)
+                }
+                .width('100%')
+                .padding({ top: 10, bottom: 10, right: 12 })
+                .alignItems(VerticalAlign.Center)
+                .backgroundColor($r('app.color.white'))
+                .onClick(() => {
+                  this.onItemClick(file);
+                })
+                // Row 无 onLongClick 属性（首轮构建 10505001 实证）→ LongPressGesture 等价
+                .gesture(LongPressGesture({ repeat: false, duration: 500 })
+                  .onAction(() => {
+                    this.onItemLongPress(file);
+                  }))
+              }
+            }, (file: DownloadFile) => file.filePath + '_' + String(file.stamp))
+          }
+          .width('100%')
+          .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+          .padding({ bottom: this.avoidAreaBottomVp })
+          .layoutWeight(1)
+          .backgroundColor($r('app.color.main_bg'))
         }
       }
       .width('100%')
+      .height('100%')
+      .alignItems(HorizontalAlign.Center)
+      .backgroundColor($r('app.color.main_bg'))
 
-      if (this.files.length === 0) {
-        // 源码 q2(this.r)：MultiStateView 空态（empty_view 12fp #CECECE padding 15）
-        Column() {
-          Text('暂无下载文件')
-            .fontSize(12)
-            .fontColor($r('app.color.common_color_4'))
-            .padding(15)
-        }
-        .width('100%')
-        .layoutWeight(1)
-        .justifyContent(FlexAlign.Center)
-        .backgroundColor($r('app.color.main_bg'))
-      } else {
-        List() {
-          ForEach(this.files, (file: DownloadFile) => {
-            ListItem() {
-              Row() {
-                // rb_select：选择模式下显示 CheckBox
-                if (this.selectMode) {
-                  Checkbox({ name: file.filePath })
-                    .select(this.selected.has(file.filePath))
-                    .selectedColor($r('app.color.sdmu_primary'))
-                    .width(20)
-                    .height(20)
-                    .margin({ left: 15 })
-                } else {
-                  Row()
-                    .width(20)
-                    .height(20)
-                    .margin({ left: 15 })
-                }
-
-                // 文件类型图标（FileListAdapter 固定 word 图标）
-                Image($r('app.media.mobile_campus_oa_word'))
-                  .width(32)
-                  .height(32)
-                  .margin({ left: 20, right: 24 })
-
-                Column() {
-                  Text(file.name)
-                    .fontSize(17.5)
-                    .fontColor($r('app.color.common_color_1'))
-                    .maxLines(1)
-                    .textOverflow({ overflow: TextOverflow.Ellipsis })
-                  Text(file.createTime)
-                    .fontSize(11.5)
-                    .fontColor($r('app.color.common_color_1'))
-                    .margin({ top: 2 })
-                }
-                .alignItems(HorizontalAlign.Start)
-                .layoutWeight(1)
-              }
-              .width('100%')
-              .padding({ top: 10, bottom: 10 })
-              .alignItems(VerticalAlign.Center)
-              .backgroundColor($r('app.color.white'))
-              .onClick(() => {
-                this.onItemClick(file);
-              })
-              // Row 无 onLongClick 属性（首轮构建 10505001 实证）→ LongPressGesture 等价
-              .gesture(LongPressGesture({ repeat: false, duration: 500 })
-                .onAction(() => {
-                  this.onItemLongPress(file);
-                }))
-            }
-          }, (file: DownloadFile) => file.filePath + '_' + String(file.stamp))
-        }
-        .width('100%')
-        .layoutWeight(1)
-        .backgroundColor($r('app.color.main_bg'))
+      if (this.showPdfModal) {
+        this.pdfPreviewOverlay()
       }
     }
     .width('100%')
     .height('100%')
-    .backgroundColor($r('app.color.main_bg'))
+  }
+
+  @Builder
+  pdfPreviewOverlay() {
+    Column() {
+      Column() {
+        Row() {
+          Text(this.pdfTitle)
+            .fontSize(15)
+            .fontWeight(FontWeight.Medium)
+            .fontColor($r('app.color.common_color_1'))
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+            .layoutWeight(1)
+          Text('关闭')
+            .fontSize(14)
+            .fontColor('#3A92ED')
+            .padding({ left: 10, right: 4, top: 4, bottom: 4 })
+            .onClick(() => {
+              this.closePdfModal();
+            })
+        }
+        .width('100%')
+        .padding({ left: 14, right: 14, top: 10, bottom: 10 })
+        .backgroundColor($r('app.color.white'))
+
+        Divider().color($r('app.color.common_color_5')).strokeWidth(0.5).width('100%')
+
+        PdfView({
+          controller: this.pdfController,
+          pageLayout: pdfService.PageLayout.LAYOUT_SINGLE,
+          isContinuous: true,
+          showScroll: true
+        })
+          .width('100%')
+          .layoutWeight(1)
+      }
+      .width(AdaptiveLayoutHelper.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp))
+      .height(AdaptiveLayoutHelper.getDialogMaxHeight(this.windowHeightVp))
+      .backgroundColor($r('app.color.white'))
+      .borderRadius(10)
+      .clip(true)
+      .onClick(() => {
+        // 拦截点击
+      })
+    }
+    .width('100%')
+    .height('100%')
+    .padding({ left: 16, right: 16 })
+    .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
+    .backgroundColor('#66000000')
+    .onClick(() => {
+      this.closePdfModal();
+    })
   }
 
   /** 源码 onBackPressed：选择模式 → 退出选择模式；否则默认返回 */
   onBackPress(): boolean {
+    if (this.showPdfModal) {
+      this.closePdfModal();
+      return true;
+    }
     if (!this.selectMode) {
       return false;
     }

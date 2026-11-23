@@ -5,6 +5,8 @@ import { ApiService } from '../network/ApiService';
 import { LoginSession } from '../network/LoginSession';
 import { PreferencesUtil } from '../data/PreferencesUtil';
 import { PrivacyWindowHelper } from '../common/PrivacyWindowHelper';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 修改密码页 — 1:1 复刻 ModifyPwdActivity.java + mobile_campus_activity_modify_pwd.xml
@@ -39,6 +41,11 @@ struct ModifyPasswordPage {
   @State submitting: boolean = false;
   /** 成功弹窗（ModifyDialog 复刻：白卡圆角6 标题+新密码回显） */
   @State showSuccessDialog: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 780;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('keyboardHeightVp') keyboardHeightVp: number = 0;
 
   aboutToAppear(): void {
     // 源码 f1()：tvName.setText(d.a.c().getUserName())
@@ -145,140 +152,161 @@ struct ModifyPasswordPage {
   }
 
   build() {
-    Column() {
-      TitleBar({ title: '密码修改', showBack: true })
-
-      // 白卡1：账号 + 原密码（marginTop 16、paddingL 12、divider middle）
+    Stack() {
       Column() {
-        // 行1 高48：账号：<tvName>
-        Row() {
-          Text('账号：')
-            .fontSize(16)
-            .fontColor($r('app.color.mobile_campus_primary_color'))
-          Text(this.displayName())
-            .fontSize(16)
-            .fontColor($r('app.color.mobile_campus_primary_color'))
-        }
-        .width('100%')
-        .height(48)
-        .alignItems(VerticalAlign.Center)
+        TitleBar({ title: '密码修改', showBack: true })
 
-        this.cardDivider()
+        Scroll() {
+          Column() {
+            // 白卡1：账号 + 原密码（marginTop 16、paddingL 12、divider middle）
+            Column() {
+              // 行1 高48：账号：<tvName>
+              Row() {
+                Text('账号：')
+                  .fontSize(16)
+                  .fontColor($r('app.color.mobile_campus_primary_color'))
+                Text(this.displayName())
+                  .fontSize(16)
+                  .fontColor($r('app.color.mobile_campus_primary_color'))
+              }
+              .width('100%')
+              .height(48)
+              .alignItems(VerticalAlign.Center)
 
-        // 行2 高48：tvOriginalPwd（g0.j 请求焦点 → defaultFocus）
-        Row() {
-          TextInput({ placeholder: '请输入原密码', text: this.oldPwd })
-            .type(InputType.Password)
-            .fontSize(16)
-            .fontColor($r('app.color.common_color_3'))
-            .placeholderColor($r('app.color.common_color_3'))
-            .placeholderFont({ size: 16 })
-            .backgroundColor(Color.Transparent)
-            .padding(0)
-            .layoutWeight(1)
-            .margin({ right: 12 })
-            .defaultFocus(true)
-            .onChange((value: string) => {
-              this.oldPwd = value;
-              this.validate();
-            })
-        }
-        .width('100%')
-        .height(48)
-        .alignItems(VerticalAlign.Center)
-      }
-      .width('100%')
-      .margin({ top: 16 })
-      .padding({ left: 12 })
-      .backgroundColor($r('app.color.white'))
+              this.cardDivider()
 
-      // 白卡2：新密码 + 确认（marginTop 12、divider middle）
-      Column() {
-        Row() {
-          TextInput({ placeholder: '请输入新密（6-12位）', text: this.newPwd })
-            .type(InputType.Password)
-            .fontSize(16)
-            .fontColor($r('app.color.common_color_3'))
-            .placeholderColor($r('app.color.common_color_3'))
-            .placeholderFont({ size: 16 })
-            .maxLength(12)
-            .backgroundColor(Color.Transparent)
-            .padding(0)
-            .layoutWeight(1)
-            .margin({ right: 12 })
-            .onChange((value: string) => {
-              this.newPwd = value;
-              this.validate();
-            })
-        }
-        .width('100%')
-        .height(48)
-        .alignItems(VerticalAlign.Center)
+              // 行2 高48：tvOriginalPwd（g0.j 请求焦点 → defaultFocus）
+              Row() {
+                TextInput({ placeholder: '请输入原密码', text: this.oldPwd })
+                  .type(InputType.Password)
+                  .fontSize(16)
+                  .fontColor($r('app.color.common_color_3'))
+                  .placeholderColor($r('app.color.common_color_3'))
+                  .placeholderFont({ size: 16 })
+                  .backgroundColor(Color.Transparent)
+                  .padding(0)
+                  .layoutWeight(1)
+                  .margin({ right: 12 })
+                  .defaultFocus(true)
+                  .onChange((value: string) => {
+                    this.oldPwd = value;
+                    this.validate();
+                  })
+              }
+              .width('100%')
+              .height(48)
+              .alignItems(VerticalAlign.Center)
+            }
+            .width('100%')
+            .margin({ top: 16 })
+            .padding({ left: 12 })
+            .backgroundColor($r('app.color.white'))
 
-        this.cardDivider()
+            // 白卡2：新密码 + 确认（marginTop 12、divider middle）
+            Column() {
+              Row() {
+                TextInput({ placeholder: '请输入新密（6-12位）', text: this.newPwd })
+                  .type(InputType.Password)
+                  .fontSize(16)
+                  .fontColor($r('app.color.common_color_3'))
+                  .placeholderColor($r('app.color.common_color_3'))
+                  .placeholderFont({ size: 16 })
+                  .maxLength(12)
+                  .backgroundColor(Color.Transparent)
+                  .padding(0)
+                  .layoutWeight(1)
+                  .margin({ right: 12 })
+                  .onChange((value: string) => {
+                    this.newPwd = value;
+                    this.validate();
+                  })
+              }
+              .width('100%')
+              .height(48)
+              .alignItems(VerticalAlign.Center)
 
-        Row() {
-          TextInput({ placeholder: '再次请输入新密（6-12位）', text: this.confirmPwd })
-            .type(InputType.Password)
-            .fontSize(16)
-            .fontColor($r('app.color.common_color_3'))
-            .placeholderColor($r('app.color.common_color_3'))
-            .placeholderFont({ size: 16 })
-            .maxLength(12)
-            .backgroundColor(Color.Transparent)
-            .padding(0)
-            .layoutWeight(1)
-            .margin({ right: 12 })
-            .onChange((value: string) => {
-              this.confirmPwd = value;
-              this.validate();
-            })
-        }
-        .width('100%')
-        .height(48)
-        .alignItems(VerticalAlign.Center)
-      }
-      .width('100%')
-      .margin({ top: 12 })
-      .padding({ left: 12 })
-      .backgroundColor($r('app.color.white'))
+              this.cardDivider()
 
-      // tvErrorTips：12.5fp #FD6161 marginH 12 marginTop 8（visibility 随校验）
-      if (this.errorTipsVisible) {
-        Text(this.errorTipsText)
-          .fontSize(12.5)
-          .fontColor('#FD6161')
-          .textAlign(TextAlign.Center)
+              Row() {
+                TextInput({ placeholder: '再次请输入新密（6-12位）', text: this.confirmPwd })
+                  .type(InputType.Password)
+                  .fontSize(16)
+                  .fontColor($r('app.color.common_color_3'))
+                  .placeholderColor($r('app.color.common_color_3'))
+                  .placeholderFont({ size: 16 })
+                  .maxLength(12)
+                  .backgroundColor(Color.Transparent)
+                  .padding(0)
+                  .layoutWeight(1)
+                  .margin({ right: 12 })
+                  .onChange((value: string) => {
+                    this.confirmPwd = value;
+                    this.validate();
+                  })
+              }
+              .width('100%')
+              .height(48)
+              .alignItems(VerticalAlign.Center)
+            }
+            .width('100%')
+            .margin({ top: 12 })
+            .padding({ left: 12 })
+            .backgroundColor($r('app.color.white'))
+
+            // tvErrorTips：12.5fp #FD6161 paddingH 12 marginTop 8（visibility 随校验）
+            if (this.errorTipsVisible) {
+              Text(this.errorTipsText)
+                .fontSize(12.5)
+                .fontColor('#FD6161')
+                .textAlign(TextAlign.Center)
+                .width('100%')
+                .padding({ left: 12, right: 12 })
+                .margin({ top: 8 })
+            }
+
+            // tvSubmit "确定设置"：高44 paddingH 12 top 48，selector 色随 enabled
+            Column() {
+              Text('确定设置')
+                .fontSize(16)
+                .fontColor(this.submitEnabled ? $r('app.color.ybg_white') : $r('app.color.common_color_3'))
+                .width('100%')
+                .height(44)
+                .textAlign(TextAlign.Center)
+                .borderRadius(4)
+                .backgroundColor(this.submitEnabled ?
+                  $r('app.color.mobile_campus_primary_color') : '#DEE3E9')
+                .onClick(() => {
+                  this.submit();
+                })
+            }
+            .width('100%')
+            .padding({ left: 12, right: 12, top: 48 })
+          }
           .width('100%')
-          .margin({ left: 12, right: 12, top: 8 })
-      }
-
-      // tvSubmit "确定设置"：高44 marginH 12 marginTop 48，selector 色随 enabled
-      Text('确定设置')
-        .fontSize(16)
-        .fontColor(this.submitEnabled ? $r('app.color.ybg_white') : $r('app.color.common_color_3'))
+          .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+          .padding({ bottom: Math.max(24, this.avoidAreaBottomVp + this.keyboardHeightVp + 16) })
+        }
         .width('100%')
-        .height(44)
-        .textAlign(TextAlign.Center)
-        .margin({ left: 12, right: 12, top: 48 })
-        .borderRadius(4)
-        .backgroundColor(this.submitEnabled ?
-          $r('app.color.mobile_campus_primary_color') : '#DEE3E9')
-        .onClick(() => {
-          this.submit();
-        })
+        .layoutWeight(1)
+        .scrollBar(BarState.Off)
+        .align(Alignment.Top)
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor($r('app.color.common_color_6'))
+
+      if (this.showSuccessDialog) {
+        this.successDialogBuilder()
+      }
     }
     .width('100%')
     .height('100%')
-    .backgroundColor($r('app.color.common_color_6'))
-    .overlay(this.successDialogBuilder(), { align: Alignment.Center })
   }
 
-  /** ModifyDialog 复刻（mobile_campus_dialog_modify.xml）：白卡圆角6、
-   *  标题 LargeText(19fp) 黑 居中 padding 16；"新密码："+confirm marginT 17、paddingB 27 */
+  /** ModifyDialog 复刻（mobile_campus_dialog_modify.xml）：带遮罩、自适应宽高 */
   @Builder
   successDialogBuilder() {
-    if (this.showSuccessDialog) {
+    Column() {
       Column() {
         Text('修改密码成功，请重新登录')
           .fontSize(19)
@@ -297,10 +325,17 @@ struct ModifyPasswordPage {
         }
         .margin({ top: 17 })
       }
-      .width(280)
+      .width(AdaptiveLayoutHelper.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp))
+      .constraintSize({ maxHeight: AdaptiveLayoutHelper.getDialogMaxHeight(this.windowHeightVp) })
       .padding({ bottom: 27 })
       .backgroundColor($r('app.color.ybg_white'))
       .borderRadius(6)
     }
+    .width('100%')
+    .height('100%')
+    .padding({ left: 16, right: 16 })
+    .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
+    .backgroundColor('#66000000')
   }
 }

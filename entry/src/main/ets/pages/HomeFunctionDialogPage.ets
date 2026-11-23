@@ -1,3 +1,5 @@
+import { BreakpointSystem } from '../common/BreakpointSystem';
+
 /**
  * 右上角功能入口弹窗页 — 1:1 复刻 layout_home_right_function_enter_dialog.xml
  * + item_home_right_function_enter_dialog.xml（px_to_dip_N = N/2 vp）：
@@ -22,6 +24,13 @@ class HomeFuncEntry {
 @Entry
 @Component
 struct HomeFunctionDialogPage {
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 640;
+  @StorageProp('avoidAreaTopVp') avoidAreaTopVp: number = 0;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
   private funcEntries: HomeFuncEntry[] = [
     new HomeFuncEntry('scan', '扫一扫', $r('app.media.mobile_campus_main_scan')),
     new HomeFuncEntry('addplan', '添加日程', $r('app.media.mobile_campus_main_addplan')),
@@ -43,36 +52,47 @@ struct HomeFunctionDialogPage {
           .margin({ right: 13 })
 
         // BLLinearLayout：白底圆角 8vp、pad 20/10vp、单列宫格
-        Column() {
-          ForEach(this.funcEntries, (entry: HomeFuncEntry) => {
-            Row() {
-              Image(entry.entryIcon)
-                .width(20)
-                .height(20)
-                .objectFit(ImageFit.Cover)
-              Text(entry.entryLabel)
-                .fontSize(14)
-                .fontColor($r('app.color.titleColor'))
-                .padding({ left: 10 })
-                .maxLines(1)
-            }
-            .width('100%')
-            .padding({ top: 18, bottom: 18 })
-            .alignItems(VerticalAlign.Center)
-          }, (entry: HomeFuncEntry) => entry.entryId)
+        Scroll() {
+          Column() {
+            ForEach(this.funcEntries, (entry: HomeFuncEntry) => {
+              Row() {
+                Image(entry.entryIcon)
+                  .width(20)
+                  .height(20)
+                  .objectFit(ImageFit.Cover)
+                Text(entry.entryLabel)
+                  .fontSize(14)
+                  .fontColor($r('app.color.titleColor'))
+                  .padding({ left: 10 })
+                  .maxLines(1)
+              }
+              .width('100%')
+              .padding({ top: 18, bottom: 18 })
+              .alignItems(VerticalAlign.Center)
+            }, (entry: HomeFuncEntry) => entry.entryId)
+          }
+          .width('100%')
         }
         .width('100%')
+        .constraintSize({ maxHeight: Math.max(120, BreakpointSystem.getDialogMaxHeight(this.windowHeightVp) - 80) })
+        .scrollBar(BarState.Off)
         .padding({ left: 20, right: 20, top: 10, bottom: 10 })
         .borderRadius(8)
         .backgroundColor($r('app.color.white'))
       }
-      .width(210)
+      .width(Math.min(210, BreakpointSystem.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp)))
       .padding({ left: 8, right: 8 })
-      .margin({ top: 90 })
+      .margin({ top: Math.max(56, this.avoidAreaTopVp + 46) })
     }
     .width('100%')
     .height('100%')
+    .padding({
+      left: this.avoidAreaLeftVp,
+      right: this.avoidAreaRightVp,
+      bottom: this.avoidAreaBottomVp
+    })
     .backgroundColor('#99000000')
     .alignItems(HorizontalAlign.Center) // layout_gravity center_horizontal
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 }

@@ -4,6 +4,8 @@ import { TitleBar } from '../components/TitleBar';
 import { ApiService } from '../network/ApiService';
 import { LoginSession } from '../network/LoginSession';
 import { PreferencesUtil } from '../data/PreferencesUtil';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 输入手机号页（绑定手机第一步）— 1:1 翻译 MobileCampusInputPhoneActivity.java +
@@ -67,6 +69,11 @@ struct InputPhonePage {
   @State submitting: boolean = false;
   /** 源码 u：返回确认弹窗显示态 */
   @State showQuitDialog: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 780;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('keyboardHeightVp') keyboardHeightVp: number = 0;
 
   aboutToAppear(): void {
     // 源码 y(Intent) 逐行还原
@@ -210,7 +217,7 @@ struct InputPhonePage {
   /** 源码 com.lysoft.android.lyyd.base.widget.a 弹窗复刻（标题+退出/继续） */
   @Builder
   quitDialog() {
-    if (this.showQuitDialog) {
+    Column() {
       Column() {
         Text('须输入手机号码完成绑定')
           .fontSize(15)
@@ -250,76 +257,97 @@ struct InputPhonePage {
         }
         .alignItems(VerticalAlign.Center)
       }
-      .width(280)
+      .width(AdaptiveLayoutHelper.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp))
+      .constraintSize({ maxHeight: AdaptiveLayoutHelper.getDialogMaxHeight(this.windowHeightVp) })
       .backgroundColor($r('app.color.ybg_white'))
       .borderRadius(6)
     }
+    .width('100%')
+    .height('100%')
+    .padding({ left: 16, right: 16 })
+    .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
+    .backgroundColor('#66000000')
   }
 
   build() {
-    Column() {
-      TitleBar({ title: this.validation === '' ? '绑定手机号' : '设备验证', showBack: true })
-      Divider()
-        .color($r('app.color.divider_grey'))
-        .strokeWidth(0.5)
-        .width('100%')
-
+    Stack() {
       Column() {
-        Image($r('app.media.mobile_campus_phone_nub'))
-          .margin({ top: 40 })
-
-        Text('输入手机号')
-          .fontSize(16)
-          .fontColor($r('app.color.common_color_1'))
-          .margin({ top: 12 })
-
-        Text('请输入手机号码，以便绑定手机')
-          .fontSize(13)
-          .fontColor($r('app.color.common_color_1'))
-          .margin({ top: 8 })
-
-        TextInput({ text: this.phone, placeholder: '' })
+        TitleBar({ title: this.validation === '' ? '绑定手机号' : '设备验证', showBack: true })
+        Divider()
+          .color($r('app.color.divider_grey'))
+          .strokeWidth(0.5)
           .width('100%')
-          .height(40)
-          .textAlign(TextAlign.Center)
-          .fontSize(16)
-          .fontColor($r('app.color.common_color_1'))
-          .backgroundColor(Color.Transparent)
-          .type(InputType.PhoneNumber)
-          .maxLength(11)
-          .enabled(this.validation === '')
-          .padding({ left: 56, right: 56 })
-          .margin({ top: 18 })
-          .onChange((value: string) => {
-            this.phone = value;
-          })
 
-        Text(this.nextLabel())
-          .fontSize(15)
-          .fontColor(this.phone.trim() === '' || this.submitting ? '#CECECE' : '#1B68B7')
-          .padding(10)
-          .margin({ top: 48 })
-          .onClick(() => {
-            this.onNextClick();
-          })
+        Scroll() {
+          Column() {
+            Image($r('app.media.mobile_campus_phone_nub'))
+              .margin({ top: 40 })
+
+            Text('输入手机号')
+              .fontSize(16)
+              .fontColor($r('app.color.common_color_1'))
+              .margin({ top: 12 })
+
+            Text('请输入手机号码，以便绑定手机')
+              .fontSize(13)
+              .fontColor($r('app.color.common_color_1'))
+              .margin({ top: 8 })
+
+            TextInput({ text: this.phone, placeholder: '' })
+              .width('100%')
+              .height(40)
+              .textAlign(TextAlign.Center)
+              .fontSize(16)
+              .fontColor($r('app.color.common_color_1'))
+              .backgroundColor(Color.Transparent)
+              .type(InputType.PhoneNumber)
+              .maxLength(11)
+              .enabled(this.validation === '')
+              .padding({ left: 56, right: 56 })
+              .margin({ top: 18 })
+              .onChange((value: string) => {
+                this.phone = value;
+              })
+
+            Text(this.nextLabel())
+              .fontSize(15)
+              .fontColor(this.phone.trim() === '' || this.submitting ? '#CECECE' : '#1B68B7')
+              .padding(10)
+              .margin({ top: 48 })
+              .onClick(() => {
+                this.onNextClick();
+              })
+
+            Blank().layoutWeight(1)
+
+            Column() {
+              Text('温馨提醒:\n\n请输入本人使用的手机号码。')
+                .fontSize(15)
+                .fontColor($r('app.color.common_color_1'))
+                .textAlign(TextAlign.Center)
+            }
+            .width('100%')
+            .justifyContent(FlexAlign.Center)
+            .padding({ left: 50, right: 50, top: 24, bottom: Math.max(24, this.avoidAreaBottomVp + this.keyboardHeightVp + 16) })
+          }
+          .width('100%')
+          .constraintSize({ minHeight: '100%', maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+          .alignItems(HorizontalAlign.Center)
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .scrollBar(BarState.Off)
       }
       .width('100%')
-      .alignItems(HorizontalAlign.Center)
+      .height('100%')
+      .backgroundColor($r('app.color.ybg_white'))
 
-      Column() {
-        Text('温馨提醒:\n\n请输入本人使用的手机号码。')
-          .fontSize(15)
-          .fontColor($r('app.color.common_color_1'))
-          .textAlign(TextAlign.Center)
+      if (this.showQuitDialog) {
+        this.quitDialog()
       }
-      .width('100%')
-      .layoutWeight(1)
-      .justifyContent(FlexAlign.Center)
-      .padding({ left: 50, right: 50 })
     }
     .width('100%')
     .height('100%')
-    .backgroundColor($r('app.color.ybg_white'))
-    .overlay(this.quitDialog(), { align: Alignment.Center })
   }
 }

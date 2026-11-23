@@ -7,17 +7,28 @@
 @Entry
 @Component
 struct EndisableServicePage {
+  @StorageProp('avoidAreaTopVp') avoidAreaTopVp: number = 0;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
+
   build() {
     Column() {
       Text('Please enable the HMS service in settings tag')
         .fontSize(13)
         .fontColor('#333333')
         .width('100%')
-        .margin({ top: 16, right: 8 })
+        .padding({ top: 16, right: 8 })
     }
     .width('100%')
     .height('100%')
-    .padding({ left: 16, right: 16 })
+    .padding({
+      left: Math.max(16, this.avoidAreaLeftVp),
+      right: Math.max(16, this.avoidAreaRightVp),
+      top: this.avoidAreaTopVp,
+      bottom: this.avoidAreaBottomVp
+    })
     .backgroundColor($r('app.color.white'))
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 }

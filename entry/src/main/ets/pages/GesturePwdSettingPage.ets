@@ -5,6 +5,7 @@ import { GesturePwdGrid } from '../components/GesturePwdGrid';
 import { GestureManager } from '../model/GestureManager';
 import { LoginSession } from '../network/LoginSession';
 import { PrivacyWindowHelper } from '../common/PrivacyWindowHelper';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 手势密码设置页 — 1:1 复刻 GesturePwdSettingActivity（100 行）
@@ -38,6 +39,10 @@ struct GesturePwdSettingPage {
   private tempPwd: number[] = [];
   /** 源码 mCount：CDJS=4，其余=3 */
   private gridCount: number = 3;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 780;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
 
   aboutToAppear(): void {
     // 源码 f1()：if ("CDJS".equals(c.b())) l/m.setCount(4)
@@ -123,61 +128,68 @@ struct GesturePwdSettingPage {
     Column() {
       TitleBar({ title: '设置手势密码', showBack: true })
 
-      Column() {
-        // tvTitle
-        Text('设置您的新手势密码')
-          .fontSize(17)
-          .fontColor($r('app.color.black'))
-          .textAlign(TextAlign.Center)
-          .width('100%')
-          .margin({ top: 20 })
+      Scroll() {
+        Column() {
+          // tvTitle
+          Text('设置您的新手势密码')
+            .fontSize(17)
+            .fontColor($r('app.color.black'))
+            .textAlign(TextAlign.Center)
+            .width('100%')
+            .margin({ top: 20 })
 
-        // gplSmall 72x72（count=3 预览，refreshPwdKeyboard 回显）
-        GesturePwdGrid({
-          gridWidth: 72,
-          allowInteract: false,
-          count: this.gridCount,
-          displaySeq: this.smallSeq,
-          onSwipeFinish: (seq: number[]): void => {
-            this.onSmallMirror(seq);
-          }
-        })
-          .margin({ top: 8 })
+          // gplSmall 72x72（count=3 预览，refreshPwdKeyboard 回显）
+          GesturePwdGrid({
+            gridWidth: 72,
+            allowInteract: false,
+            count: this.gridCount,
+            displaySeq: this.smallSeq,
+            onSwipeFinish: (seq: number[]): void => {
+              this.onSmallMirror(seq);
+            }
+          })
+            .margin({ top: 8 })
 
-        // tvTip（i2==1||2 文案）
-        Text(this.tipText)
-          .fontSize(14)
-          .fontColor('#999999')
-          .textAlign(TextAlign.Center)
-          .width('100%')
-          .margin({ top: 8 })
+          // tvTip（i2==1||2 文案）
+          Text(this.tipText)
+            .fontSize(14)
+            .fontColor('#999999')
+            .textAlign(TextAlign.Center)
+            .width('100%')
+            .margin({ top: 8 })
 
-        // tvErrorTip（i2==3/4/6 文案，色 colorCheckedErr）
-        Text(this.errorTip)
-          .fontSize(14)
-          .fontColor($r('app.color.color_checked_err'))
-          .textAlign(TextAlign.Center)
-          .width('100%')
-          .margin({ top: 4 })
+          // tvErrorTip（i2==3/4/6 文案，色 colorCheckedErr）
+          Text(this.errorTip)
+            .fontSize(14)
+            .fontColor($r('app.color.color_checked_err'))
+            .textAlign(TextAlign.Center)
+            .width('100%')
+            .margin({ top: 4 })
 
-        // gplBig（reset 模式）
-        GesturePwdGrid({
-          gridWidth: 336,
-          allowInteract: true,
-          count: this.gridCount,
-          onSwipeFinish: (seq: number[]): void => {
-            this.onSmallMirror(seq);
-          },
-          onFinish: (seq: number[]): void => {
-            this.onBigFinish(seq);
-          }
-        })
-          .margin({ top: 12.5 })
-          .padding({ left: 6, right: 6 })
+          // gplBig（reset 模式）
+          GesturePwdGrid({
+            gridWidth: BreakpointSystem.computeGestureGridSize(this.windowWidthVp, this.windowHeightVp),
+            allowInteract: true,
+            count: this.gridCount,
+            onSwipeFinish: (seq: number[]): void => {
+              this.onSmallMirror(seq);
+            },
+            onFinish: (seq: number[]): void => {
+              this.onBigFinish(seq);
+            }
+          })
+            .margin({ top: 12.5 })
+            .padding({ left: 6, right: 6 })
+        }
+        .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .padding({ bottom: Math.max(16, this.avoidAreaBottomVp + 12) })
+        .alignItems(HorizontalAlign.Center)
       }
       .width('100%')
-      .height('100%')
-      .alignItems(HorizontalAlign.Center)
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
+      .align(Alignment.Top)
     }
     .width('100%')
     .height('100%')

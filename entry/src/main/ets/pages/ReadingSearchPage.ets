@@ -1,5 +1,6 @@
 ﻿import { TitleBar } from '../components/TitleBar';
 import { router } from '@kit.ArkUI';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { ReadingBookEntry } from '../model/ContactModel';
@@ -39,6 +40,8 @@ struct ReadingSearchPage {
   @State isLoading: boolean = true;
   @State showError: boolean = false;
   @State isRefreshing: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   /** 源码 t：搜索分页 startIndex（新搜索重置 1，有数据自增） */
   private page: number = 1;
   /** 源码 u：最近一次搜索词 */
@@ -237,34 +240,38 @@ struct ReadingSearchPage {
       TitleBar({ title: '图书馆', showBack: true })
 
       // ClearableEditText：32dip margin14/4 hint"搜索书籍"
-      Row() {
-        Image($r('app.media.mobile_campus_reading_search'))
-          .width(16)
-          .height(16)
-          .margin({ left: 12, right: 9 })
-        TextInput({ text: this.keyword, placeholder: '搜索书籍' })
-          .fontSize(14)
-          .fontColor($r('app.color.common_color_1'))
-          .placeholderColor('#B5B5B5')
-          .placeholderFont({ size: 14 })
-          .backgroundColor(Color.Transparent)
-          .border({ width: 0 })
-          .padding(0)
-          .layoutWeight(1)
-          .height(32)
-          .onChange((value: string) => {
-            this.keyword = value;
-          })
-          .onSubmit(() => {
-            this.submitSearch();
-          })
+      Column() {
+        Row() {
+          Image($r('app.media.mobile_campus_reading_search'))
+            .width(16)
+            .height(16)
+            .margin({ left: 12, right: 9 })
+          TextInput({ text: this.keyword, placeholder: '搜索书籍' })
+            .fontSize(14)
+            .fontColor($r('app.color.common_color_1'))
+            .placeholderColor('#B5B5B5')
+            .placeholderFont({ size: 14 })
+            .backgroundColor(Color.Transparent)
+            .border({ width: 0 })
+            .padding(0)
+            .layoutWeight(1)
+            .height(32)
+            .onChange((value: string) => {
+              this.keyword = value;
+            })
+            .onSubmit(() => {
+              this.submitSearch();
+            })
+        }
+        .width('100%')
+        .height(32)
+        .borderRadius(4)
+        .backgroundColor($r('app.color.white'))
+        .alignItems(VerticalAlign.Center)
       }
       .width('100%')
-      .height(32)
-      .borderRadius(4)
-      .backgroundColor($r('app.color.white'))
-      .margin({ left: 14, right: 4, top: 14 })
-      .alignItems(VerticalAlign.Center)
+      .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+      .padding({ left: 14, right: 4, top: 14 })
 
       if (this.isLoading) {
         LoadingView()
@@ -304,6 +311,8 @@ struct ReadingSearchPage {
         }, (bean: ReadingBookEntry, idx: number) => bean.TXM + '_' + idx)
       }
       .width('100%')
+      .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+      .padding({ bottom: this.avoidAreaBottomVp })
       .scrollBar(BarState.Off)
     }
     .width('100%')
@@ -324,6 +333,8 @@ struct ReadingSearchPage {
       }, (bean: ReadingBookEntry, idx: number) => bean.TXM + '_' + idx)
     }
     .width('100%')
+    .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+    .padding({ bottom: this.avoidAreaBottomVp })
     .layoutWeight(1)
     .scrollBar(BarState.Off)
     .onReachEnd(() => {

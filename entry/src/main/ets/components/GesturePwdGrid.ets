@@ -81,6 +81,11 @@ export struct GesturePwdGrid {
     return 1.5;
   }
 
+  private dotFontSize(): number {
+    const scale: number = this.count === 4 ? 1.05 : 1.2;
+    return Math.min(40, Math.max(11, Math.round(this.dotRadius() * scale)));
+  }
+
   private dotText(idx: number): string {
     if (this.count === 4) {
       return GesturePwdGrid.COUNT4_TEXTS[idx];
@@ -167,7 +172,7 @@ export struct GesturePwdGrid {
       ForEach(Array.from({ length: this.count * this.count }, (v: Object, i: number) => i), (i: number) => {
         Stack() {
           Text(this.dotText(i))
-            .fontSize(40)
+            .fontSize(this.dotFontSize())
             .fontWeight(FontWeight.Bold)
             .fontColor(this.isDotSelected(i) ? '#FFFFFF' : '#B9C0D0')
             .visibility(this.allowInteract ? Visibility.Visible : Visibility.None)

@@ -10,6 +10,7 @@ import { PreferencesUtil } from '../data/PreferencesUtil';
 import { Constants } from '../data/Constants';
 import { ImmersiveLightHelper } from '../common/ImmersiveLightHelper';
 import { PrivacyWindowHelper } from '../common/PrivacyWindowHelper';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 手机号登录页 — 1:1 复刻 APK 手机号登录链路（InputIdentifyCodeActivity 188 行 + IdentifyCodeModel）：
@@ -32,6 +33,9 @@ struct PhoneLoginPage {
   @State codeDigits: string = '';
   @State countDown: number = 0;
   @State logging: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('keyboardHeightVp') keyboardHeightVp: number = 0;
   private timerId: number = -1;
   /** checkLoginPhone 服务器下发倒计时秒数（源码 InputIdentifyCodeActivity.q=timeSpace，重发沿用同值） */
   private timeFrequency: number = Api.SMS_TIME_FREQUENCY;
@@ -241,226 +245,233 @@ struct PhoneLoginPage {
         } : null
       })
 
-      if (this.stage === 0) {
-        // ===== 阶段1：手机号输入（LoginPage 同款输入行 + 主色胶囊按钮） =====
+      Scroll() {
         Column() {
-          Row() {
-            Image($r('app.media.mobile_campus_login_phone'))
-              .width(24)
-              .height(24)
-            TextInput({ placeholder: '请输入您的手机号', text: this.phoneNum })
-              .type(InputType.PhoneNumber)
-              .fontSize(17)
-              .fontColor($r('app.color.common_color_1'))
-              .placeholderColor($r('app.color.common_color_3'))
-              .placeholderFont({ size: 17 })
-              .height(42)
-              .padding({ left: 10, right: 0 })
-              .backgroundColor(Color.Transparent)
-              .caretColor($r('app.color.mobile_campus_primary_color'))
-              .layoutWeight(1)
-              .onChange((value: string) => {
-                this.phoneNum = value;
-              })
+          if (this.stage === 0) {
+            // ===== 阶段1：手机号输入（LoginPage 同款输入行 + 主色胶囊按钮） =====
+            Column() {
+              Row() {
+                Image($r('app.media.mobile_campus_login_phone'))
+                  .width(24)
+                  .height(24)
+                TextInput({ placeholder: '请输入您的手机号', text: this.phoneNum })
+                  .type(InputType.PhoneNumber)
+                  .fontSize(17)
+                  .fontColor($r('app.color.common_color_1'))
+                  .placeholderColor($r('app.color.common_color_3'))
+                  .placeholderFont({ size: 17 })
+                  .height(42)
+                  .padding({ left: 10, right: 0 })
+                  .backgroundColor(Color.Transparent)
+                  .caretColor($r('app.color.mobile_campus_primary_color'))
+                  .layoutWeight(1)
+                  .onChange((value: string) => {
+                    this.phoneNum = value;
+                  })
 
-            // 清除按钮：灰圆 ×（有手机号才显示，LoginPage 同款）
-            if (this.phoneNum !== '') {
-              Stack({ alignContent: Alignment.Center }) {
-                Text('×')
-                  .fontSize(14)
-                  .fontColor($r('app.color.white'))
+                // 清除按钮：灰圆 ×（有手机号才显示，LoginPage 同款）
+                if (this.phoneNum !== '') {
+                  Stack({ alignContent: Alignment.Center }) {
+                    Text('×')
+                      .fontSize(14)
+                      .fontColor($r('app.color.white'))
+                  }
+                  .width(16)
+                  .height(16)
+                  .borderRadius(8)
+                  .backgroundColor($r('app.color.common_color_4'))
+                  .onClick(() => {
+                    this.phoneNum = '';
+                  })
+                }
               }
-              .width(16)
-              .height(16)
-              .borderRadius(8)
-              .backgroundColor($r('app.color.common_color_4'))
-              .onClick(() => {
-                this.phoneNum = '';
-              })
-            }
-          }
-          .width('100%')
-          .height(46)
-          .padding({ left: 24, right: 24 })
-          .margin({ top: 30 })
-          .alignItems(VerticalAlign.Center)
-
-          Divider()
-            .color($r('app.color.login_divider'))
-            .strokeWidth(0.5)
-            .width('100%')
-            .margin({ left: 24 })
-
-          // 获取验证码：深红胶囊（同 LoginPage 登录按钮样式）
-          Row() {
-            Text(this.sending ? '发送中...' : '获取验证码')
-              .fontSize(18)
-              .fontColor($r('app.color.white'))
               .width('100%')
               .height(46)
-              .textAlign(TextAlign.Center)
-              .backgroundColor(ImmersiveLightHelper.fallbackBg($r('app.color.mobile_campus_primary_color')))
-              .borderRadius(23)
-              .systemMaterial(ImmersiveLightHelper.primaryButtonMaterial())
-              .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
+              .padding({ left: 24, right: 24 })
+              .margin({ top: 30 })
+              .alignItems(VerticalAlign.Center)
+
+              Row() {
+                Divider()
+                  .color($r('app.color.login_divider'))
+                  .strokeWidth(0.5)
+                  .width('100%')
+              }
+              .width('100%')
+              .padding({ left: 24 })
+
+              // 获取验证码：深红胶囊（同 LoginPage 登录按钮样式）
+              Row() {
+                Text(this.sending ? '发送中...' : '获取验证码')
+                  .fontSize(18)
+                  .fontColor($r('app.color.white'))
+                  .width('100%')
+                  .height(46)
+                  .textAlign(TextAlign.Center)
+                  .backgroundColor(ImmersiveLightHelper.fallbackBg($r('app.color.mobile_campus_primary_color')))
+                  .borderRadius(23)
+                  .systemMaterial(ImmersiveLightHelper.primaryButtonMaterial())
+                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
+                  .onClick(() => {
+                    this.getSmsCode();
+                  })
+              }
+              .width('100%')
+              .constraintSize({ maxWidth: 480 })
+              .padding({ left: 33, right: 33 })
+              .margin({ top: 30 })
+            }
+            .width('100%')
+            .alignItems(HorizontalAlign.Center)
+          } else {
+            // ===== 阶段2：输入验证码（InputIdentifyCodeActivity + VerifyCodeView 复刻） =====
+            Column() {
+              Image($r('app.media.mobile_campus_code'))
+                .width(57)
+                .height(97)
+                .margin({ top: 40 })
+
+              Text('输入验证码')
+                .fontSize(18)
+                .fontColor($r('app.color.common_color_1'))
+                .margin({ top: 12 })
+
+              Row() {
+                Text('验证码已发送至')
+                  .fontSize(13)
+                  .fontColor($r('app.color.black'))
+
+                // 源码 InputIdentifyCodeActivity f1()：this.l.setText("+86 " + this.p) 原样手机号
+                Text('+86 ' + this.phoneNum)
+                  .fontSize(13)
+                  .fontColor($r('app.color.mobile_campus_primary_color'))
+                  .padding({ left: 10 })
+              }
+              .margin({ top: 4 })
+              .alignItems(VerticalAlign.Center)
+
+              // 4 位验证码格（单行方格 40vp，间距 3vp）+ 隐藏输入框叠加接收输入
+              Stack() {
+                Row({ space: 3 }) {
+                  ForEach([0, 1, 2, 3, 4, 5], (idx: number) => {
+                    Text(this.digitAt(idx))
+                      .fontSize(20)
+                      .fontColor($r('app.color.common_color_1'))
+                      .textAlign(TextAlign.Center)
+                      .width(40)
+                      .height(40)
+                      .backgroundColor($r('app.color.common_color_6'))
+                      .borderRadius(1)
+                  }, (idx: number) => `sms_code_box_${idx}`)
+                }
+                .alignItems(VerticalAlign.Center)
+
+                TextInput({ text: this.codeDigits })
+                  .type(InputType.Number)
+                  .maxLength(6)
+                  .opacity(0)
+                  .width(255)
+                  .height(40)
+                  .caretColor(Color.Transparent)
+                  .onChange((value: string) => {
+                    this.codeDigits = value;
+                    // APK VerifyCodeView 同款：满 4 位自动 loginBySms
+                    if (value.length === 4 && !this.logging) {
+                      this.doSmsLogin();
+                    }
+                  })
+              }
+              .margin({ top: 9 })
+
+              Text(this.logging ? '正在登录...' : '')
+                .fontSize(13)
+                .fontColor($r('app.color.common_color_2'))
+                .margin({ top: 8 })
+
+              // 重发按钮：倒计时中 "Xs后重发"（置灰不可点），归零后 "重新获取"
+              Text(this.countDown > 0 ? `${this.countDown}s后重发` : '重新获取')
+                .fontSize(15)
+                .fontColor(this.countDown > 0 ?
+                  $r('app.color.common_color_3') : $r('app.color.mobile_campus_primary_color'))
+                .padding({ left: 10, right: 10, top: 12, bottom: 12 })
+                .borderRadius(25)
+                .border({
+                  width: 1,
+                  color: this.countDown > 0 ?
+                    $r('app.color.common_color_3') : $r('app.color.mobile_campus_primary_color')
+                })
+                .backgroundColor($r('app.color.white'))
+                .margin({ top: 24 })
+                .onClick(() => {
+                  this.resendSms();
+                })
+            }
+            .width('100%')
+            .alignItems(HorizontalAlign.Center)
+          }
+
+          Blank().layoutWeight(1)
+
+          // ===== 底部圆形 radio 同意行（LoginPage 同款） =====
+          Row() {
+            Stack({ alignContent: Alignment.Center }) {
+              Circle()
+                .width(20)
+                .height(20)
+                .fill(Color.White)
+                .stroke($r('app.color.mobile_campus_primary_color'))
+                .strokeWidth(1.5)
+              if (this.privacyAgreed) {
+                Circle()
+                  .width(11)
+                  .height(11)
+                  .fill($r('app.color.mobile_campus_primary_color'))
+              }
+            }
+            .onClick(() => {
+              this.privacyAgreed = !this.privacyAgreed;
+            })
+
+            Text('同意')
+              .fontSize(15)
+              .fontColor($r('app.color.common_color_1'))
+              .margin({ left: 8 })
+
+            Text('《隐私政策》')
+              .fontSize(15)
+              .fontColor($r('app.color.mobile_campus_primary_color'))
               .onClick(() => {
-                this.getSmsCode();
+                router.pushUrl({
+                  url: 'pages/WebViewPage',
+                  params: { url: 'https://www.sdmu.edu.cn/', title: '隐私政策' }
+                });
+              })
+
+            Text('和')
+              .fontSize(15)
+              .fontColor($r('app.color.common_color_1'))
+
+            Text('《服务协议》')
+              .fontSize(15)
+              .fontColor($r('app.color.mobile_campus_primary_color'))
+              .onClick(() => {
+                router.pushUrl({
+                  url: 'pages/WebViewPage',
+                  params: { url: 'https://www.sdmu.edu.cn/', title: '服务协议' }
+                });
               })
           }
           .width('100%')
-          .constraintSize({ maxWidth: 480 })
-          .padding({ left: 33, right: 33 })
-          .margin({ top: 30 })
-
-          Blank()
+          .justifyContent(FlexAlign.Center)
+          .margin({ top: 24, bottom: Math.max(24, this.avoidAreaBottomVp + this.keyboardHeightVp + 16) })
         }
         .width('100%')
-        // 修复：表单区用 layoutWeight 占据剩余空间，底部 radio 同意行才能显示
-        // （原 height('100%') 撑满根 Column，把协议勾选行挤出屏幕外，导致"请先同意"toast 无解）
-        .layoutWeight(1)
-      } else {
-        // ===== 阶段2：输入验证码（InputIdentifyCodeActivity + VerifyCodeView 复刻） =====
-        Column() {
-          Image($r('app.media.mobile_campus_code'))
-            .width(57)
-            .height(97)
-            .margin({ top: 40 })
-
-          Text('输入验证码')
-            .fontSize(18)
-            .fontColor($r('app.color.common_color_1'))
-            .margin({ top: 12 })
-
-          Row() {
-            Text('验证码已发送至')
-              .fontSize(13)
-              .fontColor($r('app.color.black'))
-
-            // 源码 InputIdentifyCodeActivity f1()：this.l.setText("+86 " + this.p) 原样手机号
-            Text('+86 ' + this.phoneNum)
-              .fontSize(13)
-              .fontColor($r('app.color.mobile_campus_primary_color'))
-              .padding({ left: 10 })
-          }
-          .margin({ top: 4 })
-          .alignItems(VerticalAlign.Center)
-
-          // 4 位验证码格（单行方格 40vp，间距 3vp）+ 隐藏输入框叠加接收输入
-          Stack() {
-            Row({ space: 3 }) {
-              ForEach([0, 1, 2, 3, 4, 5], (idx: number) => {
-                Text(this.digitAt(idx))
-                  .fontSize(20)
-                  .fontColor($r('app.color.common_color_1'))
-                  .textAlign(TextAlign.Center)
-                  .width(40)
-                  .height(40)
-                  .backgroundColor($r('app.color.common_color_6'))
-                  .borderRadius(1)
-              }, (idx: number) => `sms_code_box_${idx}`)
-            }
-            .alignItems(VerticalAlign.Center)
-
-            TextInput({ text: this.codeDigits })
-              .type(InputType.Number)
-              .maxLength(6)
-              .opacity(0)
-              .width(255)
-              .height(40)
-              .caretColor(Color.Transparent)
-              .onChange((value: string) => {
-                this.codeDigits = value;
-                // APK VerifyCodeView 同款：满 4 位自动 loginBySms
-                if (value.length === 4 && !this.logging) {
-                  this.doSmsLogin();
-                }
-              })
-          }
-          .margin({ top: 9 })
-
-          Text(this.logging ? '正在登录...' : '')
-            .fontSize(13)
-            .fontColor($r('app.color.common_color_2'))
-            .margin({ top: 8 })
-
-          // 重发按钮：倒计时中 "Xs后重发"（置灰不可点），归零后 "重新获取"
-          Text(this.countDown > 0 ? `${this.countDown}s后重发` : '重新获取')
-            .fontSize(15)
-            .fontColor(this.countDown > 0 ?
-              $r('app.color.common_color_3') : $r('app.color.mobile_campus_primary_color'))
-            .padding({ left: 10, right: 10, top: 12, bottom: 12 })
-            .borderRadius(25)
-            .border({
-              width: 1,
-              color: this.countDown > 0 ?
-                $r('app.color.common_color_3') : $r('app.color.mobile_campus_primary_color')
-            })
-            .backgroundColor($r('app.color.white'))
-            .margin({ top: 24 })
-            .onClick(() => {
-              this.resendSms();
-            })
-
-          Blank()
-        }
-        .width('100%')
+        .constraintSize({ minHeight: '100%', maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
         .alignItems(HorizontalAlign.Center)
-        // 修复同阶段1：layoutWeight 让底部协议行可见
-        .layoutWeight(1)
-      }
-
-      // ===== 底部圆形 radio 同意行（LoginPage 同款） =====
-      Row() {
-        Stack({ alignContent: Alignment.Center }) {
-          Circle()
-            .width(20)
-            .height(20)
-            .fill(Color.White)
-            .stroke($r('app.color.mobile_campus_primary_color'))
-            .strokeWidth(1.5)
-          if (this.privacyAgreed) {
-            Circle()
-              .width(11)
-              .height(11)
-              .fill($r('app.color.mobile_campus_primary_color'))
-          }
-        }
-        .onClick(() => {
-          this.privacyAgreed = !this.privacyAgreed;
-        })
-
-        Text('同意')
-          .fontSize(15)
-          .fontColor($r('app.color.common_color_1'))
-          .margin({ left: 8 })
-
-        Text('《隐私政策》')
-          .fontSize(15)
-          .fontColor($r('app.color.mobile_campus_primary_color'))
-          .onClick(() => {
-            router.pushUrl({
-              url: 'pages/WebViewPage',
-              params: { url: 'https://www.sdmu.edu.cn/', title: '隐私政策' }
-            });
-          })
-
-        Text('和')
-          .fontSize(15)
-          .fontColor($r('app.color.common_color_1'))
-
-        Text('《服务协议》')
-          .fontSize(15)
-          .fontColor($r('app.color.mobile_campus_primary_color'))
-          .onClick(() => {
-            router.pushUrl({
-              url: 'pages/WebViewPage',
-              params: { url: 'https://www.sdmu.edu.cn/', title: '服务协议' }
-            });
-          })
       }
       .width('100%')
-      .justifyContent(FlexAlign.Center)
-      .margin({ bottom: 46 })
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
     }
     .width('100%')
     .height('100%')

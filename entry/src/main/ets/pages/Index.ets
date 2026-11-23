@@ -623,9 +623,9 @@ struct Index {
   @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
   @StorageProp('heightBreakpoint') heightBreakpoint: string = 'lg';
   @StorageProp('isLandscape') isLandscape: boolean = false;
-  @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
   @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
   @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   @State tabTriggers: number[] = [-1, -1, -1];
 
   private useSideRail(): boolean {
@@ -779,7 +779,7 @@ struct Index {
         .barBackgroundColor(!this.useSideRail() ? Color.Transparent : $r('app.color.main_bg'))
         .barFloatingStyle(!this.useSideRail() && ImmersiveLightHelper.isSupported() ? {
           barSideMargin: 16,
-          barBottomMargin: 10,
+          barBottomMargin: Math.max(10, this.avoidAreaBottomVp > 0 ? Math.round(this.avoidAreaBottomVp * 0.5) : 10),
           systemMaterial: ImmersiveLightHelper.tabBarMaterial()
         } : undefined)
         .scrollable(!this.useSideRail())
@@ -801,6 +801,7 @@ struct Index {
       right: this.avoidAreaRightVp > 0 ? this.avoidAreaRightVp : 0
     })
     .backgroundColor($r('app.color.main_bg'))
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 }
 

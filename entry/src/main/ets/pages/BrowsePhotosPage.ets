@@ -4,6 +4,7 @@ import { photoAccessHelper } from '@kit.MediaLibraryKit';
 import { http } from '@kit.NetworkKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import fs from '@ohos.file.fs';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 照片全屏浏览页 — 源码级复刻 BrowsePhotosActivity（baseapp weiget 包，PhotoView+ViewPager）。
@@ -31,6 +32,10 @@ struct BrowsePhotosPage {
   private extraOperation: string = 'none';
   /** PhotoView 缩放态（pinch 手势） */
   @State scaleValue: number = 1;
+  @StorageProp('avoidAreaTopVp') avoidAreaTopVp: number = 0;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
   private filePathCache: string = '';
 
   aboutToAppear(): void {
@@ -195,6 +200,20 @@ struct BrowsePhotosPage {
             this.currentIndex = index;
             this.scaleValue = 1;
           })
+        } else {
+          Scroll() {
+            Column() {
+              Text('暂无图片')
+                .fontSize(14)
+                .fontColor($r('app.color.white'))
+            }
+            .width('100%')
+            .padding({ top: 120, bottom: 24 })
+            .alignItems(HorizontalAlign.Center)
+          }
+          .width('100%')
+          .height('100%')
+          .scrollBar(BarState.Off)
         }
 
         // 顶部 alpha_20 操作条（padding 12）：白返回 + 右上操作按钮
@@ -247,9 +266,15 @@ struct BrowsePhotosPage {
           }
         }
         .width('100%')
-        .padding(6)
+        .padding({
+          top: Math.max(6, this.avoidAreaTopVp + 6),
+          bottom: 6,
+          left: Math.max(12, this.avoidAreaLeftVp + 12),
+          right: Math.max(12, this.avoidAreaRightVp + 12)
+        })
         .alignItems(VerticalAlign.Center)
         .backgroundColor($r('app.color.alpha_20'))
+        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
       }
       .width('100%')
       .layoutWeight(1)
@@ -268,11 +293,17 @@ struct BrowsePhotosPage {
         }
         .justifyContent(FlexAlign.Center)
         .width('100%')
-        .padding({ top: 10, bottom: 10 })
+        .padding({
+          top: 10,
+          bottom: Math.max(10, this.avoidAreaBottomVp + 10),
+          left: this.avoidAreaLeftVp,
+          right: this.avoidAreaRightVp
+        })
       }
     }
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.black'))
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 }

@@ -4,6 +4,7 @@ import { ApiResponse } from '../model/ResponseModel';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { TitleBar } from '../components/TitleBar';
 import { MeetingSignQrEntity } from '../model/MeetingApiModel';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 会议签到页（扫码结果页）— MeetingAttendActivity.java(115行) 源码级翻译
@@ -26,6 +27,10 @@ struct MeetingAttendPage {
   private meetingId: string = '';
   @State hasQrResult: boolean = false;
   @State submitting: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
 
   aboutToAppear(): void {
     // 源码 y(intent)：l=result；TextUtils.isEmpty → 仅保存；否则 gson 解析 Sign.meetingId
@@ -83,41 +88,55 @@ struct MeetingAttendPage {
       TitleBar({ title: '会议签到', showBack: true })
 
       // RelativeLayout：ic_attend 居中（top 79vp）+ tvAttend 底部（left/right 12、bottom 37vp）
-      Column() {
+      Scroll() {
         Column() {
-          Image($r('app.media.mobile_campus_meeting_ic_attend'))
-            .width(160)
-            .height(160)
-            .objectFit(ImageFit.Contain)
-            .margin({ top: 79 })
-          if (!this.hasQrResult) {
-            Text('未获取到扫码签到结果')
-              .fontSize(14)
-              .fontColor($r('app.color.common_color_3'))
-              .margin({ top: 16 })
+          Column() {
+            Image($r('app.media.mobile_campus_meeting_ic_attend'))
+              .width(160)
+              .height(160)
+              .objectFit(ImageFit.Contain)
+              .margin({ top: 79 })
+            if (!this.hasQrResult) {
+              Text('未获取到扫码签到结果')
+                .fontSize(14)
+                .fontColor($r('app.color.common_color_3'))
+                .margin({ top: 16 })
+            }
           }
+          .width('100%')
+          .alignItems(HorizontalAlign.Center)
+
+          Text(this.submitting ? '签到中...' : '签到')
+            .fontSize(17)
+            .fontColor($r('app.color.white'))
+            .textAlign(TextAlign.Center)
+            .width('100%')
+            .height(44)
+            .borderRadius(4)
+            .margin({ top: 24 })
+            .backgroundColor($r('app.color.mobile_campus_primary_color_default'))
+            .onClick(() => {
+              this.submitSign();
+            })
         }
         .width('100%')
-        .alignItems(HorizontalAlign.Center)
-
-        Blank()
-          .layoutWeight(1)
-
-        Text(this.submitting ? '签到中...' : '签到')
-          .fontSize(17)
-          .fontColor($r('app.color.white'))
-          .textAlign(TextAlign.Center)
-          .width('100%')
-          .height(44)
-          .borderRadius(4)
-          .backgroundColor($r('app.color.mobile_campus_primary_color_default'))
-          .onClick(() => {
-            this.submitSign();
-          })
+        .constraintSize({
+          minHeight: '100%',
+          maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint)
+        })
+        .alignSelf(ItemAlign.Center)
+        .justifyContent(FlexAlign.SpaceBetween)
+        .padding({
+          left: Math.max(12, this.avoidAreaLeftVp),
+          right: Math.max(12, this.avoidAreaRightVp),
+          bottom: 37 + this.avoidAreaBottomVp
+        })
+        .backgroundColor($r('app.color.white'))
       }
       .width('100%')
       .layoutWeight(1)
-      .padding({ left: 12, right: 12, bottom: 37 })
+      .scrollBar(BarState.Off)
+      .align(Alignment.Top)
       .backgroundColor($r('app.color.white'))
     }
     .width('100%')

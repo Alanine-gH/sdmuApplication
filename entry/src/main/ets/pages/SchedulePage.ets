@@ -8,6 +8,8 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { common } from '@kit.AbilityKit';
 import { WidgetDataHelper, WidgetCourseSummary } from '../common/WidgetDataHelper';
 import { ImmersiveLightHelper } from '../common/ImmersiveLightHelper';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 课表页 — 源码级对齐 TimetableActivity + WeekCourseFragment + CourseBox + ChooseWeeksPopup + ChooseTermDialog
@@ -126,6 +128,13 @@ struct SchedulePage {
   @State pinTrigger: number = -1;
   @State prevWeekTrigger: number = -1;
   @State nextWeekTrigger: number = -1;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 780;
+  @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   // 学期起止毫秒（termInfo 失败时用服务器实测兜底值，与 APK 常量语义一致）
   @State semesterStartMs: number = 0;
   @State semesterEndMs: number = 0;
@@ -495,7 +504,7 @@ struct SchedulePage {
       })
   }
 
-  // ChooseWeeksPopup：0x77000000 全屏遮罩 + 白底 6 项列表(setSelection(cur-3))
+  // ChooseWeeksPopup：0x77000000 全屏遮罩 + 自适应高度白底列表(setSelection(cur-3))
   @Builder
   weekPopup() {
     Column() {
@@ -509,17 +518,19 @@ struct SchedulePage {
         }
         .scrollBar(BarState.Off)
         .width('100%')
-        .height(WEEK_ITEM_HEIGHT * 6)
+        .height(Math.min(WEEK_ITEM_HEIGHT * 6, Math.max(160, Math.round(this.windowHeightVp * 0.58))))
         .backgroundColor($r('app.color.white'))
       }
-      .margin({ top: 46 })
+      .width('100%')
+      .constraintSize({ maxWidth: AdaptiveLayoutHelper.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp) })
+      .margin({ top: this.isCompactHeight ? 38 : 45 })
       .onClick(() => {
         // 拦截面板内点击，避免冒泡关闭
       })
     }
     .width('100%')
     .height('100%')
-    .alignItems(HorizontalAlign.Start)
+    .alignItems(HorizontalAlign.Center)
     .backgroundColor('#77000000')
     .onClick(() => {
       this.showWeekPopup = false;
@@ -631,9 +642,11 @@ struct SchedulePage {
         })
         .scrollBar(BarState.Off)
         .width('100%')
-        .height(WHEEL_ITEM_HEIGHT * WHEEL_VISIBLE_ITEMS)
+        .height(Math.min(WHEEL_ITEM_HEIGHT * WHEEL_VISIBLE_ITEMS, Math.max(160, Math.round(this.windowHeightVp * 0.55))))
       }
       .width('100%')
+      .constraintSize({ maxWidth: AdaptiveLayoutHelper.getSheetMaxWidth(this.currentBreakpoint, this.windowWidthVp) })
+      .padding({ bottom: this.avoidAreaBottomVp })
       .backgroundColor($r('app.color.white'))
       .onClick(() => {
         // 拦截面板内点击
@@ -717,16 +730,22 @@ struct SchedulePage {
           })
       }
       .width('100%')
-      .height(44)
+      .height(this.isCompactHeight ? 37 : 44)
+      .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
+      .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+      .alignSelf(ItemAlign.Center)
       .alignItems(VerticalAlign.Center)
       .backgroundColor($r('app.color.main_bg'))
       Divider()
         .color($r('app.color.common_color_5'))
         .strokeWidth(0.5)
         .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
     }
     .width('100%')
-    .height(45)
+    .height(this.isCompactHeight ? 38 : 45)
+    .backgroundColor($r('app.color.main_bg'))
     .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
   }
 
@@ -929,7 +948,10 @@ struct SchedulePage {
     Image($r('app.media.mobile_campus_timetable_course_custom'))
       .width(71.5)
       .height(71.5)
-      .margin({ right: 10, bottom: 15 + 71.5 })
+      .margin({
+        right: Math.max(10, this.avoidAreaRightVp + 10),
+        bottom: Math.max(15, this.avoidAreaBottomVp + 10) + 71.5
+      })
       .opacity(this.fabExpanded ? 1 : 0)
       .translate({ y: this.fabExpanded ? 0 : 71.5 })
       .enabled(this.fabExpanded)
@@ -940,7 +962,10 @@ struct SchedulePage {
     Image($r('app.media.mobile_campus_timetable_course_audit'))
       .width(71.5)
       .height(71.5)
-      .margin({ right: 10, bottom: 15 + 143 })
+      .margin({
+        right: Math.max(10, this.avoidAreaRightVp + 10),
+        bottom: Math.max(15, this.avoidAreaBottomVp + 10) + 143
+      })
       .opacity(this.fabExpanded ? 1 : 0)
       .translate({ y: this.fabExpanded ? 0 : 143 })
       .enabled(this.fabExpanded)
@@ -951,7 +976,10 @@ struct SchedulePage {
     Image($r('app.media.mobile_campus_timetable_course_iv_open'))
       .width(71.5)
       .height(71.5)
-      .margin({ right: 10, bottom: 15 })
+      .margin({
+        right: Math.max(10, this.avoidAreaRightVp + 10),
+        bottom: Math.max(15, this.avoidAreaBottomVp + 10)
+      })
       .rotate({ angle: this.fabExpanded ? 45 : 0 })
       .onClick(() => {
         this.getUIContext().animateTo({ duration: 500, curve: Curve.EaseOut }, () => {
@@ -960,19 +988,30 @@ struct SchedulePage {
       })
   }
 
+  private multiDialogCols(): number {
+    if (this.currentBreakpoint === 'xs') {
+      return 1;
+    }
+    if (this.currentBreakpoint === 'sm') {
+      return 2;
+    }
+    return 3;
+  }
+
   @Builder
   multiDialogCell(course: CourseItem) {
     Column() {
       Text(course.name + '\n@' + course.location)
-        .fontSize(17)
+        .fontSize(15)
         .fontColor($r('app.color.common_color_6'))
-        .maxLines(6)
+        .maxLines(5)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
-        .padding(20)
+        .padding(14)
     }
     .width('100%')
-    .height(140)
+    .constraintSize({ minHeight: 108 })
     .justifyContent(FlexAlign.Center)
+    .borderRadius(8)
     .backgroundColor(this.colorPool[this.colorIndexOf(course)])
     .onClick(() => {
       this.showMultiDialog = false;
@@ -980,26 +1019,39 @@ struct SchedulePage {
     })
   }
 
-  // MultiCoursesDialog(widget/h.java)：透明全屏，内边距 L/R80 T/B100，3 列 Grid 间距 13
+  // MultiCoursesDialog(widget/h.java)：半透明遮罩 + 自适应居中弹窗 + 可滚动响应式多列 Grid
   @Builder
   multiDialog() {
     Column() {
-      Grid() {
-        ForEach(this.multiCourses, (course: CourseItem) => {
-          GridItem() {
-            this.multiDialogCell(course)
-          }
-        }, (course: CourseItem) => 'multi' + course.id)
+      Scroll() {
+        Grid() {
+          ForEach(this.multiCourses, (course: CourseItem) => {
+            GridItem() {
+              this.multiDialogCell(course)
+            }
+          }, (course: CourseItem) => 'multi' + course.id)
+        }
+        .columnsTemplate(AdaptiveLayoutHelper.buildColumnsTemplate(this.multiDialogCols()))
+        .columnsGap(12)
+        .rowsGap(12)
+        .width('100%')
+        .padding(16)
       }
-      .columnsTemplate('1fr 1fr 1fr')
-      .columnsGap(13)
-      .rowsGap(13)
-      .width('100%')
-      .padding({ left: 80, right: 80, top: 100, bottom: 100 })
+      .scrollBar(BarState.Off)
+      .width(AdaptiveLayoutHelper.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp))
+      .constraintSize({ maxHeight: AdaptiveLayoutHelper.getDialogMaxHeight(this.windowHeightVp) })
+      .backgroundColor($r('app.color.white'))
+      .borderRadius(12)
+      .onClick(() => {
+        // 拦截弹窗内点击
+      })
     }
     .width('100%')
     .height('100%')
+    .padding({ left: 16, right: 16 })
     .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
+    .backgroundColor('#66000000')
     .onClick(() => {
       this.showMultiDialog = false;
     })
@@ -1037,7 +1089,7 @@ struct SchedulePage {
             .fontColor($r('app.color.common_color_3'))
             .width('100%')
             .textAlign(TextAlign.Center)
-            .padding(10)
+            .padding({ left: 10, right: 10, top: 10, bottom: Math.max(10, this.avoidAreaBottomVp + 6) })
           this.fabCluster()
         }
         .width('100%')
@@ -1047,6 +1099,7 @@ struct SchedulePage {
       .id('schedule_pin_snapshot_anchor')
       .width('100%')
       .height('100%')
+      .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
       if (this.showWeekPopup) {
         this.weekPopup()
       }

@@ -1,5 +1,6 @@
 import { router } from '@kit.ArkUI';
 import { photoAccessHelper } from '@kit.MediaLibraryKit';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 import { TitleBar } from '../components/TitleBar';
 import { ApiService, FeedbackTypeEntry } from '../network/ApiService';
 import { LoginSession } from '../network/LoginSession';
@@ -47,6 +48,9 @@ struct FeedbackPage {
   private feedbackTypes: FeedbackTypeEntry[] = [];
   /** 提交中防重复（源码 loading g0.i / a.e dismiss） */
   @State submitting: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('keyboardHeightVp') keyboardHeightVp: number = 0;
 
   aboutToAppear(): void {
     // 源码 f1()：tvNum 初始 0/6、adapter 单占位；e3() + d3()
@@ -372,21 +376,26 @@ struct FeedbackPage {
           }
 
           // tvSubmit 提交
-          Text('提交')
-            .fontSize(18)
-            .fontColor($r('app.color.white'))
-            .width('100%')
-            .height(44)
-            .textAlign(TextAlign.Center)
-            .margin(30)
-            .borderRadius(10)
-            .backgroundColor(this.submitEnabled() ?
-              $r('app.color.mobile_campus_primary_color') : $r('app.color.common_color_24'))
-            .onClick(() => {
-              this.submit();
-            })
+          Column() {
+            Text('提交')
+              .fontSize(18)
+              .fontColor($r('app.color.white'))
+              .width('100%')
+              .height(44)
+              .textAlign(TextAlign.Center)
+              .borderRadius(10)
+              .backgroundColor(this.submitEnabled() ?
+                $r('app.color.mobile_campus_primary_color') : $r('app.color.common_color_24'))
+              .onClick(() => {
+                this.submit();
+              })
+          }
+          .width('100%')
+          .padding(30)
         }
         .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .padding({ bottom: this.keyboardHeightVp + this.avoidAreaBottomVp })
       }
       .width('100%')
       .layoutWeight(1)

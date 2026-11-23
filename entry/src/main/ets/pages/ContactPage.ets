@@ -497,12 +497,11 @@ struct ContactPage {
       }
       .width('100%')
       .height(28)
-      .margin({ left: 12, right: 12 })
       .alignItems(VerticalAlign.Center)
     }
     .width('100%')
     .height(44)
-    .padding({ top: 5, bottom: 5 })
+    .padding({ top: 5, bottom: 5, left: 12, right: 12 })
     .backgroundColor($r('app.color.white'))
     .onClick(() => {
       // 源码 a 类：a1(o0, bundle, 2333) → ContactSearchActivity；返回刷新

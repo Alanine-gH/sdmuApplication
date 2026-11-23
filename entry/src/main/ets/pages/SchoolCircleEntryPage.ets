@@ -1,6 +1,7 @@
 import { router } from '@kit.ArkUI';
 import { TitleBar } from '../components/TitleBar';
 import { LoginSession } from '../network/LoginSession';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 校圈入口页 — 1:1 复刻 social_main_activity.xml（SocialMainActivity）
@@ -24,6 +25,10 @@ struct SchoolCircleEntryPage {
   @State emptyTips: string = '说点新鲜事儿分享给同学们吧~';
   /** SocialMainActivity.T2：PopupMenu 展开态 */
   @State showMenu: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
 
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
@@ -35,33 +40,45 @@ struct SchoolCircleEntryPage {
             this.showMenu = !this.showMenu;
           } })
 
-        Stack() {
-          // social_no_pager 空态视图
-          Column() {
-            Image($r('app.media.social_no_page'))
-              .margin({ left: 25, right: 25 })
+        Stack({ alignContent: Alignment.BottomEnd }) {
+          Scroll() {
+            // social_no_pager 空态视图
+            Column() {
+              Image($r('app.media.social_no_page'))
+                .margin({ left: 25, right: 25 })
 
-            Text(this.emptyTips)
-              .fontSize(12)
-              .fontColor($r('app.color.common_color_4'))
-              .textAlign(TextAlign.Center)
-              .padding(30)
+              Text(this.emptyTips)
+                .fontSize(12)
+                .fontColor($r('app.color.common_color_4'))
+                .textAlign(TextAlign.Center)
+                .padding(30)
+            }
+            .width('100%')
+            .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+            .alignSelf(ItemAlign.Center)
+            .padding({
+              left: this.avoidAreaLeftVp,
+              right: this.avoidAreaRightVp,
+              bottom: this.avoidAreaBottomVp
+            })
+            .alignItems(HorizontalAlign.Center)
           }
           .width('100%')
-          .alignItems(HorizontalAlign.Center)
+          .height('100%')
+          .scrollBar(BarState.Off)
+          .align(Alignment.Top)
+
+          // fragment_social.xml floatBtn：SocialFragmentEx.f → PostPublishActivity{post_type:"2"}
+          Image($r('app.media.market_publish'))
+            .width(48)
+            .height(48)
+            .margin({ right: 15 + this.avoidAreaRightVp, bottom: 20 + this.avoidAreaBottomVp })
+            .onClick(() => {
+              router.pushUrl({ url: 'pages/PostPublishPage', params: { 'postType': '2' } });
+            })
         }
         .width('100%')
-        .height('100%')
-        .alignContent(Alignment.Top)
-
-        // fragment_social.xml floatBtn：SocialFragmentEx.f → PostPublishActivity{post_type:"2"}
-        Image($r('app.media.market_publish'))
-          .width(48)
-          .height(48)
-          .margin({ right: 15, bottom: 20 })
-          .onClick(() => {
-            router.pushUrl({ url: 'pages/PostPublishPage', params: { 'postType': '2' } });
-          })
+        .layoutWeight(1)
       }
       .width('100%')
       .height('100%')

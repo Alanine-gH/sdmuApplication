@@ -7,6 +7,7 @@
  * - ScrollView marginTop px_to_dip_12(=6vp)：tvContent px_to_dip_28(=14fp) ybg_white。
  */
 import { router } from '@kit.ArkUI';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 const HEAD_TEACHER_COMMENT: string = '该生本学期学习态度端正，课堂表现积极，能够按时完成各科作业，质量良好。\n\n' +
   '在班级活动中乐于助人，与同学相处融洽，具有较强的集体荣誉感。\n\n' +
@@ -16,6 +17,14 @@ const HEAD_TEACHER_COMMENT: string = '该生本学期学习态度端正，课堂
 @Entry
 @Component
 struct ScoreCommentDialogPage {
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 640;
+  @StorageProp('avoidAreaTopVp') avoidAreaTopVp: number = 0;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
+
   build() {
     Column() {
       // shape_scroe_comment：#4B4B4B 圆角 8vp
@@ -52,15 +61,26 @@ struct ScoreCommentDialogPage {
         .align(Alignment.TopStart)
       }
       .width('88%')
-      .height(320)
+      .height(Math.min(320, BreakpointSystem.getDialogMaxHeight(this.windowHeightVp)))
+      .constraintSize({
+        maxWidth: BreakpointSystem.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp),
+        maxHeight: BreakpointSystem.getDialogMaxHeight(this.windowHeightVp)
+      })
       .padding(6)
       .borderRadius(8)
       .backgroundColor('#4B4B4B')
     }
     .width('100%')
     .height('100%')
+    .padding({
+      top: this.avoidAreaTopVp,
+      bottom: this.avoidAreaBottomVp,
+      left: this.avoidAreaLeftVp,
+      right: this.avoidAreaRightVp
+    })
     .backgroundColor('#99000000')
     .justifyContent(FlexAlign.Center)
     .alignItems(HorizontalAlign.Center)
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 }

@@ -7,6 +7,7 @@ import { ApiResponse } from '../model/ResponseModel';
 import { UserInfo } from '../model/UserModel';
 import { PreferencesUtil } from '../data/PreferencesUtil';
 import { Constants } from '../data/Constants';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 输入验证码页 — 1:1 复刻 InputIdentifyCodeActivity（188 行）
@@ -54,6 +55,9 @@ struct InputIdentifyCodePage {
   @State logging: boolean = false;
   /** 发码中防重复 */
   @State sending: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('keyboardHeightVp') keyboardHeightVp: number = 0;
 
   aboutToAppear(): void {
     // 源码 y(Intent)：phone/timeSpace/isSendSms
@@ -213,84 +217,91 @@ struct InputIdentifyCodePage {
         .strokeWidth(0.5)
         .width('100%')
 
-      Column() {
-        Image($r('app.media.mobile_campus_code'))
-          .width(57)
-          .height(97)
-          .margin({ top: 40 })
+      Scroll() {
+        Column() {
+          Image($r('app.media.mobile_campus_code'))
+            .width(57)
+            .height(97)
+            .margin({ top: 40 })
 
-        Text('输入验证码')
-          .fontSize(18)
-          .fontColor($r('app.color.common_color_1'))
-          .margin({ top: 12 })
+          Text('输入验证码')
+            .fontSize(18)
+            .fontColor($r('app.color.common_color_1'))
+            .margin({ top: 12 })
 
-        Row() {
-          Text('验证码已发送至')
-            .fontSize(13)
-            .fontColor($r('app.color.black'))
+          Row() {
+            Text('验证码已发送至')
+              .fontSize(13)
+              .fontColor($r('app.color.black'))
 
-          Text('+86 ' + this.phoneText)
-            .fontSize(13)
-            .fontColor($r('app.color.mobile_campus_primary_color'))
-            .padding({ left: 10 })
-        }
-        .margin({ top: 4 })
-        .alignItems(VerticalAlign.Center)
-
-        // VerifyCodeView（singleBox 方格 + 叠加透明输入框；P2 margins：4 位左右 45vp）
-        Stack() {
-          Row({ space: 3 }) {
-            ForEach(Array.from({ length: this.contentNumber }, (v: Object, i: number) => i), (idx: number) => {
-              Text(this.digitAt(idx))
-                .fontSize(20)
-                .fontColor($r('app.color.textColor'))
-                .textAlign(TextAlign.Center)
-                .width(40)
-                .height(40)
-                .backgroundColor('#F2F2F2')
-                .borderRadius(1)
-            }, (idx: number) => `code_box_${idx}`)
+            Text('+86 ' + this.phoneText)
+              .fontSize(13)
+              .fontColor($r('app.color.mobile_campus_primary_color'))
+              .padding({ left: 10 })
           }
+          .margin({ top: 4 })
           .alignItems(VerticalAlign.Center)
 
-          TextInput({ text: this.codeDigits })
-            .type(InputType.Number)
-            .maxLength(this.contentNumber)
-            .opacity(0)
-            .width(this.contentNumber * 40 + (this.contentNumber - 1) * 3)
-            .height(40)
-            .caretColor(Color.Transparent)
-            .onChange((value: string) => {
-              this.codeDigits = value;
-              // 源码 VerifyCodeView：输入满 contentNumber 位 → b(str) 自动提交
-              if (value.length >= this.contentNumber) {
-                this.onCodeComplete(value);
-              }
+          // VerifyCodeView（singleBox 方格 + 叠加透明输入框；P2 margins：4 位左右 45vp）
+          Stack() {
+            Row({ space: 3 }) {
+              ForEach(Array.from({ length: this.contentNumber }, (v: Object, i: number) => i), (idx: number) => {
+                Text(this.digitAt(idx))
+                  .fontSize(20)
+                  .fontColor($r('app.color.textColor'))
+                  .textAlign(TextAlign.Center)
+                  .width(40)
+                  .height(40)
+                  .backgroundColor('#F2F2F2')
+                  .borderRadius(1)
+              }, (idx: number) => `code_box_${idx}`)
+            }
+            .alignItems(VerticalAlign.Center)
+
+            TextInput({ text: this.codeDigits })
+              .type(InputType.Number)
+              .maxLength(this.contentNumber)
+              .opacity(0)
+              .width(this.contentNumber * 40 + (this.contentNumber - 1) * 3)
+              .height(40)
+              .caretColor(Color.Transparent)
+              .onChange((value: string) => {
+                this.codeDigits = value;
+                // 源码 VerifyCodeView：输入满 contentNumber 位 → b(str) 自动提交
+                if (value.length >= this.contentNumber) {
+                  this.onCodeComplete(value);
+                }
+              })
+          }
+          .margin({ top: 9, left: 24, right: 24 })
+
+          // tvNext"完成"：XML visibility=gone 且源码无显示逻辑 → 保真省略渲染
+
+          // tvCode BLTextView"重新获取"
+          Text(this.codeBtnText)
+            .fontSize(15)
+            .fontColor(this.codeBtnEnabled ? $r('app.color.mobile_campus_primary_color') : '#999999')
+            .padding({ left: 10, right: 10, top: 6, bottom: 6 })
+            .borderRadius(512)
+            .border({
+              width: 1,
+              color: this.codeBtnEnabled ? $r('app.color.mobile_campus_primary_color') : '#999999'
+            })
+            .backgroundColor($r('app.color.white'))
+            .margin({ top: 48 })
+            .onClick(() => {
+              this.onResend();
             })
         }
-        .margin({ top: 9, left: 45, right: 45 })
-
-        // tvNext"完成"：XML visibility=gone 且源码无显示逻辑 → 保真省略渲染
-
-        // tvCode BLTextView"重新获取"
-        Text(this.codeBtnText)
-          .fontSize(15)
-          .fontColor(this.codeBtnEnabled ? $r('app.color.mobile_campus_primary_color') : '#999999')
-          .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-          .borderRadius(512)
-          .border({
-            width: 1,
-            color: this.codeBtnEnabled ? $r('app.color.mobile_campus_primary_color') : '#999999'
-          })
-          .backgroundColor($r('app.color.white'))
-          .margin({ top: 48 })
-          .onClick(() => {
-            this.onResend();
-          })
+        .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .padding({ bottom: Math.max(24, this.avoidAreaBottomVp + this.keyboardHeightVp + 16) })
+        .alignItems(HorizontalAlign.Center)
       }
       .width('100%')
-      .height('100%')
-      .alignItems(HorizontalAlign.Center)
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
+      .align(Alignment.Top)
     }
     .width('100%')
     .height('100%')

@@ -5,6 +5,7 @@ import { OaSubDeptResult, OaSubDeptUser } from '../model/OaTodoModel';
 import { EmptyView } from '../components/EmptyView';
 import { LoadingView } from '../components/LoadingView';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 待办部门搜索选择页 — 源码级翻译（W23，原 1:1 XML 复刻版+mock 清除重写）：
@@ -44,6 +45,11 @@ struct TodoSearchDepartmentPage {
   @State isLoading: boolean = true;
   @State searched: boolean = false;
   @State errorNetwork: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
+  @StorageProp('keyboardHeightVp') keyboardHeightVp: number = 0;
   /** 源码 ListView choiceMode：singleDeptPicker 单选 / multiDeptPicker 多选（入参 mode） */
   private mode: string = 'multiDeptPicker';
 
@@ -150,55 +156,64 @@ struct TodoSearchDepartmentPage {
   build() {
     Column() {
       // mobile_campus_toolbar_base_search.xml：搜索框 32 圆角灰 + 取消
-      Row() {
+      Column() {
         Row() {
-          Image($r('app.media.search_b'))
-            .width(16)
-            .height(16)
-            .margin({ left: 8, right: 9 })
-          TextInput({ placeholder: '输入关键字搜索...', text: this.keyword })
+          Row() {
+            Image($r('app.media.search_b'))
+              .width(16)
+              .height(16)
+              .margin({ left: 8, right: 9 })
+            TextInput({ placeholder: '输入关键字搜索...', text: this.keyword })
+              .fontSize(14)
+              .fontColor($r('app.color.common_color_1'))
+              .placeholderColor('#B5B5B5')
+              .placeholderFont({ size: 14 })
+              .backgroundColor(Color.Transparent)
+              .padding({ left: 0, right: 8 })
+              .height('100%')
+              .layoutWeight(1)
+              .onChange((value: string) => {
+                this.keyword = value;
+              })
+              .onSubmit((enterKey: EnterKeyType) => {
+                // 源码 c 类：IME_ACTION_SEARCH(3)/IME_ACTION_DONE(6) 触发搜索
+                if (enterKey === EnterKeyType.Search || enterKey === EnterKeyType.Done) {
+                  this.submitSearch();
+                }
+              })
+          }
+          .layoutWeight(1)
+          .height(32)
+          .margin({ right: 4 })
+          .borderRadius(8)
+          .backgroundColor($r('app.color.common_color_6'))
+          .alignItems(VerticalAlign.Center)
+
+          Text('取消')
             .fontSize(14)
             .fontColor($r('app.color.common_color_1'))
-            .placeholderColor('#B5B5B5')
-            .placeholderFont({ size: 14 })
-            .backgroundColor(Color.Transparent)
-            .padding({ left: 0, right: 8 })
-            .height('100%')
-            .layoutWeight(1)
-            .onChange((value: string) => {
-              this.keyword = value;
-            })
-            .onSubmit((enterKey: EnterKeyType) => {
-              // 源码 c 类：IME_ACTION_SEARCH(3)/IME_ACTION_DONE(6) 触发搜索
-              if (enterKey === EnterKeyType.Search || enterKey === EnterKeyType.Done) {
-                this.submitSearch();
-              }
+            .margin({ left: 8 })
+            .height(44)
+            .textAlign(TextAlign.Center)
+            .onClick(() => {
+              this.getUIContext().getRouter().back();
             })
         }
         .width('100%')
-        .height(32)
-        .margin({ right: 4 })
-        .borderRadius(8)
-        .backgroundColor($r('app.color.common_color_6'))
+        .height(44)
+        .padding({
+          left: Math.max(8, this.avoidAreaLeftVp),
+          right: Math.max(12, this.avoidAreaRightVp)
+        })
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
         .alignItems(VerticalAlign.Center)
 
-        Text('取消')
-          .fontSize(14)
-          .fontColor($r('app.color.common_color_1'))
-          .margin({ left: 8 })
-          .height(44)
-          .textAlign(TextAlign.Center)
-          .onClick(() => {
-            this.getUIContext().getRouter().back();
-          })
+        Divider().color($r('app.color.common_color_5')).strokeWidth(0.5).width('100%')
       }
       .width('100%')
-      .height(44)
-      .padding({ right: 12 })
-      .alignItems(VerticalAlign.Center)
       .backgroundColor($r('app.color.main_bg'))
-
-      Divider().color($r('app.color.common_color_5')).strokeWidth(0.5)
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
 
       if (this.isLoading) {
         Column() {
@@ -211,6 +226,13 @@ struct TodoSearchDepartmentPage {
           EmptyView({ tipText: '网络异常，请稍后重试' })
         }
         .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
+        .padding({
+          left: this.avoidAreaLeftVp,
+          right: this.avoidAreaRightVp,
+          bottom: this.keyboardHeightVp + this.avoidAreaBottomVp
+        })
         .layoutWeight(1)
       } else if (this.departments.length === 0) {
         Column() {
@@ -218,6 +240,13 @@ struct TodoSearchDepartmentPage {
           EmptyView({ tipText: this.searched ? '暂无搜索结果' : '输入关键字搜索部门' })
         }
         .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
+        .padding({
+          left: this.avoidAreaLeftVp,
+          right: this.avoidAreaRightVp,
+          bottom: this.keyboardHeightVp + this.avoidAreaBottomVp
+        })
         .layoutWeight(1)
       } else {
         this.listContent()
@@ -240,31 +269,45 @@ struct TodoSearchDepartmentPage {
         }, (bean: OaSubDeptUser) => bean.BMDM)
       }
       .width('100%')
+      .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+      .alignSelf(ItemAlign.Center)
+      .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
+      .contentEndOffset(this.keyboardHeightVp)
       .layoutWeight(1)
       .scrollBar(BarState.Off)
       .backgroundColor(Color.Transparent)
 
       // layoutBottom：98(px_to_dip_98=49dip) 白底 padL12 已选择 + 确定(160=80dip)
-      Row() {
-        Text('已选择：' + this.selectedCount + '人')
-          .fontSize(16)
-          .fontColor($r('app.color.mobile_campus_primary_color_default'))
-        Blank()
-        Text('确定')
-          .fontSize(17)
-          .fontColor($r('app.color.white'))
-          .backgroundColor($r('app.color.mobile_campus_primary_color_default'))
-          .width(80)
-          .height('100%')
-          .textAlign(TextAlign.Center)
-          .onClick(() => {
-            this.submit();
-          })
+      Column() {
+        Row() {
+          Text('已选择：' + this.selectedCount + '人')
+            .fontSize(16)
+            .fontColor($r('app.color.mobile_campus_primary_color_default'))
+          Blank()
+          Text('确定')
+            .fontSize(17)
+            .fontColor($r('app.color.white'))
+            .backgroundColor($r('app.color.mobile_campus_primary_color_default'))
+            .width(80)
+            .height('100%')
+            .textAlign(TextAlign.Center)
+            .onClick(() => {
+              this.submit();
+            })
+        }
+        .width('100%')
+        .height(49)
+        .padding({ left: 12 })
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
+        .alignItems(VerticalAlign.Center)
       }
       .width('100%')
-      .height(49)
-      .padding({ left: 12 })
-      .alignItems(VerticalAlign.Center)
+      .padding({
+        left: this.avoidAreaLeftVp,
+        right: this.avoidAreaRightVp,
+        bottom: this.avoidAreaBottomVp
+      })
       .backgroundColor($r('app.color.white'))
     }
     .width('100%')

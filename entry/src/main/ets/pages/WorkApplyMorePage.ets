@@ -3,6 +3,7 @@ import { ApiService } from '../network/ApiService';
 import { WorkApplyEntry } from '../model/OaTodoModel';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { EmptyView } from '../components/EmptyView';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 业务申请更多页 — 1:1 翻译原 APK WorkApplyMoreActivity.java(107行)：
@@ -26,6 +27,10 @@ import { EmptyView } from '../components/EmptyView';
 @Component
 struct WorkApplyMorePage {
   @State items: WorkApplyEntry[] = [];
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
   /** 源码 5347 RESULT_OK → setResult(-1)+finish 标记 */
   private picked: boolean = false;
 
@@ -88,11 +93,22 @@ struct WorkApplyMorePage {
 
       if (this.items.length === 0) {
         // MultiStateView 空态
-        Column() {
-          EmptyView({ tipText: '暂无更多申请流程' })
+        Scroll() {
+          Column() {
+            EmptyView({ tipText: '暂无更多申请流程' })
+          }
+          .width('100%')
+          .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+          .alignSelf(ItemAlign.Center)
+          .padding({
+            left: this.avoidAreaLeftVp,
+            right: this.avoidAreaRightVp,
+            bottom: this.avoidAreaBottomVp
+          })
         }
         .width('100%')
         .layoutWeight(1)
+        .scrollBar(BarState.Off)
       } else {
         Grid() {
           ForEach(this.items, (item: WorkApplyEntry, idx: number) => {
@@ -124,8 +140,15 @@ struct WorkApplyMorePage {
         .columnsGap(16)
         .rowsGap(10)
         .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
         .layoutWeight(1)
-        .padding({ left: 10, top: 12.5, right: 10, bottom: 12 })
+        .padding({
+          left: Math.max(10, this.avoidAreaLeftVp),
+          top: 12.5,
+          right: Math.max(10, this.avoidAreaRightVp),
+          bottom: 12 + this.avoidAreaBottomVp
+        })
         .backgroundColor($r('app.color.ybg_white'))
       }
     }

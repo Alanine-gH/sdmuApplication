@@ -3,6 +3,7 @@ import { HttpClient } from '../network/HttpClient';
 import { ApiResponse } from '../model/ResponseModel';
 import { PreferencesUtil } from '../data/PreferencesUtil';
 import { Constants } from '../data/Constants';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 常用应用搜索页 — 源码级复刻 EditCommonAppSearchActivity（newUI 包，
@@ -37,6 +38,11 @@ struct EditCommonAppSearchPage {
   @State showHistory: boolean = true;
   @State resultList: CommonSearchAppBean[] = [];
   @State searched: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
+  @StorageProp('keyboardHeightVp') keyboardHeightVp: number = 0;
   private allApps: CommonSearchAppBean[] = [];
 
   aboutToAppear(): void {
@@ -217,72 +223,75 @@ struct EditCommonAppSearchPage {
   /** item_child_edit_common_app_search：图标+标题+tvStatus+减/加圆点 */
   @Builder
   appRow(app: CommonSearchAppBean, index: number) {
-    Row() {
-      if (this.iconUrl(app) === '') {
-        Image($r('app.media.default_app_icon'))
-          .width(40)
-          .height(40)
-          .objectFit(ImageFit.Cover)
-      } else {
-        Image(this.iconUrl(app))
-          .width(40)
-          .height(40)
-          .objectFit(ImageFit.Cover)
-          .alt($r('app.media.default_app_icon'))
-      }
+    Column() {
+      Row() {
+        if (this.iconUrl(app) === '') {
+          Image($r('app.media.default_app_icon'))
+            .width(40)
+            .height(40)
+            .objectFit(ImageFit.Cover)
+        } else {
+          Image(this.iconUrl(app))
+            .width(40)
+            .height(40)
+            .objectFit(ImageFit.Cover)
+            .alt($r('app.media.default_app_icon'))
+        }
 
-      Text(app.yymc)
-        .fontSize(16)
-        .fontColor($r('app.color.common_color_1'))
-        .maxLines(2)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
-        .padding({ left: 12, right: 12 })
-        .layoutWeight(1)
+        Text(app.yymc)
+          .fontSize(16)
+          .fontColor($r('app.color.common_color_1'))
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .padding({ left: 12, right: 12 })
+          .layoutWeight(1)
 
-      Text(app.isCommonApp ? '移除' : '添加')
-        .fontSize(16)
-        .fontColor(app.isCommonApp ? '#fd5f65' : '#80d38d')
-        .maxLines(2)
-        .padding({ right: 8 })
+        Text(app.isCommonApp ? '移除' : '添加')
+          .fontSize(16)
+          .fontColor(app.isCommonApp ? '#fd5f65' : '#80d38d')
+          .maxLines(2)
+          .padding({ right: 8 })
 
-      // flStatus：18×18 白圆 + 16×16 color_jian/jia 圆 + 白横杠(+常显竖杠 vVertical)
-      Stack({ alignContent: Alignment.Center }) {
-        Circle()
-          .width(16)
-          .height(16)
-          .fill(app.isCommonApp ? '#fd5f65' : '#80d38d')
-        Column() {
-          Row()
-            .width(10)
-            .height(2)
-            .borderRadius(1)
-            .backgroundColor(Color.White)
-          if (!app.isCommonApp) {
+        // flStatus：18×18 白圆 + 16×16 color_jian/jia 圆 + 白横杠(+常显竖杠 vVertical)
+        Stack({ alignContent: Alignment.Center }) {
+          Circle()
+            .width(16)
+            .height(16)
+            .fill(app.isCommonApp ? '#fd5f65' : '#80d38d')
+          Column() {
             Row()
-              .width(2)
-              .height(10)
+              .width(10)
+              .height(2)
               .borderRadius(1)
               .backgroundColor(Color.White)
-              .margin({ top: 0 })
+            if (!app.isCommonApp) {
+              Row()
+                .width(2)
+                .height(10)
+                .borderRadius(1)
+                .backgroundColor(Color.White)
+                .margin({ top: 0 })
+            }
           }
+          .alignItems(HorizontalAlign.Center)
+          .justifyContent(FlexAlign.Center)
         }
-        .alignItems(HorizontalAlign.Center)
-        .justifyContent(FlexAlign.Center)
+        .width(18)
+        .height(18)
+        .backgroundColor(Color.White)
+        .borderRadius(9)
       }
-      .width(18)
-      .height(18)
-      .backgroundColor(Color.White)
-      .borderRadius(9)
+      .width('100%')
+      .padding(12)
+      .borderRadius(8)
+      .backgroundColor($r('app.color.white'))
+      .alignItems(VerticalAlign.Center)
+      .onClick(() => {
+        this.toggleCommon(app, index);
+      })
     }
     .width('100%')
-    .padding(12)
-    .borderRadius(8)
-    .backgroundColor($r('app.color.white'))
-    .margin({ left: 8, right: 8, top: 6, bottom: 6 })
-    .alignItems(VerticalAlign.Center)
-    .onClick(() => {
-      this.toggleCommon(app, index);
-    })
+    .padding({ left: 8, right: 8, top: 6, bottom: 6 })
   }
 
   /** layout_edit_common_app_search_empty 空态 */
@@ -311,124 +320,144 @@ struct EditCommonAppSearchPage {
 
   build() {
     Column() {
-      Row() {
-        Stack({ alignContent: Alignment.End }) {
-          Row() {
-            Image(this.searchText === '' ? $r('app.media.icon_search_gray') : $r('app.media.icon_search_black'))
-              .width(16)
-              .height(16)
-              .objectFit(ImageFit.Contain)
-              .margin({ left: 10 })
+      Column() {
+        Row() {
+          Stack({ alignContent: Alignment.End }) {
+            Row() {
+              Image(this.searchText === '' ? $r('app.media.icon_search_gray') : $r('app.media.icon_search_black'))
+                .width(16)
+                .height(16)
+                .objectFit(ImageFit.Contain)
+                .margin({ left: 10 })
 
-            TextInput({ text: this.searchText, placeholder: '请输入应用名称搜索...' })
-              .fontSize(14)
-              .fontColor($r('app.color.common_color_1'))
-              .placeholderColor($r('app.color.explain_color'))
-              .placeholderFont({ size: 14 })
-              .backgroundColor(Color.Transparent)
-              .border({ width: 0 })
-              .padding({ left: 8, right: 40 })
-              .layoutWeight(1)
-              .height(34)
-              .enterKeyType(EnterKeyType.Search)
-              .onChange((value: string) => {
-                this.searchText = value;
-                if (value === '') {
-                  this.showHistory = this.historyList.length > 0;
-                  this.searched = false;
-                }
-              })
-              .onSubmit((enterKey: EnterKeyType) => {
-                if (enterKey === EnterKeyType.Search) {
-                  this.doSearch();
-                }
-              })
-          }
-          .width('100%')
-          .height(34)
-          .borderRadius(8)
-          .backgroundColor('#f2f2f2')
-          .alignItems(VerticalAlign.Center)
-
-          if (this.searchText !== '') {
-            Image($r('app.media.icon_search_history_clear'))
-              .width(40)
-              .height(40)
-              .objectFit(ImageFit.None)
-              .onClick(() => {
-                this.searchText = '';
-                this.searched = false;
-                this.showHistory = this.historyList.length > 0;
-              })
-          }
-        }
-        .layoutWeight(1)
-        .margin({ left: 16 })
-
-        Text('取消')
-          .fontSize(14)
-          .fontColor($r('app.color.sdmu_primary'))
-          .padding({ left: 16, right: 20 })
-          .height('100%')
-          .onClick(() => {
-            router.back();
-          })
-      }
-      .width('100%')
-      .height(45)
-      .alignItems(VerticalAlign.Center)
-      .backgroundColor($r('app.color.white'))
-
-      if (!this.searched && this.showHistory) {
-        Column() {
-          Row() {
-            Text('历史搜索')
-              .fontSize(14)
-              .fontColor('#555555')
-              .padding({ left: 16, right: 16, top: 8, bottom: 8 })
-              .layoutWeight(1)
-            Image($r('app.media.icon_delete'))
-              .width(20)
-              .height(20)
-              .objectFit(ImageFit.Contain)
-              .padding({ left: 16, right: 16 })
-              .onClick(() => {
-                this.getUIContext().showAlertDialog({
-                  title: '',
-                  message: '确认删除全部历史记录？',
-                  primaryButton: {
-                    value: '取消',
-                    action: () => {
-                    }
-                  },
-                  secondaryButton: {
-                    value: '确认',
-                    action: () => {
-                      this.clearHistory();
-                    }
+              TextInput({ text: this.searchText, placeholder: '请输入应用名称搜索...' })
+                .fontSize(14)
+                .fontColor($r('app.color.common_color_1'))
+                .placeholderColor($r('app.color.explain_color'))
+                .placeholderFont({ size: 14 })
+                .backgroundColor(Color.Transparent)
+                .border({ width: 0 })
+                .padding({ left: 8, right: 40 })
+                .layoutWeight(1)
+                .height(34)
+                .enterKeyType(EnterKeyType.Search)
+                .onChange((value: string) => {
+                  this.searchText = value;
+                  if (value === '') {
+                    this.showHistory = this.historyList.length > 0;
+                    this.searched = false;
                   }
-                });
-              })
-          }
-          .width('100%')
-          .alignItems(VerticalAlign.Center)
+                })
+                .onSubmit((enterKey: EnterKeyType) => {
+                  if (enterKey === EnterKeyType.Search) {
+                    this.doSearch();
+                  }
+                })
+            }
+            .width('100%')
+            .height(34)
+            .borderRadius(8)
+            .backgroundColor('#f2f2f2')
+            .alignItems(VerticalAlign.Center)
 
-          Flex({
-            direction: FlexDirection.Row,
-            wrap: FlexWrap.Wrap,
-            justifyContent: FlexAlign.Start,
-            alignItems: ItemAlign.Center
-          }) {
-            ForEach(this.historyList, (keyword: string) => {
-              this.historyChip(keyword)
-            }, (keyword: string) => 'chip_' + keyword)
+            if (this.searchText !== '') {
+              Image($r('app.media.icon_search_history_clear'))
+                .width(40)
+                .height(40)
+                .objectFit(ImageFit.None)
+                .onClick(() => {
+                  this.searchText = '';
+                  this.searched = false;
+                  this.showHistory = this.historyList.length > 0;
+                })
+            }
           }
-          .width('100%')
-          .padding({ left: 16, right: 16, top: 8, bottom: 8 })
+          .layoutWeight(1)
+          .margin({ left: 16 })
+
+          Text('取消')
+            .fontSize(14)
+            .fontColor($r('app.color.sdmu_primary'))
+            .padding({ left: 16, right: 20 })
+            .height('100%')
+            .onClick(() => {
+              router.back();
+            })
         }
         .width('100%')
-        .padding({ top: 16 })
-        .backgroundColor($r('app.color.white'))
+        .height(45)
+        .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
+        .alignItems(VerticalAlign.Center)
+      }
+      .width('100%')
+      .backgroundColor($r('app.color.white'))
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
+
+      if (!this.searched && this.showHistory) {
+        Scroll() {
+          Column() {
+            Row() {
+              Text('历史搜索')
+                .fontSize(14)
+                .fontColor('#555555')
+                .padding({ left: 16, right: 16, top: 8, bottom: 8 })
+                .layoutWeight(1)
+              Image($r('app.media.icon_delete'))
+                .width(20)
+                .height(20)
+                .objectFit(ImageFit.Contain)
+                .padding({ left: 16, right: 16 })
+                .onClick(() => {
+                  this.getUIContext().showAlertDialog({
+                    title: '',
+                    message: '确认删除全部历史记录？',
+                    primaryButton: {
+                      value: '取消',
+                      action: () => {
+                      }
+                    },
+                    secondaryButton: {
+                      value: '确认',
+                      action: () => {
+                        this.clearHistory();
+                      }
+                    }
+                  });
+                })
+            }
+            .width('100%')
+            .alignItems(VerticalAlign.Center)
+
+            Flex({
+              direction: FlexDirection.Row,
+              wrap: FlexWrap.Wrap,
+              justifyContent: FlexAlign.Start,
+              alignItems: ItemAlign.Center
+            }) {
+              ForEach(this.historyList, (keyword: string) => {
+                this.historyChip(keyword)
+              }, (keyword: string) => 'chip_' + keyword)
+            }
+            .width('100%')
+            .padding({ left: 16, right: 16, top: 8, bottom: 8 })
+          }
+          .width('100%')
+          .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+          .alignSelf(ItemAlign.Center)
+          .padding({
+            top: 16,
+            left: this.avoidAreaLeftVp,
+            right: this.avoidAreaRightVp,
+            bottom: this.keyboardHeightVp + this.avoidAreaBottomVp
+          })
+          .backgroundColor($r('app.color.white'))
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .scrollBar(BarState.Off)
+        .align(Alignment.Top)
       } else {
         Column() {
           if (this.resultList.length === 0) {
@@ -443,11 +472,15 @@ struct EditCommonAppSearchPage {
             }
             .width('100%')
             .height('100%')
+            .contentEndOffset(this.keyboardHeightVp + this.avoidAreaBottomVp)
             .scrollBar(BarState.Off)
             .backgroundColor($r('app.color.white'))
           }
         }
         .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
+        .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
         .layoutWeight(1)
         .backgroundColor($r('app.color.white'))
       }

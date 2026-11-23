@@ -203,7 +203,7 @@ export class ReminderCalendarHelper {
   ): ClockRange | null {
     const timeText: string = (classtime || '').trim();
     const rangeMatch: RegExpMatchArray | null =
-      timeText.match(/(\d{1,2}):(\d{2})\s*[-~至—]+\s*(\d{1,2}):(\d{2})/);
+      timeText.match(/(\d{1,2}):(\d{2})\s*[-~至\u2013\u2014]+\s*(\d{1,2}):(\d{2})/);
     if (rangeMatch !== null) {
       const sh: number = Number(rangeMatch[1]);
       const sm: number = Number(rangeMatch[2]);
@@ -230,7 +230,7 @@ export class ReminderCalendarHelper {
     }
 
     const secText: string = (session || '').trim();
-    const secRange: RegExpMatchArray | null = secText.match(/(\d{1,2})\s*[-~至]+\s*(\d{1,2})/);
+    const secRange: RegExpMatchArray | null = secText.match(/(\d{1,2})\s*[-~至\u2013\u2014]+\s*(\d{1,2})/);
     let startSec: number = 0;
     let endSec: number = 0;
     if (secRange !== null) {

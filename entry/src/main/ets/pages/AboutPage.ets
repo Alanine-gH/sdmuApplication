@@ -1,4 +1,5 @@
 import { bundleManager } from '@kit.AbilityKit';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 import { TitleBar } from '../components/TitleBar';
 
 /**
@@ -18,6 +19,9 @@ import { TitleBar } from '../components/TitleBar';
 struct AboutPage {
   /** tvAppVersion 文本（f1() 拼接结果，aboutToAppear 计算） */
   @State appVersion: string = '';
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
 
   aboutToAppear(): void {
     try {
@@ -48,30 +52,37 @@ struct AboutPage {
       TitleBar({ title: '关于我们', showBack: true })
 
       // 内层 LinearLayout：gravity=center_horizontal
-      Column() {
-        // rivImage：120dip、marginTop 140dip、圆角 28dip、边框 #E7E7E7 1dip、src @mipmap/icon
-        Image($r('app.media.app_icon'))
-          .width(120)
-          .height(120)
-          .borderRadius(28)
-          .border({ width: 1, color: '#E7E7E7' })
-          .margin({ top: 140 })
+      Scroll() {
+        Column() {
+          // rivImage：120dip、marginTop 140dip、圆角 28dip、边框 #E7E7E7 1dip、src @mipmap/icon
+          Image($r('app.media.app_icon'))
+            .width(120)
+            .height(120)
+            .borderRadius(28)
+            .border({ width: 1, color: '#E7E7E7' })
+            .margin({ top: this.isCompactHeight ? 32 : 140 })
 
-        // tvAppName：17sp 黑、marginTop 24dip、@string/app_name
-        Text($r('app.string.app_name'))
-          .fontSize(17)
-          .fontColor($r('app.color.black'))
-          .margin({ top: 24 })
+          // tvAppName：17sp 黑、marginTop 24dip、@string/app_name
+          Text($r('app.string.app_name'))
+            .fontSize(17)
+            .fontColor($r('app.color.black'))
+            .margin({ top: 24 })
 
-        // tvAppVersion：14sp explainColor(#999999)、marginTop 4dip（代码设置版本文本）
-        Text(this.appVersion)
-          .fontSize(14)
-          .fontColor($r('app.color.explain_color'))
-          .margin({ top: 4 })
+          // tvAppVersion：14sp explainColor(#999999)、marginTop 4dip（代码设置版本文本）
+          Text(this.appVersion)
+            .fontSize(14)
+            .fontColor($r('app.color.explain_color'))
+            .margin({ top: 4 })
+        }
+        .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .padding({ bottom: Math.max(24, this.avoidAreaBottomVp) })
+        .alignItems(HorizontalAlign.Center)
       }
       .width('100%')
       .layoutWeight(1)
-      .alignItems(HorizontalAlign.Center)
+      .scrollBar(BarState.Off)
+      .align(Alignment.Top)
     }
     .width('100%')
     .height('100%')

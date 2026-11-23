@@ -223,7 +223,7 @@ struct ReadingPage {
         }
         .width('100%')
         .alignItems(VerticalAlign.Bottom)
-        .margin({ left: 26, right: 26, bottom: 15 })
+        .padding({ left: 26, right: 26, bottom: 15 })
       }
       .width('100%')
       .height('100%')

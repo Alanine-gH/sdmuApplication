@@ -3,6 +3,7 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { TitleBar } from '../components/TitleBar';
 import { ApiService } from '../network/ApiService';
 import { LoginSession } from '../network/LoginSession';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 绑定手机验证码页 — 1:1 翻译 MobileCampusBindPhoneActivity.java +
@@ -74,6 +75,9 @@ struct BindPhonePage {
   /** VerifyCodeView 光标闪烁（源码 cursorDuration 500ms） */
   @State cursorOn: boolean = true;
   private cursorTimer: number = -1;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('keyboardHeightVp') keyboardHeightVp: number = 0;
 
   aboutToAppear(): void {
     // 源码 y(Intent)：phone/validation/justBindPhone/isCircle/userInfoJson
@@ -265,77 +269,88 @@ struct BindPhonePage {
         .strokeWidth(0.5)
         .width('100%')
 
-      Column() {
-        Image($r('app.media.mobile_campus_code'))
-          .margin({ top: 40 })
+      Scroll() {
+        Column() {
+          Image($r('app.media.mobile_campus_code'))
+            .margin({ top: 40 })
 
-        Text('输入验证码')
-          .fontSize(16)
-          .fontColor($r('app.color.common_color_1'))
-          .margin({ top: 12 })
-
-        Row() {
-          Text('+86 ' + this.phone)
-            .fontSize(13)
+          Text('输入验证码')
+            .fontSize(16)
             .fontColor($r('app.color.common_color_1'))
+            .margin({ top: 12 })
 
-          Text(this.countdown > 0 ? '已发送(' + this.countdown + 's)' :
-            (this.codeSentOnce ? '重新获取' : '获取验证码'))
-            .fontSize(12)
-            .fontColor($r('app.color.common_color_5'))
-            .backgroundColor(this.countdown > 0 ? '#B8C0C9' : '#1B68B6')
-            .borderRadius(4)
-            .padding(6)
-            .margin({ left: 10 })
-            .onClick(() => {
-              if (this.countdown <= 0) {
-                this.sendCode();
-              }
-            })
-        }
-        .alignItems(VerticalAlign.Center)
-        .margin({ top: 8 })
+          Row() {
+            Text('+86 ' + this.phone)
+              .fontSize(13)
+              .fontColor($r('app.color.common_color_1'))
 
-        // VerifyCodeView 复刻：透明 TextInput 承接输入，上方格子回显。
-        // k3()：marginTop 18dip；左右 margin 4 格 90dip / 6 格 40dip（y.a(K1(), 90f/40f)）
-        Stack({ alignContent: Alignment.TopStart }) {
-          Row({ space: 6 }) {
-            ForEach(this.cellIndexes(), (idx: number) => {
-              this.codeBox(idx)
-            }, (idx: number) => 'box_' + idx)
+            Text(this.countdown > 0 ? '已发送(' + this.countdown + 's)' :
+              (this.codeSentOnce ? '重新获取' : '获取验证码'))
+              .fontSize(12)
+              .fontColor($r('app.color.common_color_5'))
+              .backgroundColor(this.countdown > 0 ? '#B8C0C9' : '#1B68B6')
+              .borderRadius(4)
+              .padding(6)
+              .margin({ left: 10 })
+              .onClick(() => {
+                if (this.countdown <= 0) {
+                  this.sendCode();
+                }
+              })
+          }
+          .alignItems(VerticalAlign.Center)
+          .margin({ top: 8 })
+
+          // VerifyCodeView 复刻：透明 TextInput 承接输入，上方格子回显。
+          Stack({ alignContent: Alignment.TopStart }) {
+            Row({ space: 6 }) {
+              ForEach(this.cellIndexes(), (idx: number) => {
+                this.codeBox(idx)
+              }, (idx: number) => 'box_' + idx)
+            }
+            .width('100%')
+            .justifyContent(FlexAlign.Center)
+
+            TextInput({ text: this.verifyCode })
+              .type(InputType.Number)
+              .maxLength(this.cells)
+              .fontSize(20)
+              .fontColor(Color.Transparent)
+              .caretColor(Color.Transparent)
+              .backgroundColor(Color.Transparent)
+              .width('100%')
+              .height(42)
+              .defaultFocus(true)
+              .onChange((value: string) => {
+                this.onCodeChange(value);
+              })
           }
           .width('100%')
-          .justifyContent(FlexAlign.Center)
+          .constraintSize({ maxWidth: 360 })
+          .margin({ top: 18 })
+          .padding({
+            left: this.currentBreakpoint === 'xs' ? 24 : this.sideMargin,
+            right: this.currentBreakpoint === 'xs' ? 24 : this.sideMargin
+          })
 
-          TextInput({ text: this.verifyCode })
-            .type(InputType.Number)
-            .maxLength(this.cells)
-            .fontSize(20)
-            .fontColor(Color.Transparent)
-            .caretColor(Color.Transparent)
-            .backgroundColor(Color.Transparent)
-            .width('100%')
-            .height(42)
-            .defaultFocus(true)
-            .onChange((value: string) => {
-              this.onCodeChange(value);
+          Text('完成')
+            .fontSize(15)
+            .fontColor(this.verifyCode.length >= this.cells && !this.submitting ? '#1B68B7' : '#CECECE')
+            .padding(10)
+            .margin({ top: 48 })
+            .onClick(() => {
+              this.submitCode();
             })
         }
         .width('100%')
-        .margin({ top: 18 })
-        .padding({ left: this.sideMargin, right: this.sideMargin })
-
-        Text('完成')
-          .fontSize(15)
-          .fontColor(this.verifyCode.length >= this.cells && !this.submitting ? '#1B68B7' : '#CECECE')
-          .padding(10)
-          .margin({ top: 48 })
-          .onClick(() => {
-            this.submitCode();
-          })
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .padding({ bottom: Math.max(24, this.avoidAreaBottomVp + this.keyboardHeightVp + 16) })
+        .alignItems(HorizontalAlign.Center)
       }
       .width('100%')
-      .alignItems(HorizontalAlign.Center)
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
+      .align(Alignment.Top)
     }
     .width('100%')
     .height('100%')

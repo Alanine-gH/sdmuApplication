@@ -135,99 +135,105 @@ struct SuperviseComingPage {
 
           // 听课提醒卡（LectureNotifyView，buttonType=delete）
           Column() {
-            Row() {
-              Image($r('app.media.mobile_campus_supervise_time'))
-                .width(14)
-                .height(14)
-                .margin({ right: 8 })
-              Text('听课时间')
-                .fontSize(14)
-                .fontColor($r('app.color.common_color_1'))
-                .margin({ right: 21 })
-              Text(this.listenTime)
-                .fontSize(14)
-                .fontColor($r('app.color.common_color_1'))
-                .layoutWeight(1)
-              Image($r('app.media.mobile_campus_supervise_arrow'))
-                .width(12)
-                .height(12)
-            }
-            .width('100%')
-            .height(48)
-            .alignItems(VerticalAlign.Center)
-
-            Divider()
-              .color($r('app.color.common_color_5'))
-              .strokeWidth(0.5)
-              .width('100%')
-
-            Row() {
-              Image($r('app.media.mobile_campus_supervise_notice'))
-                .width(14)
-                .height(14)
-                .margin({ right: 8 })
-              Text('日程提醒')
-                .fontSize(14)
-                .fontColor($r('app.color.common_color_1'))
-                .margin({ right: 21 })
-
-              Column() {
-                Row() {
-                  Image(this.remindOn ? $r('app.media.mobile_campus_supervise_choosed') : $r('app.media.mobile_campus_supervise_choose'))
-                    .width(16)
-                    .height(16)
-                    .margin({ right: 8 })
-                  Text('不提醒')
-                    .fontSize(14)
-                    .fontColor(!this.remindOn ? $r('app.color.common_color_1') : $r('app.color.common_color_35'))
-                }
-                .margin({ top: 12.5 })
-                .alignItems(VerticalAlign.Center)
-                .onClick(() => {
-                  this.remindOn = false;
-                })
-
-                Row() {
-                  Image(this.remindOn ? $r('app.media.mobile_campus_supervise_choosed') : $r('app.media.mobile_campus_supervise_choose'))
-                    .width(16)
-                    .height(16)
-                    .margin({ right: 8 })
-                  Text('指定时间提醒')
-                    .fontSize(14)
-                    .fontColor(this.remindOn ? $r('app.color.common_color_1') : $r('app.color.common_color_35'))
-                }
-                .margin({ top: 16 })
-                .alignItems(VerticalAlign.Center)
-                .onClick(() => {
-                  this.remindOn = true;
-                })
+            Column() {
+              Row() {
+                Image($r('app.media.mobile_campus_supervise_time'))
+                  .width(14)
+                  .height(14)
+                  .margin({ right: 8 })
+                Text('听课时间')
+                  .fontSize(14)
+                  .fontColor($r('app.color.common_color_1'))
+                  .margin({ right: 21 })
+                Text(this.listenTime)
+                  .fontSize(14)
+                  .fontColor($r('app.color.common_color_1'))
+                  .layoutWeight(1)
+                Image($r('app.media.mobile_campus_supervise_arrow'))
+                  .width(12)
+                  .height(12)
               }
-              .layoutWeight(1)
-              .alignItems(HorizontalAlign.Start)
+              .width('100%')
+              .height(48)
+              .alignItems(VerticalAlign.Center)
+
+              Divider()
+                .color($r('app.color.common_color_5'))
+                .strokeWidth(0.5)
+                .width('100%')
+
+              Row() {
+                Image($r('app.media.mobile_campus_supervise_notice'))
+                  .width(14)
+                  .height(14)
+                  .margin({ right: 8 })
+                Text('日程提醒')
+                  .fontSize(14)
+                  .fontColor($r('app.color.common_color_1'))
+                  .margin({ right: 21 })
+
+                Column() {
+                  Row() {
+                    Image(this.remindOn ? $r('app.media.mobile_campus_supervise_choosed') : $r('app.media.mobile_campus_supervise_choose'))
+                      .width(16)
+                      .height(16)
+                      .margin({ right: 8 })
+                    Text('不提醒')
+                      .fontSize(14)
+                      .fontColor(!this.remindOn ? $r('app.color.common_color_1') : $r('app.color.common_color_35'))
+                  }
+                  .margin({ top: 12.5 })
+                  .alignItems(VerticalAlign.Center)
+                  .onClick(() => {
+                    this.remindOn = false;
+                  })
+
+                  Row() {
+                    Image(this.remindOn ? $r('app.media.mobile_campus_supervise_choosed') : $r('app.media.mobile_campus_supervise_choose'))
+                      .width(16)
+                      .height(16)
+                      .margin({ right: 8 })
+                    Text('指定时间提醒')
+                      .fontSize(14)
+                      .fontColor(this.remindOn ? $r('app.color.common_color_1') : $r('app.color.common_color_35'))
+                  }
+                  .margin({ top: 16 })
+                  .alignItems(VerticalAlign.Center)
+                  .onClick(() => {
+                    this.remindOn = true;
+                  })
+                }
+                .layoutWeight(1)
+                .alignItems(HorizontalAlign.Start)
+              }
+              .width('100%')
+              .padding({ bottom: 4 })
+              .alignItems(VerticalAlign.Top)
+
+              // 删除听课：delete_button_bg 红描边 radius 4，字色 #E60012
+              Column() {
+                Text('删除听课')
+                  .fontSize(14)
+                  .fontColor($r('app.color.mobile_campus_supervise_edit_textcolor'))
+                  .textAlign(TextAlign.Center)
+                  .width('100%')
+                  .padding({ top: 10, bottom: 10 })
+                  .borderRadius(4)
+                  .border({ width: 0.5, color: $r('app.color.mobile_campus_supervise_edit_textcolor') })
+                  .onClick(() => {
+                    this.deleteListen();
+                  })
+              }
+              .width('100%')
+              .padding({ left: 9, right: 9, top: 30 })
             }
             .width('100%')
-            .padding({ bottom: 4 })
-            .alignItems(VerticalAlign.Top)
-
-            // 删除听课：delete_button_bg 红描边 radius 4，字色 #E60012
-            Text('删除听课')
-              .fontSize(14)
-              .fontColor($r('app.color.mobile_campus_supervise_edit_textcolor'))
-              .textAlign(TextAlign.Center)
-              .width('100%')
-              .padding({ top: 10, bottom: 10 })
-              .margin({ left: 9, right: 9, top: 30 })
-              .borderRadius(4)
-              .border({ width: 0.5, color: $r('app.color.mobile_campus_supervise_edit_textcolor') })
-              .onClick(() => {
-                this.deleteListen();
-              })
+            .padding({ left: 12, right: 12, bottom: 18 })
+            .borderRadius(6)
+            .backgroundColor($r('app.color.white'))
           }
           .width('100%')
-          .padding({ left: 12, right: 12, bottom: 18 })
-          .borderRadius(6)
-          .backgroundColor($r('app.color.white'))
-          .margin({ left: 12, right: 12, top: 20 })
+          .padding({ left: 12, right: 12, top: 20 })
         }
         .width('100%')
       }

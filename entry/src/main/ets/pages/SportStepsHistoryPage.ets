@@ -77,30 +77,33 @@ struct SportStepsHistoryPage {
         ForEach(this.list, (row: SportStepsHistoryRow, idx: number) => {
           ListItem() {
             // item_sport_steps_history.xml：圆角8 #F8F8F8 marginH15 marginV6
-            Row() {
-              Text(this.timeTextOf(row.time))
-                .fontSize(16)
-                .fontColor($r('app.color.black'))
-                .padding({ left: 20, right: 20, top: 18, bottom: 18 })
-                .layoutWeight(1)
-                .maxLines(1)
-              Text('查看')
-                .fontSize(16)
-                .fontColor('#999999')
-                .margin({ right: 13 })
-              Image($r('app.media.icon_arrow_right_gray'))
-                .width(16)
-                .height(16)
-                .margin({ right: 24 })
+            Column() {
+              Row() {
+                Text(this.timeTextOf(row.time))
+                  .fontSize(16)
+                  .fontColor($r('app.color.black'))
+                  .padding({ left: 20, right: 20, top: 18, bottom: 18 })
+                  .layoutWeight(1)
+                  .maxLines(1)
+                Text('查看')
+                  .fontSize(16)
+                  .fontColor('#999999')
+                  .margin({ right: 13 })
+                Image($r('app.media.icon_arrow_right_gray'))
+                  .width(16)
+                  .height(16)
+                  .margin({ right: 24 })
+              }
+              .width('100%')
+              .borderRadius(8)
+              .backgroundColor('#F8F8F8')
+              .alignItems(VerticalAlign.Center)
+              .onClick(() => {
+                this.openDetail();
+              })
             }
             .width('100%')
-            .borderRadius(8)
-            .backgroundColor('#F8F8F8')
-            .margin({ left: 15, right: 15, top: 6, bottom: 6 })
-            .alignItems(VerticalAlign.Center)
-            .onClick(() => {
-              this.openDetail();
-            })
+            .padding({ left: 15, right: 15, top: 6, bottom: 6 })
           }
         }, (row: SportStepsHistoryRow, idx: number) => String(row.time) + '_' + idx)
       }

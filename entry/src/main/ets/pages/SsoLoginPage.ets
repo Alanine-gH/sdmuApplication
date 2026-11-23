@@ -24,5 +24,6 @@ struct SsoLoginPage {
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.white'))
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 }

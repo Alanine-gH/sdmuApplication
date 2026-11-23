@@ -1,5 +1,6 @@
 import { common } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 import { TitleBar } from '../components/TitleBar';
 
 /**
@@ -10,6 +11,9 @@ import { TitleBar } from '../components/TitleBar';
 @Entry
 @Component
 struct DownloadAddressPage {
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+
   private openAppGallery(): void {
     // 拉起华为应用市场（AppGallery）搜索本应用
     const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
@@ -66,7 +70,7 @@ struct DownloadAddressPage {
           .padding(16)
           .borderRadius(8)
           .backgroundColor($r('app.color.white'))
-          .margin({ top: 24, left: 12, right: 12 })
+          .margin({ top: 24 })
           .alignItems(HorizontalAlign.Start)
 
           // 前往应用市场按钮：#97000C 圆角 10vp，拉起华为应用市场
@@ -78,12 +82,14 @@ struct DownloadAddressPage {
             .textAlign(TextAlign.Center)
             .borderRadius(10)
             .backgroundColor($r('app.color.mobile_campus_primary_color'))
-            .margin({ top: 30, left: 12, right: 12 })
+            .margin({ top: 30 })
             .onClick(() => {
               this.openAppGallery();
             })
         }
         .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .padding({ left: 12, right: 12, bottom: Math.max(24, this.avoidAreaBottomVp) })
       }
       .width('100%')
       .layoutWeight(1)

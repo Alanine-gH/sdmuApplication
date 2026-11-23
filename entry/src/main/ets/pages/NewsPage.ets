@@ -5,6 +5,7 @@ import { geoLocationManager } from '@kit.LocationKit';
 import { abilityAccessCtrl, common, PermissionRequestResult, Want } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 import { ApiService, NewsWebViewHeaders } from '../network/ApiService';
 import { Constants } from '../data/Constants';
 import { LoadingView } from '../components/LoadingView';
@@ -138,6 +139,11 @@ struct NewsPage {
   @State pageState: string = 'loading';
   @State showBack: boolean = false;
   @State errorMsg: string = '';
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   private targetUrl: string = '';
   private jsBridge: YbgLightAppJsBridge = new YbgLightAppJsBridge(
     (msg: string) => {
@@ -359,44 +365,51 @@ struct NewsPage {
   // ===== mobile_campus_fragment_news.xml 顶部 RelativeLayout（白底 45vp） =====
   @Builder
   titleBar() {
-    Stack({ alignContent: Alignment.Center }) {
-      // TextView "资讯"：textSize=18sp、textColor=common_color_1、gravity=center、fill_parent
-      Text('资讯')
-        .fontSize(18)
-        .fontColor($r('app.color.common_color_1'))
-        .textAlign(TextAlign.Center)
+    Column() {
+      Stack({ alignContent: Alignment.Center }) {
+        // TextView "资讯"：textSize=18sp、textColor=common_color_1、gravity=center、fill_parent
+        Text('资讯')
+          .fontSize(18)
+          .fontColor($r('app.color.common_color_1'))
+          .textAlign(TextAlign.Center)
+          .width('100%')
+          .height(this.isCompactHeight ? 38 : 45)
+        // 操作层：ivBack alignParentLeft（70×45dip padT/B12）+ ivRefresh alignParentRight（padL/R15 T/B12）
+        Row() {
+          Image($r('app.media.icon_back_black'))
+            .width(70)
+            .height(this.isCompactHeight ? 38 : 45)
+            .padding({ top: 12, bottom: 12 })
+            .objectFit(ImageFit.Contain)
+            .visibility(this.showBack ? Visibility.Visible : Visibility.Hidden)
+            .onClick(() => {
+              // 源码 class e(:788)：ivBack → i.goBack()
+              this.webController.backward();
+            })
+          Blank()
+          Image($r('app.media.icon_refresh_black'))
+            .height(this.isCompactHeight ? 38 : 45)
+            .padding({ left: 15, top: 12, right: 15, bottom: 12 })
+            .objectFit(ImageFit.Contain)
+            .onClick(() => {
+              // 源码 class d(:778)：ivRefresh → K1() 完整重载（含 headers）
+              this.startLoadNews();
+            })
+        }
         .width('100%')
-        .height(45)
-      // 操作层：ivBack alignParentLeft（70×45dip padT/B12）+ ivRefresh alignParentRight（padL/R15 T/B12）
-      Row() {
-        Image($r('app.media.icon_back_black'))
-          .width(70)
-          .height(45)
-          .padding({ top: 12, bottom: 12 })
-          .objectFit(ImageFit.Contain)
-          .visibility(this.showBack ? Visibility.Visible : Visibility.Hidden)
-          .onClick(() => {
-            // 源码 class e(:788)：ivBack → i.goBack()
-            this.webController.backward();
-          })
-        Blank()
-        Image($r('app.media.icon_refresh_black'))
-          .height(45)
-          .padding({ left: 15, top: 12, right: 15, bottom: 12 })
-          .objectFit(ImageFit.Contain)
-          .onClick(() => {
-            // 源码 class d(:778)：ivRefresh → K1() 完整重载（含 headers）
-            this.startLoadNews();
-          })
+        .height(this.isCompactHeight ? 38 : 45)
+        .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
+        .alignItems(VerticalAlign.Center)
       }
       .width('100%')
-      .height(45)
-      .alignItems(VerticalAlign.Center)
+      .height(this.isCompactHeight ? 38 : 45)
+      .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+      .alignContent(Alignment.Center)
     }
     .width('100%')
-    .height(45)
-    .alignContent(Alignment.Center)
+    .alignItems(HorizontalAlign.Center)
     .backgroundColor($r('app.color.white'))
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
   }
 
   build() {
@@ -515,6 +528,11 @@ struct NewsPage {
       }
       .width('100%')
       .layoutWeight(1)
+      .padding({
+        left: this.avoidAreaLeftVp,
+        right: this.avoidAreaRightVp,
+        bottom: this.avoidAreaBottomVp
+      })
       .backgroundColor($r('app.color.main_bg'))
     }
     .width('100%')

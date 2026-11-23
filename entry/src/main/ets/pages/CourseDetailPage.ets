@@ -1,11 +1,15 @@
 import { router } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
+import { image } from '@kit.ImageKit';
 import { TitleBar } from '../components/TitleBar';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { CourseDetailEntry, LeaveStudentEntry } from '../model/CourseModel';
 import { LoginSession } from '../network/LoginSession';
 import { ReminderCalendarHelper } from '../common/ReminderCalendarHelper';
+import { BarcodeHelper } from '../common/BarcodeHelper';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 课程详情页 — 1:1 复刻 timetable/view/CourseDetailActivity.java（页名 course_detail）
@@ -102,7 +106,92 @@ struct CourseDetailPage {
   @State showRatioBar: boolean = false;
   @State leaveStudents: LeaveStudentEntry[] = [];
   @State leaveDetail: LeaveStudentEntry | null = null;
+  @State showQrModal: boolean = false;
+  @State qrPixelMap: image.PixelMap | null = null;
+  @State qrLoading: boolean = false;
+  @State qrSaving: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 780;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   private detail: CourseDetailEntry | null = null;
+
+  aboutToDisappear(): void {
+    this.releaseQrPixelMap();
+  }
+
+  private releaseQrPixelMap(): void {
+    if (this.qrPixelMap !== null) {
+      const pm: image.PixelMap = this.qrPixelMap;
+      this.qrPixelMap = null;
+      try {
+        pm.release();
+      } catch {
+        // 忽略释放异常
+      }
+    }
+  }
+
+  private closeQrModal(): void {
+    this.showQrModal = false;
+    if (!this.qrSaving) {
+      this.releaseQrPixelMap();
+    }
+  }
+
+  private async openCourseQrModal(): Promise<void> {
+    const teacherName: string = this.teacher !== '' ? this.teacher : this.topTeacher;
+    const payload: string = BarcodeHelper.buildCourseQrPayload(
+      this.courseName,
+      this.weekTime,
+      this.session,
+      this.place,
+      this.classtime,
+      teacherName
+    );
+    if (payload === '') {
+      this.toast('暂无可生成二维码的课程信息');
+      return;
+    }
+    this.releaseQrPixelMap();
+    this.qrLoading = true;
+    this.showQrModal = true;
+    const res = await BarcodeHelper.generateQrPixelMap(payload, 480);
+    this.qrLoading = false;
+    if (!this.showQrModal) {
+      if (res.pixelMap !== null) {
+        try {
+          res.pixelMap.release();
+        } catch {
+          // 忽略释放异常
+        }
+      }
+      return;
+    }
+    if (res.success && res.pixelMap !== null) {
+      this.qrPixelMap = res.pixelMap;
+    } else {
+      this.showQrModal = false;
+      this.toast(res.message);
+    }
+  }
+
+  private async saveQrToGallery(): Promise<void> {
+    if (this.qrPixelMap === null || this.qrSaving) {
+      return;
+    }
+    this.qrSaving = true;
+    try {
+      const ctx = this.getUIContext().getHostContext() as common.Context;
+      const res = await BarcodeHelper.savePixelMapToGallery(ctx, this.qrPixelMap);
+      this.toast(res.message);
+    } finally {
+      this.qrSaving = false;
+      if (!this.showQrModal) {
+        this.releaseQrPixelMap();
+      }
+    }
+  }
 
   aboutToAppear(): void {
     const params: Record<string, Object> | null =
@@ -409,7 +498,14 @@ struct CourseDetailPage {
   build() {
     Stack() {
       Column() {
-        TitleBar({ title: '课程详情', showBack: true })
+        TitleBar({
+          title: '课程详情',
+          showBack: true,
+          rightText: '课程码',
+          onRightClick: () => {
+            this.openCourseQrModal();
+          }
+        })
         Scroll() {
           Column() {
             // 基础信息块（白底 padding15）
@@ -460,13 +556,14 @@ struct CourseDetailPage {
                 .color($r('app.color.common_color_5'))
                 .strokeWidth(0.5)
                 .width('100%')
-              Row({ space: 10 }) {
+              Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.End }) {
                 Text('上课提醒')
                   .fontSize(14)
                   .fontColor('#18B4ED')
                   .backgroundColor('#E8F7FD')
                   .borderRadius(16)
                   .padding({ left: 14, right: 14, top: 7, bottom: 7 })
+                  .margin({ left: 8, top: 4, bottom: 4 })
                   .onClick(() => {
                     this.scheduleCourseReminder();
                   })
@@ -476,13 +573,23 @@ struct CourseDetailPage {
                   .backgroundColor('#FDECEE')
                   .borderRadius(16)
                   .padding({ left: 14, right: 14, top: 7, bottom: 7 })
+                  .margin({ left: 8, top: 4, bottom: 4 })
                   .onClick(() => {
                     this.addCourseToCalendar();
                   })
+                Text('课程二维码')
+                  .fontSize(14)
+                  .fontColor('#2E7D32')
+                  .backgroundColor('#EAF7EC')
+                  .borderRadius(16)
+                  .padding({ left: 14, right: 14, top: 7, bottom: 7 })
+                  .margin({ left: 8, top: 4, bottom: 4 })
+                  .onClick(() => {
+                    this.openCourseQrModal();
+                  })
               }
               .width('100%')
-              .padding({ left: 15, right: 15, top: 10, bottom: 10 })
-              .justifyContent(FlexAlign.End)
+              .padding({ left: 15, right: 15, top: 6, bottom: 6 })
               .backgroundColor($r('app.color.ybg_white'))
             }
             // course_detail_teacher（custom 模式 / term-i3 教师=skdx）
@@ -713,6 +820,8 @@ struct CourseDetailPage {
             }
           }
           .width('100%')
+          .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+          .padding({ bottom: Math.max(12, this.avoidAreaBottomVp) })
         }
         .width('100%')
         .layoutWeight(1)
@@ -725,9 +834,116 @@ struct CourseDetailPage {
       if (this.leaveDetail !== null) {
         this.leaveDialog()
       }
+
+      if (this.showQrModal) {
+        this.courseQrOverlay()
+      }
     }
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.common_color_6'))
+  }
+
+  @Builder
+  courseQrOverlay() {
+    Column() {
+      Scroll() {
+        Column() {
+          Row() {
+            Text('课程信息二维码')
+              .fontSize(17)
+              .fontWeight(FontWeight.Medium)
+              .fontColor($r('app.color.common_color_1'))
+              .layoutWeight(1)
+            Text('关闭')
+              .fontSize(15)
+              .fontColor('#3A92ED')
+              .padding({ left: 8, right: 4, top: 4, bottom: 4 })
+              .onClick(() => {
+                this.closeQrModal();
+              })
+          }
+          .width('100%')
+
+          if (this.courseName !== '') {
+            Text(this.courseName)
+              .fontSize(16)
+              .fontWeight(FontWeight.Bold)
+              .fontColor($r('app.color.common_color_1'))
+              .margin({ top: 10 })
+              .maxLines(2)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
+          if (this.place !== '' || this.session !== '') {
+            Text(`${this.session}${this.place !== '' ? ' · ' + this.place : ''}`)
+              .fontSize(13)
+              .fontColor($r('app.color.common_color_3'))
+              .margin({ top: 4 })
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
+
+          if (this.qrLoading) {
+            LoadingProgress()
+              .width(42)
+              .height(42)
+              .margin({ top: 40, bottom: 40 })
+          } else if (this.qrPixelMap !== null) {
+            Image(this.qrPixelMap)
+              .width(200)
+              .height(200)
+              .objectFit(ImageFit.Contain)
+              .margin({ top: 14, bottom: 10 })
+              .backgroundColor($r('app.color.white'))
+          }
+
+          Text('扫码分享课程时间与地点信息')
+            .fontSize(12)
+            .fontColor($r('app.color.common_color_3'))
+            .margin({ bottom: 14 })
+
+          if (this.qrPixelMap !== null) {
+            SaveButton({
+              icon: SaveIconStyle.FULL_FILLED,
+              text: SaveDescription.SAVE_TO_GALLERY,
+              buttonType: ButtonType.Capsule
+            })
+              .height(38)
+              .fontSize(14)
+              .fontColor($r('app.color.white'))
+              .iconColor($r('app.color.white'))
+              .backgroundColor('#3A92ED')
+              .padding({ left: 18, right: 18 })
+              .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
+                if (result === SaveButtonOnClickResult.SUCCESS) {
+                  this.saveQrToGallery();
+                } else {
+                  this.toast('未获得保存授权');
+                }
+              })
+          }
+        }
+        .width('100%')
+        .alignItems(HorizontalAlign.Center)
+        .padding({ left: 20, right: 20, top: 16, bottom: 20 })
+      }
+      .scrollBar(BarState.Off)
+      .width(AdaptiveLayoutHelper.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp))
+      .constraintSize({ maxHeight: AdaptiveLayoutHelper.getDialogMaxHeight(this.windowHeightVp) })
+      .backgroundColor($r('app.color.white'))
+      .borderRadius(12)
+      .onClick(() => {
+        // 拦截弹窗内点击
+      })
+    }
+    .width('100%')
+    .height('100%')
+    .padding({ left: 16, right: 16 })
+    .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
+    .backgroundColor('#66000000')
+    .onClick(() => {
+      this.closeQrModal();
+    })
   }
 }

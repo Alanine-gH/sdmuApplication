@@ -1,6 +1,7 @@
 import { router } from '@kit.ArkUI';
 import { TitleBar } from '../components/TitleBar';
 import { ApiService } from '../network/ApiService';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 修改昵称页 — 1:1 翻译 ChangeNickNameActivity.java + mobile_campus_activity_personal_change_nickname.xml
@@ -29,6 +30,9 @@ struct ChangeNickNamePage {
   @State nickName: string = '';
   /** 提交中防重复（源码 g0.h/g0.b loading 对） */
   @State submitting: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('keyboardHeightVp') keyboardHeightVp: number = 0;
 
   aboutToAppear(): void {
     // 源码 y(Intent)：this.l = intent.getStringExtra("nickname")；f1()：m.setText(l)
@@ -81,39 +85,53 @@ struct ChangeNickNamePage {
     Column() {
       TitleBar({ title: '设置昵称', showBack: true })
 
-      TextInput({ text: this.nickName, placeholder: '请设置您的昵称' })
-        .width('100%')
-        .backgroundColor($r('app.color.white'))
-        .fontSize(16)
-        .fontColor($r('app.color.common_color_1'))
-        .placeholderColor($r('app.color.common_color_3'))
-        .placeholderFont({ size: 16 })
-        .maxLength(15)
-        .padding(15)
-        .margin({ top: 20 })
-        .defaultFocus(true)
-        .onChange((value: string) => {
-          this.nickName = value;
-        })
+      Scroll() {
+        Column() {
+          TextInput({ text: this.nickName, placeholder: '请设置您的昵称' })
+            .width('100%')
+            .backgroundColor($r('app.color.white'))
+            .fontSize(16)
+            .fontColor($r('app.color.common_color_1'))
+            .placeholderColor($r('app.color.common_color_3'))
+            .placeholderFont({ size: 16 })
+            .maxLength(15)
+            .padding(15)
+            .margin({ top: 20 })
+            .defaultFocus(true)
+            .onChange((value: string) => {
+              this.nickName = value;
+            })
 
-      Text('支持2-15个字符哦~(*^▽^*)')
-        .fontSize(14)
-        .fontColor($r('app.color.common_color_1'))
-        .width('100%')
-        .padding({ left: 15, right: 15, top: 12, bottom: 12 })
+          Text('支持2-15个字符哦~(*^▽^*)')
+            .fontSize(14)
+            .fontColor($r('app.color.common_color_1'))
+            .width('100%')
+            .padding({ left: 15, right: 15, top: 12, bottom: 12 })
 
-      Text('确定设置')
-        .fontSize(17)
-        .fontColor(this.canSubmit() ? $r('app.color.white') : $r('app.color.gray_text'))
-        .textAlign(TextAlign.Center)
+          Column() {
+            Text('确定设置')
+              .fontSize(17)
+              .fontColor(this.canSubmit() ? $r('app.color.white') : $r('app.color.gray_text'))
+              .textAlign(TextAlign.Center)
+              .width('100%')
+              .padding({ top: 13, bottom: 13 })
+              .backgroundColor(this.canSubmit() ? '#1B68B7' : $r('app.color.gray_nickname'))
+              .borderRadius(8)
+              .onClick(() => {
+                this.submit();
+              })
+          }
+          .width('100%')
+          .padding({ left: 15, right: 15, top: 20 })
+        }
         .width('100%')
-        .padding({ top: 13, bottom: 13 })
-        .margin({ left: 15, right: 15, top: 20 })
-        .backgroundColor(this.canSubmit() ? '#1B68B7' : $r('app.color.gray_nickname'))
-        .borderRadius(8)
-        .onClick(() => {
-          this.submit();
-        })
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .padding({ bottom: Math.max(24, this.avoidAreaBottomVp + this.keyboardHeightVp + 16) })
+      }
+      .width('100%')
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
+      .align(Alignment.Top)
     }
     .width('100%')
     .height('100%')

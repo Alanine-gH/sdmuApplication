@@ -3,6 +3,7 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { TitleBar } from '../components/TitleBar';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 教学评价表单 — 源码级翻译 [W21 supervise]（SuperviseEvaluateActivity.java 逐行 → ArkTS）：
@@ -49,6 +50,11 @@ struct SuperviseEvaluatePage {
     new SuperviseStar(5, false)
   ];
   @State isSubmitting: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
+  @StorageProp('keyboardHeightVp') keyboardHeightVp: number = 0;
   /** 源码 r：intent "xlh"（听课示例行唯一标识，提交必需） */
   private xlh: string = '';
 
@@ -132,116 +138,134 @@ struct SuperviseEvaluatePage {
       // T1：R$string.mobile_campus_supervise_activity_evaluate_title = "教学评价"
       TitleBar({ title: '教学评价', showBack: true })
 
-      // 白色内容卡：marginTop 12，padding L/R 12，bottom 18
-      Column() {
-        // 应到/实到人数两列（TextStyle5：宽 68vp，padding V8，编辑框底 #F8F8F9 描边 #DFE4EA 圆角 4）
-        Row() {
-          Row() {
-            Text('应到人数')
-              .fontSize(14)
-              .fontColor($r('app.color.common_color_1'))
-            TextInput({ text: this.attendanceExpect, placeholder: '' })
-              .fontSize(14)
-              .fontColor($r('app.color.common_color_1'))
-              .maxLength(3)
-              .type(InputType.Number)
-              .textAlign(TextAlign.Center)
-              .width(68)
-              .height(36)
-              .padding({ top: 8, bottom: 8 })
-              .backgroundColor($r('app.color.mobile_campus_supervise_evaluate_edittext_solid'))
-              .borderRadius(4)
-              .border({ width: 0.5, color: $r('app.color.mobile_campus_supervise_evaluate_edittext_stroke') })
-              .onChange((value: string) => {
-                this.attendanceExpect = value;
-              })
-          }
-          .layoutWeight(1)
+      Scroll() {
+        Column() {
+          // 白色内容卡：marginTop 12，padding L/R 12，bottom 18
+          Column() {
+            // 应到/实到人数两列（TextStyle5：宽 68vp，padding V8，编辑框底 #F8F8F9 描边 #DFE4EA 圆角 4）
+            Row() {
+              Row() {
+                Text('应到人数')
+                  .fontSize(14)
+                  .fontColor($r('app.color.common_color_1'))
+                TextInput({ text: this.attendanceExpect, placeholder: '' })
+                  .fontSize(14)
+                  .fontColor($r('app.color.common_color_1'))
+                  .maxLength(3)
+                  .type(InputType.Number)
+                  .textAlign(TextAlign.Center)
+                  .width(68)
+                  .height(36)
+                  .padding({ top: 8, bottom: 8 })
+                  .backgroundColor($r('app.color.mobile_campus_supervise_evaluate_edittext_solid'))
+                  .borderRadius(4)
+                  .border({ width: 0.5, color: $r('app.color.mobile_campus_supervise_evaluate_edittext_stroke') })
+                  .onChange((value: string) => {
+                    this.attendanceExpect = value;
+                  })
+              }
+              .layoutWeight(1)
 
-          Row() {
-            Text('实到人数')
+              Row() {
+                Text('实到人数')
+                  .fontSize(14)
+                  .fontColor($r('app.color.common_color_1'))
+                TextInput({ text: this.attendanceActual, placeholder: '' })
+                  .fontSize(14)
+                  .fontColor($r('app.color.common_color_1'))
+                  .maxLength(3)
+                  .type(InputType.Number)
+                  .textAlign(TextAlign.Center)
+                  .width(68)
+                  .height(36)
+                  .padding({ top: 8, bottom: 8 })
+                  .backgroundColor($r('app.color.mobile_campus_supervise_evaluate_edittext_solid'))
+                  .borderRadius(4)
+                  .border({ width: 0.5, color: $r('app.color.mobile_campus_supervise_evaluate_edittext_stroke') })
+                  .onChange((value: string) => {
+                    this.attendanceActual = value;
+                  })
+              }
+              .layoutWeight(1)
+            }
+            .width('100%')
+            .margin({ top: 12, bottom: 12 })
+            .alignItems(VerticalAlign.Center)
+
+            Divider()
+              .color($r('app.color.common_color_5'))
+              .strokeWidth(0.5)
+              .width('100%')
+
+            Text('课程评价')
+              .fontSize(17)
+              .fontColor($r('app.color.common_color_1'))
+              .margin({ top: 24 })
+
+            // BaseRatingBar：numStars 5，starSize 20px→10vp，starPadding 8px→4vp
+            Row({ space: 4 }) {
+              ForEach(this.stars, (star: SuperviseStar) => {
+                Image(star.lit ? $r('app.media.mobile_campus_supervise_star_light') : $r('app.media.mobile_campus_supervise_star_grey'))
+                  .width(10)
+                  .height(10)
+                  .onClick(() => {
+                    this.refreshStars(star.index);
+                  })
+              }, (star: SuperviseStar) => star.index.toString())
+            }
+            .margin({ top: 21, bottom: 17 })
+
+            TextArea({ text: this.evaluateContent, placeholder: '本次课程整体效果如何呢？' })
               .fontSize(14)
               .fontColor($r('app.color.common_color_1'))
-            TextInput({ text: this.attendanceActual, placeholder: '' })
-              .fontSize(14)
-              .fontColor($r('app.color.common_color_1'))
-              .maxLength(3)
-              .type(InputType.Number)
-              .textAlign(TextAlign.Center)
-              .width(68)
-              .height(36)
-              .padding({ top: 8, bottom: 8 })
+              .placeholderColor($r('app.color.edit_hint_color'))
+              .placeholderFont({ size: 14 })
               .backgroundColor($r('app.color.mobile_campus_supervise_evaluate_edittext_solid'))
               .borderRadius(4)
               .border({ width: 0.5, color: $r('app.color.mobile_campus_supervise_evaluate_edittext_stroke') })
+              .padding(7)
+              .height(120)
+              .width('100%')
+              .margin({ top: 15 })
               .onChange((value: string) => {
-                this.attendanceActual = value;
+                this.evaluateContent = value;
               })
           }
-          .layoutWeight(1)
+          .width('100%')
+          .backgroundColor($r('app.color.white'))
+          .padding({ left: 12, right: 12, bottom: 18 })
+          .margin({ top: 12 })
+
+          // 提交评价：shape_evaluate 纯色 #1B68B7 无圆角，文字白色 17fp，padding V10
+          Text('提交评价')
+            .fontSize(17)
+            .fontColor(Color.White)
+            .textAlign(TextAlign.Center)
+            .width('100%')
+            .padding({ top: 10, bottom: 10 })
+            .margin({ top: 20 })
+            .backgroundColor($r('app.color.mobile_campus_primary_color_default'))
+            .onClick(() => {
+              this.submitEvaluate();
+            })
         }
         .width('100%')
-        .margin({ top: 12, bottom: 12 })
-        .alignItems(VerticalAlign.Center)
-
-        Divider()
-          .color($r('app.color.common_color_5'))
-          .strokeWidth(0.5)
-          .width('100%')
-
-        Text('课程评价')
-          .fontSize(17)
-          .fontColor($r('app.color.common_color_1'))
-          .margin({ top: 24 })
-
-        // BaseRatingBar：numStars 5，starSize 20px→10vp，starPadding 8px→4vp
-        Row({ space: 4 }) {
-          ForEach(this.stars, (star: SuperviseStar) => {
-            Image(star.lit ? $r('app.media.mobile_campus_supervise_star_light') : $r('app.media.mobile_campus_supervise_star_grey'))
-              .width(10)
-              .height(10)
-              .onClick(() => {
-                this.refreshStars(star.index);
-              })
-          }, (star: SuperviseStar) => star.index.toString())
-        }
-        .margin({ top: 21, bottom: 17 })
-
-        TextArea({ text: this.evaluateContent, placeholder: '本次课程整体效果如何呢？' })
-          .fontSize(14)
-          .fontColor($r('app.color.common_color_1'))
-          .placeholderColor($r('app.color.edit_hint_color'))
-          .placeholderFont({ size: 14 })
-          .backgroundColor($r('app.color.mobile_campus_supervise_evaluate_edittext_solid'))
-          .borderRadius(4)
-          .border({ width: 0.5, color: $r('app.color.mobile_campus_supervise_evaluate_edittext_stroke') })
-          .padding(7)
-          .height(120)
-          .width('100%')
-          .margin({ top: 15 })
-          .onChange((value: string) => {
-            this.evaluateContent = value;
-          })
+        .constraintSize({
+          minHeight: '100%',
+          maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint)
+        })
+        .alignSelf(ItemAlign.Center)
+        .justifyContent(FlexAlign.SpaceBetween)
+        .padding({
+          left: this.avoidAreaLeftVp,
+          right: this.avoidAreaRightVp,
+          bottom: this.keyboardHeightVp + this.avoidAreaBottomVp
+        })
       }
       .width('100%')
-      .backgroundColor($r('app.color.white'))
-      .padding({ left: 12, right: 12, bottom: 18 })
-      .margin({ top: 12 })
-
-      Blank()
-        .layoutWeight(1)
-
-      // 提交评价：shape_evaluate 纯色 #1B68B7 无圆角，文字白色 17fp，padding V10
-      Text('提交评价')
-        .fontSize(17)
-        .fontColor(Color.White)
-        .textAlign(TextAlign.Center)
-        .width('100%')
-        .padding({ top: 10, bottom: 10 })
-        .backgroundColor($r('app.color.mobile_campus_primary_color_default'))
-        .onClick(() => {
-          this.submitEvaluate();
-        })
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
+      .align(Alignment.Top)
     }
     .width('100%')
     .height('100%')

@@ -44,7 +44,7 @@ export class PrivacyWindowHelper {
 
   /** 纯函数：根据开关状态与当前活跃敏感页数量计算目标隐私模式 */
   public static computeTargetPrivacyMode(featureEnabled: boolean, activeSensitiveCount: number): boolean {
-    return featureEnabled && activeSensitiveCount > 0;
+    return featureEnabled && Number.isFinite(activeSensitiveCount) && activeSensitiveCount > 0;
   }
 
   /** 纯函数：判断页面名是否属于受保护敏感页面 */
@@ -61,7 +61,7 @@ export class PrivacyWindowHelper {
       return raw;
     }
     if (typeof raw === 'number') {
-      return raw !== 0;
+      return Number.isFinite(raw) ? raw !== 0 : defaultValue;
     }
     if (typeof raw === 'string') {
       const lower: string = raw.trim().toLowerCase();
@@ -184,8 +184,9 @@ export class PrivacyWindowHelper {
     pageName: string,
     ctx?: common.BaseContext
   ): Promise<PrivacyApplyResult> {
-    if (pageName && pageName !== '') {
-      PrivacyWindowHelper.activePages.add(pageName);
+    const trimmed: string = (pageName || '').trim();
+    if (trimmed !== '') {
+      PrivacyWindowHelper.activePages.add(trimmed);
     }
     return await PrivacyWindowHelper.applyPrivacyMode(ctx);
   }
@@ -195,8 +196,9 @@ export class PrivacyWindowHelper {
     pageName: string,
     ctx?: common.BaseContext
   ): Promise<PrivacyApplyResult> {
-    if (pageName && pageName !== '') {
-      PrivacyWindowHelper.activePages.delete(pageName);
+    const trimmed: string = (pageName || '').trim();
+    if (trimmed !== '') {
+      PrivacyWindowHelper.activePages.delete(trimmed);
     }
     return await PrivacyWindowHelper.applyPrivacyMode(ctx);
   }

@@ -86,52 +86,55 @@ export struct HomeTab {
       // BLLinearLayout：orientation=vertical、margin left/right=12.0dip=12vp、top=10.0dip=10vp、
       // bl_corners_radius=8.0dip=8vp、bl_solid_color=@color/white
       Column() {
-        // mRecyclerView：paddingLeft/Right=5.0dip=5vp、layout_marginTop=5.0dip=5vp，LinearLayoutManager 纵向列表
         Column() {
-          ForEach(this.newsList, (item: NewsItem) => {
-            // mobile_campus_view_main_news_item.xml — 单条文字条目
-            Column() {
-              // tvContent：textSize=15.0sp=15fp、@color/black、ellipsize=end、maxLines=1、
-              // padding 左右=12.0dip=12vp、上下=10.0dip=10vp
-              Text(item.title)
-                .fontSize(15)
-                .fontColor($r('app.color.black'))
-                .maxLines(1)
-                .textOverflow({ overflow: TextOverflow.Ellipsis })
-                .padding({ left: 12, right: 12, top: 10, bottom: 10 })
-                .width('100%')
-                .onClick(() => {
-                  router.pushUrl({ url: 'pages/NewsDetailPage', params: { id: item.id } });
-                })
-              // vLine：background=#ff7deeae、height=0.5dip=0.5vp、margin 左右=10.0dip=10vp
-              Divider()
-                .color($r('app.color.mobile_campus_center_news_green'))
-                .strokeWidth(0.5)
-                .margin({ left: 10, right: 10 })
-            }
+          // mRecyclerView：paddingLeft/Right=5.0dip=5vp、layout_marginTop=5.0dip=5vp，LinearLayoutManager 纵向列表
+          Column() {
+            ForEach(this.newsList, (item: NewsItem) => {
+              // mobile_campus_view_main_news_item.xml — 单条文字条目
+              Column() {
+                // tvContent：textSize=15.0sp=15fp、@color/black、ellipsize=end、maxLines=1、
+                // padding 左右=12.0dip=12vp、上下=10.0dip=10vp
+                Text(item.title)
+                  .fontSize(15)
+                  .fontColor($r('app.color.black'))
+                  .maxLines(1)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis })
+                  .padding({ left: 12, right: 12, top: 10, bottom: 10 })
+                  .width('100%')
+                  .onClick(() => {
+                    router.pushUrl({ url: 'pages/NewsDetailPage', params: { id: item.id } });
+                  })
+                // vLine：background=#ff7deeae、height=0.5dip=0.5vp、margin 左右=10.0dip=10vp
+                Divider()
+                  .color($r('app.color.mobile_campus_center_news_green'))
+                  .strokeWidth(0.5)
+                  .margin({ left: 10, right: 10 })
+              }
+              .width('100%')
+            }, (item: NewsItem) => 'center_' + item.id)
+          }
+          .width('100%')
+          .padding({ left: 5, right: 5 })
+          .margin({ top: 5 })
+
+          // tvMore：textSize=14.0sp=14fp、textColor=#ff7deeae、gravity=center、
+          // padding 上下=10.0dip=10vp、text="查看更多"
+          Text($r('app.string.view_more'))
+            .fontSize(14)
+            .fontColor($r('app.color.mobile_campus_center_news_green'))
+            .textAlign(TextAlign.Center)
+            .padding({ top: 10, bottom: 10 })
             .width('100%')
-          }, (item: NewsItem) => 'center_' + item.id)
+            .onClick(() => {
+              router.pushUrl({ url: 'pages/NewsPage' });
+            })
         }
         .width('100%')
-        .padding({ left: 5, right: 5 })
-        .margin({ top: 5 })
-
-        // tvMore：textSize=14.0sp=14fp、textColor=#ff7deeae、gravity=center、
-        // padding 上下=10.0dip=10vp、text="查看更多"
-        Text($r('app.string.view_more'))
-          .fontSize(14)
-          .fontColor($r('app.color.mobile_campus_center_news_green'))
-          .textAlign(TextAlign.Center)
-          .padding({ top: 10, bottom: 10 })
-          .width('100%')
-          .onClick(() => {
-            router.pushUrl({ url: 'pages/NewsPage' });
-          })
+        .borderRadius(8)
+        .backgroundColor($r('app.color.white'))
       }
       .width('100%')
-      .borderRadius(8)
-      .backgroundColor($r('app.color.white'))
-      .margin({ left: 12, right: 12, top: 10 })
+      .padding({ left: 12, right: 12, top: 10 })
     }
     .width('100%')
     .backgroundColor($r('app.color.mobile_campus_primary_color'))

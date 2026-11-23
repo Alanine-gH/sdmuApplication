@@ -86,45 +86,48 @@ struct ReceiptAssistPage {
   receiptCard(row: RatepayingEntry) {
     Scroll() {
       Column() {
-        Text() {
-          Span(row.MC).fontSize(22).fontColor($r('app.color.mobile_campus_primary_color_default'))
-          Span(this.contentOf(row).substring(row.MC.length))
-            .fontSize(18)
-            .fontColor($r('app.color.common_color_1'))
+        Column() {
+          Text() {
+            Span(row.MC).fontSize(22).fontColor($r('app.color.mobile_campus_primary_color_default'))
+            Span(this.contentOf(row).substring(row.MC.length))
+              .fontSize(18)
+              .fontColor($r('app.color.common_color_1'))
+          }
+          .width('100%')
+          .lineSpacing(LengthMetrics.vp(10))
+          .padding({ top: 20, bottom: 20 })
+
+          Image(this.qrUrl(row))
+            .width(150)
+            .height(150)
+            .objectFit(ImageFit.Contain)
+            .alt($r('app.media.report_bottom_image_bg'))
+            .margin({ top: 25 })
+
+          Text('商家扫描二维码快速获取抬头信息')
+            .fontSize(14)
+            .fontColor('#B8C0C9')
+            .width('100%')
+            .textAlign(TextAlign.Center)
+            .margin({ top: 14, bottom: 14 })
+
+          Divider().color($r('app.color.common_color_36')).strokeWidth(0.5)
+
+          Text('开票须知')
+            .fontSize(17)
+            .fontColor('#B8C0C9')
+            .width('100%')
+            .textAlign(TextAlign.Center)
+            .padding({ top: 9, bottom: 12 })
+            .margin({ top: 5 })
         }
         .width('100%')
-        .lineSpacing(LengthMetrics.vp(10))
-        .padding({ top: 20, bottom: 20 })
-
-        Image(this.qrUrl(row))
-          .width(150)
-          .height(150)
-          .objectFit(ImageFit.Contain)
-          .alt($r('app.media.report_bottom_image_bg'))
-          .margin({ top: 25 })
-
-        Text('商家扫描二维码快速获取抬头信息')
-          .fontSize(14)
-          .fontColor('#B8C0C9')
-          .width('100%')
-          .textAlign(TextAlign.Center)
-          .margin({ top: 14, bottom: 14 })
-
-        Divider().color($r('app.color.common_color_36')).strokeWidth(0.5)
-
-        Text('开票须知')
-          .fontSize(17)
-          .fontColor('#B8C0C9')
-          .width('100%')
-          .textAlign(TextAlign.Center)
-          .padding({ top: 9, bottom: 12 })
-          .margin({ top: 5 })
+        .padding({ left: 15, right: 15 })
+        .backgroundColor(Color.White)
+        .borderRadius(4)
       }
       .width('100%')
-      .padding({ left: 15, right: 15 })
-      .backgroundColor(Color.White)
-      .borderRadius(4)
-      .margin({ left: 20, right: 20, top: 15 })
+      .padding({ left: 20, right: 20, top: 15 })
     }
     .width('100%')
     .height('100%')

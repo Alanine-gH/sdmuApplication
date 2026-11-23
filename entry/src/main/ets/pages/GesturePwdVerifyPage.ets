@@ -5,6 +5,7 @@ import { GesturePwdGrid } from '../components/GesturePwdGrid';
 import { GesturePwdBean } from '../model/GestureManager';
 import { LoginSession } from '../network/LoginSession';
 import { PrivacyWindowHelper } from '../common/PrivacyWindowHelper';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 手势密码校验页 — 1:1 复刻 GesturePwdVerifyActivity（229 行）
@@ -48,6 +49,10 @@ struct GesturePwdVerifyPage {
   private readonly maxAttemptTimes: number = 5;
   /** 源码 mCount：CDJS=4，其余=3 */
   private gridCount: number = 3;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 780;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
 
   aboutToAppear(): void {
     // 源码 y(Intent)：l = Gson(intent.getStringExtra("jsonStr"))
@@ -215,66 +220,73 @@ struct GesturePwdVerifyPage {
     Column() {
       TitleBar({ title: '身份验证', showBack: true })
 
-      Column() {
-        // RelativeLayout：ivAvatar / tvAvatar 互斥
-        Stack() {
-          Image($r('app.media.default_avatar'))
-            .width(72)
-            .height(72)
-            .objectFit(ImageFit.Cover)
-            .visibility(this.showNameAvatar ? Visibility.None : Visibility.Visible)
+      Scroll() {
+        Column() {
+          // RelativeLayout：ivAvatar / tvAvatar 互斥
+          Stack() {
+            Image($r('app.media.default_avatar'))
+              .width(72)
+              .height(72)
+              .objectFit(ImageFit.Cover)
+              .visibility(this.showNameAvatar ? Visibility.None : Visibility.Visible)
 
-          Text(this.nameChar)
-            .fontSize(20)
-            .fontColor($r('app.color.white'))
-            .textAlign(TextAlign.Center)
-            .width(72)
-            .height(72)
-            .borderRadius(36)
-            .backgroundColor($r('app.color.mobile_campus_primary_color'))
-            .visibility(this.showNameAvatar ? Visibility.Visible : Visibility.None)
-        }
-        .margin({ top: 20 })
-
-        Text(this.phoneText)
-          .fontSize(18)
-          .fontColor($r('app.color.black'))
-          .textAlign(TextAlign.Center)
-          .width('100%')
-          .margin({ top: 8 })
-
-        Text('请输入手势密码')
-          .fontSize(14)
-          .fontColor('#999999')
-          .textAlign(TextAlign.Center)
-          .width('100%')
-          .margin({ top: 8 })
-
-        Text(this.errorTip)
-          .fontSize(14)
-          .fontColor($r('app.color.color_checked_err'))
-          .textAlign(TextAlign.Center)
-          .width('100%')
-          .margin({ top: 4 })
-
-        GesturePwdGrid({
-          gridWidth: 336,
-          allowInteract: !this.frozen,
-          count: this.gridCount,
-          errorToken: this.errorToken,
-          onSwipeFinish: (seq: number[]): void => {
-            // 源码 e()：onSwipeFinish 校验页无动作
-          },
-          onFinish: (seq: number[]): void => {
-            this.onCheck(seq);
+            Text(this.nameChar)
+              .fontSize(20)
+              .fontColor($r('app.color.white'))
+              .textAlign(TextAlign.Center)
+              .width(72)
+              .height(72)
+              .borderRadius(36)
+              .backgroundColor($r('app.color.mobile_campus_primary_color'))
+              .visibility(this.showNameAvatar ? Visibility.Visible : Visibility.None)
           }
-        })
-          .margin({ top: 12.5 })
-          .padding({ left: 6, right: 6 })
+          .margin({ top: 20 })
+
+          Text(this.phoneText)
+            .fontSize(18)
+            .fontColor($r('app.color.black'))
+            .textAlign(TextAlign.Center)
+            .width('100%')
+            .margin({ top: 8 })
+
+          Text('请输入手势密码')
+            .fontSize(14)
+            .fontColor('#999999')
+            .textAlign(TextAlign.Center)
+            .width('100%')
+            .margin({ top: 8 })
+
+          Text(this.errorTip)
+            .fontSize(14)
+            .fontColor($r('app.color.color_checked_err'))
+            .textAlign(TextAlign.Center)
+            .width('100%')
+            .margin({ top: 4 })
+
+          GesturePwdGrid({
+            gridWidth: BreakpointSystem.computeGestureGridSize(this.windowWidthVp, this.windowHeightVp),
+            allowInteract: !this.frozen,
+            count: this.gridCount,
+            errorToken: this.errorToken,
+            onSwipeFinish: (seq: number[]): void => {
+              // 源码 e()：onSwipeFinish 校验页无动作
+            },
+            onFinish: (seq: number[]): void => {
+              this.onCheck(seq);
+            }
+          })
+            .margin({ top: 12.5 })
+            .padding({ left: 6, right: 6 })
+        }
+        .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .padding({ bottom: Math.max(16, this.avoidAreaBottomVp + 12) })
+        .alignItems(HorizontalAlign.Center)
       }
       .width('100%')
-      .height('100%')
-      .alignItems(HorizontalAlign.Center)
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
+      .align(Alignment.Top)
     }
     .width('100%')
     .height('100%')

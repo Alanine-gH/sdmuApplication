@@ -8,6 +8,7 @@
  * - 列表条目：tvContent 16sp(=16fp) #333333 pad 20/12dip(=20/12vp) maxLines 1。
  */
 import { router } from '@kit.ArkUI';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 class TodoSortOption {
   optionId: string = '';
@@ -23,6 +24,11 @@ class TodoSortOption {
 @Component
 struct SortDialogPage {
   @State selectedIndex: number = 0;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowHeightVp') windowHeightVp: number = 640;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
   private sortOptions: TodoSortOption[] = [
     new TodoSortOption('all', '全部来源'),
     new TodoSortOption('oa', 'OA系统'),
@@ -67,29 +73,46 @@ struct SortDialogPage {
         .alignItems(VerticalAlign.Center)
 
         // 来源列表
-        Column() {
-          ForEach(this.sortOptions, (option: TodoSortOption, index: number) => {
-            Text(option.optionLabel)
-              .fontSize(16)
-              .fontColor(index === this.selectedIndex ? '#1B68B7' : '#333333')
-              .padding({ left: 20, right: 20, top: 12, bottom: 12 })
-              .width('100%')
-              .maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-              .onClick(() => {
-                this.selectedIndex = index;
-              })
-          }, (option: TodoSortOption) => option.optionId)
+        Scroll() {
+          Column() {
+            ForEach(this.sortOptions, (option: TodoSortOption, index: number) => {
+              Text(option.optionLabel)
+                .fontSize(16)
+                .fontColor(index === this.selectedIndex ? '#1B68B7' : '#333333')
+                .padding({ left: 20, right: 20, top: 12, bottom: 12 })
+                .width('100%')
+                .maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+                .onClick(() => {
+                  this.selectedIndex = index;
+                })
+            }, (option: TodoSortOption) => option.optionId)
+          }
+          .width('100%')
         }
         .width('100%')
+        .layoutWeight(1)
+        .scrollBar(BarState.Off)
+        .align(Alignment.Top)
       }
       .width('100%')
       .height('75%')
+      .constraintSize({
+        maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint),
+        maxHeight: BreakpointSystem.getDialogMaxHeight(this.windowHeightVp)
+      })
+      .padding({
+        left: this.avoidAreaLeftVp,
+        right: this.avoidAreaRightVp,
+        bottom: this.avoidAreaBottomVp
+      })
       .backgroundColor($r('app.color.white'))
     }
     .width('100%')
     .height('100%')
     .backgroundColor('#99000000')
     .justifyContent(FlexAlign.End)
+    .alignItems(HorizontalAlign.Center)
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 }

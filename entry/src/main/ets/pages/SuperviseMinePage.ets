@@ -5,6 +5,7 @@ import { ApiResponse } from '../model/ResponseModel';
 import { SuperviseListenRecord } from '../model/SuperviseModel';
 import { EmptyView } from '../components/EmptyView';
 import { LoadingView } from '../components/LoadingView';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 我的听课页 — 源码级翻译 [W21 supervise]（SuperviseMineActivity.java + 两 Fragment 逐行 → ArkTS）：
@@ -41,6 +42,10 @@ struct SuperviseMinePage {
   @State pastRecords: SuperviseListenRecord[] = [];
   @State isLoadingListen: boolean = true;
   @State isLoadingPast: boolean = true;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
   private static readonly EVALUATE_DONE_KEY: string = 'supervise_evaluate_done';
 
   aboutToAppear(): void {
@@ -129,6 +134,9 @@ struct SuperviseMinePage {
         }
         .width('100%')
         .height(44)
+        .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
         .alignItems(VerticalAlign.Center)
 
         Divider()
@@ -138,6 +146,7 @@ struct SuperviseMinePage {
       }
       .width('100%')
       .backgroundColor($r('app.color.main_bg'))
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
 
       // TabLayout：48dip 白底 indicator 2dip #1B68B7；a.f15253a 待听课/已过期
       Column() {
@@ -180,6 +189,9 @@ struct SuperviseMinePage {
         }
         .width('100%')
         .height(48)
+        .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
         .alignItems(VerticalAlign.Center)
         .backgroundColor($r('app.color.white'))
 
@@ -219,6 +231,10 @@ struct SuperviseMinePage {
         }, (record: SuperviseListenRecord) => record.XLH + '_' + record.KCMC)
       }
       .width('100%')
+      .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+      .alignSelf(ItemAlign.Center)
+      .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
+      .contentEndOffset(this.avoidAreaBottomVp)
       .layoutWeight(1)
       .scrollBar(BarState.Off)
       .backgroundColor($r('app.color.common_color_6'))
@@ -324,6 +340,10 @@ struct SuperviseMinePage {
         }, (record: SuperviseListenRecord) => record.XLH + '_' + record.KCMC)
       }
       .width('100%')
+      .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+      .alignSelf(ItemAlign.Center)
+      .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
+      .contentEndOffset(this.avoidAreaBottomVp)
       .layoutWeight(1)
       .scrollBar(BarState.Off)
       .backgroundColor($r('app.color.common_color_6'))

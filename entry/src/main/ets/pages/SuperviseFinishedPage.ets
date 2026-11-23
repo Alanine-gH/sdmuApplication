@@ -260,11 +260,15 @@ struct SuperviseFinishedPage {
         .onChange((value: string) => { this.content = value; })
 
       if (this.editable) {
-        Text('删除听课').fontSize(14).fontColor($r('app.color.mobile_campus_supervise_edit_textcolor'))
-          .textAlign(TextAlign.Center).width('100%').padding({ top: 10, bottom: 10 })
-          .margin({ left: 9, right: 9, top: 21 }).borderRadius(4)
-          .backgroundColor($r('app.color.common_color_6'))
-          .onClick(() => { this.remove(); })
+        Column() {
+          Text('删除听课').fontSize(14).fontColor($r('app.color.mobile_campus_supervise_edit_textcolor'))
+            .textAlign(TextAlign.Center).width('100%').padding({ top: 10, bottom: 10 })
+            .borderRadius(4)
+            .backgroundColor($r('app.color.common_color_6'))
+            .onClick(() => { this.remove(); })
+        }
+        .width('100%')
+        .padding({ left: 9, right: 9, top: 21 })
       }
     }
     .width('100%')
@@ -311,7 +315,7 @@ struct SuperviseFinishedPage {
           Column() {
             this.detailCard(this.detail as SuperviseListenDetail)
             Column() { this.evaluateCard() }
-              .width('100%').margin({ left: 12, right: 12, top: 12 })
+              .width('100%').padding({ left: 12, right: 12, top: 12 })
           }
           .width('100%')
         }

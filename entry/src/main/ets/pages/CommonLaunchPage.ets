@@ -1,6 +1,7 @@
 import { common } from '@kit.AbilityKit';
 import { router } from '@kit.ArkUI';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 import { PreferencesUtil } from '../data/PreferencesUtil';
 
 /**
@@ -29,6 +30,13 @@ const KEY_IS_SHOW_DIALOG: string = 'isShowPrivacyDialog_' + PRIVACY_SCHOOL_CODE;
 struct CommonLaunchPage {
   /** 源码 cVar：PrivacyDialog2 显示态 */
   @State showPrivacyDialog: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 640;
+  @StorageProp('avoidAreaTopVp') avoidAreaTopVp: number = 0;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
   private timerId: number = -1;
 
   aboutToAppear(): void {
@@ -107,6 +115,7 @@ struct CommonLaunchPage {
         .width('100%')
         .height('100%')
         .objectFit(ImageFit.Cover)
+        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
 
       // tvVersion / tvTimer：XML visibility=gone 且源码无引用（保真省略渲染）
 
@@ -119,24 +128,29 @@ struct CommonLaunchPage {
             .textAlign(TextAlign.Center)
             .margin({ top: 24 })
 
-          Text() {
-            Span('\u0009\u0009\u0009\u0009亲爱的用户，感谢您使用本应用！为了更好地保障您的个人权益，请您务必在使用前，认真阅读')
-            Span('《服务协议》')
-              .fontColor($r('app.color.mobile_campus_primary_color'))
-              .onClick(() => {
-                this.openPolicy('服务协议', 'https://www.sdmu.edu.cn/');
-              })
-            Span('和')
-            Span('《隐私政策》')
-              .fontColor($r('app.color.mobile_campus_primary_color'))
-              .onClick(() => {
-                this.openPolicy('隐私政策', 'https://www.sdmu.edu.cn/');
-              })
-            Span('的全部内容。如您同意并接受全部条款，请点击“同意”，开始使用我们的产品和服务。')
+          Scroll() {
+            Text() {
+              Span('\u0009\u0009\u0009\u0009亲爱的用户，感谢您使用本应用！为了更好地保障您的个人权益，请您务必在使用前，认真阅读')
+              Span('《服务协议》')
+                .fontColor($r('app.color.mobile_campus_primary_color'))
+                .onClick(() => {
+                  this.openPolicy('服务协议', 'https://www.sdmu.edu.cn/');
+                })
+              Span('和')
+              Span('《隐私政策》')
+                .fontColor($r('app.color.mobile_campus_primary_color'))
+                .onClick(() => {
+                  this.openPolicy('隐私政策', 'https://www.sdmu.edu.cn/');
+                })
+              Span('的全部内容。如您同意并接受全部条款，请点击“同意”，开始使用我们的产品和服务。')
+            }
+            .fontSize(14)
+            .fontColor($r('app.color.common_color_1'))
+            .padding({ left: 16, right: 16 })
           }
-          .fontSize(14)
-          .fontColor($r('app.color.common_color_1'))
-          .padding({ left: 16, right: 16 })
+          .width('100%')
+          .constraintSize({ maxHeight: Math.max(110, BreakpointSystem.getDialogMaxHeight(this.windowHeightVp) - 130) })
+          .scrollBar(BarState.Off)
           .margin({ top: 12 })
 
           Divider()
@@ -177,14 +191,25 @@ struct CommonLaunchPage {
           .width('100%')
           .alignItems(VerticalAlign.Center)
         }
-        .width(300)
+        .width('86%')
+        .constraintSize({
+          maxWidth: Math.min(340, BreakpointSystem.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp)),
+          maxHeight: BreakpointSystem.getDialogMaxHeight(this.windowHeightVp)
+        })
         .backgroundColor($r('app.color.ybg_white'))
         .borderRadius(6)
         .alignItems(HorizontalAlign.Center)
+        .margin({
+          top: this.avoidAreaTopVp,
+          bottom: this.avoidAreaBottomVp,
+          left: this.avoidAreaLeftVp,
+          right: this.avoidAreaRightVp
+        })
       }
     }
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.black'))
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 }

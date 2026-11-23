@@ -37,5 +37,6 @@ struct MeetingMainActivity {
       .width('100%')
       .height('100%')
       .backgroundColor($r('app.color.main_bg'))
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 }

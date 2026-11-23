@@ -5,6 +5,7 @@ import { TitleBar } from '../components/TitleBar';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { Constants } from '../data/Constants';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 扫码聚合中转页 — 源码级复刻 PolymerizationActivity（103 行）+ mobile_campus_polymerization.xml
@@ -43,6 +44,8 @@ struct PolymerizationPage {
   private resultJson: string = '';
   /** 源码 n：PolymerizationResultBean */
   private bean: PolyResultBean | null = null;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
 
   aboutToAppear(): void {
     const params: object | undefined = router.getParams() as object | undefined;
@@ -125,6 +128,16 @@ struct PolymerizationPage {
     // mobile_campus_polymerization.xml：仅 toolbar_normal
     Column() {
       TitleBar({ title: '', showBack: true })
+      Scroll() {
+        Column()
+          .width('100%')
+          .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+          .alignSelf(ItemAlign.Center)
+          .padding({ bottom: this.avoidAreaBottomVp })
+      }
+      .width('100%')
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
     }
     .width('100%')
     .height('100%')

@@ -769,7 +769,7 @@ struct MessageListPage {
           .textAlign(TextAlign.Center)
           .maxLines(1)
           .width('100%')
-          .margin({ left: 105, right: 105 })
+          .padding({ left: 105, right: 105 })
         Row() {
           Image($r('app.media.nav_back_btn'))
             .width(35)

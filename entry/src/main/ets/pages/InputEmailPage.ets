@@ -5,6 +5,7 @@ import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { MobileCampusUserInfo } from '../model/MobileCampusUserInfoModel';
 import { LoginSession } from '../network/LoginSession';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 绑定邮箱页 — 1:1 翻译 MobileCampusInputEmailActivity.java +
@@ -36,6 +37,9 @@ struct InputEmailPage {
   @State email: string = '';
   /** 提交中防重复（源码 g0.b/g0.i loading 对） */
   @State submitting: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('keyboardHeightVp') keyboardHeightVp: number = 0;
 
   aboutToAppear(): void {
     // 源码 f1()：TextUtils.isEmpty(UserEntity.getEmail()) ? 不填 : l.setText(email)
@@ -99,58 +103,65 @@ struct InputEmailPage {
         .strokeWidth(0.5)
         .width('100%')
 
-      Column() {
-        Image($r('app.media.mobile_campus_phone_nub'))
-          .visibility(Visibility.None)
-          .margin({ top: 40 })
+      Scroll() {
+        Column() {
+          Image($r('app.media.mobile_campus_phone_nub'))
+            .visibility(Visibility.None)
+            .margin({ top: 40 })
 
-        Text('电子邮箱')
-          .fontSize(16)
-          .fontColor($r('app.color.common_color_1'))
-          .margin({ top: 12 })
+          Text('电子邮箱')
+            .fontSize(16)
+            .fontColor($r('app.color.common_color_1'))
+            .margin({ top: 12 })
 
-        Text('请输入邮箱')
-          .fontSize(13)
-          .fontColor($r('app.color.common_color_1'))
-          .margin({ top: 8 })
+          Text('请输入邮箱')
+            .fontSize(13)
+            .fontColor($r('app.color.common_color_1'))
+            .margin({ top: 8 })
 
-        TextInput({ text: this.email, placeholder: '' })
+          TextInput({ text: this.email, placeholder: '' })
+            .width('100%')
+            .height(40)
+            .textAlign(TextAlign.Center)
+            .fontSize(16)
+            .fontColor($r('app.color.common_color_1'))
+            .backgroundColor(Color.Transparent)
+            .type(InputType.Email)
+            .padding({ left: 56, right: 56 })
+            .margin({ top: 18 })
+            .defaultFocus(true)
+            .onChange((value: string) => {
+              this.email = value;
+            })
+
+          Text('完成')
+            .fontSize(15)
+            .fontColor(this.submitting ? '#CECECE' : '#1B68B7')
+            .padding(10)
+            .margin({ top: 38 })
+            .onClick(() => {
+              this.submit();
+            })
+
+          Blank().layoutWeight(1)
+
+          Column() {
+            Text('温馨提醒:\n\n请输入本人使用的邮箱地址。')
+              .fontSize(15)
+              .fontColor($r('app.color.common_color_1'))
+              .textAlign(TextAlign.Center)
+          }
           .width('100%')
-          .height(40)
-          .textAlign(TextAlign.Center)
-          .fontSize(16)
-          .fontColor($r('app.color.common_color_1'))
-          .backgroundColor(Color.Transparent)
-          .type(InputType.Email)
-          .padding({ left: 56, right: 56 })
-          .margin({ left: 0, right: 0, top: 18 })
-          .defaultFocus(true)
-          .onChange((value: string) => {
-            this.email = value;
-          })
-
-        Text('完成')
-          .fontSize(15)
-          .fontColor(this.submitting ? '#CECECE' : '#1B68B7')
-          .padding(10)
-          .margin({ top: 38 })
-          .onClick(() => {
-            this.submit();
-          })
-      }
-      .width('100%')
-      .alignItems(HorizontalAlign.Center)
-
-      Column() {
-        Text('温馨提醒:\n\n请输入本人使用的邮箱地址。')
-          .fontSize(15)
-          .fontColor($r('app.color.common_color_1'))
-          .textAlign(TextAlign.Center)
+          .justifyContent(FlexAlign.Center)
+          .padding({ left: 50, right: 50, top: 24, bottom: Math.max(24, this.avoidAreaBottomVp + this.keyboardHeightVp + 16) })
+        }
+        .width('100%')
+        .constraintSize({ minHeight: '100%', maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignItems(HorizontalAlign.Center)
       }
       .width('100%')
       .layoutWeight(1)
-      .justifyContent(FlexAlign.Center)
-      .padding({ left: 50, right: 50 })
+      .scrollBar(BarState.Off)
     }
     .width('100%')
     .height('100%')

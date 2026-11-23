@@ -1,3 +1,5 @@
+import { BreakpointSystem } from '../common/BreakpointSystem';
+
 interface SelectedPerson {
   id: string;
   name: string;
@@ -23,6 +25,11 @@ struct TodoPersonSelectedPage {
   @State keyword: string = '';
   @State groups: SelectedGroup[] = [];
   @State checkedIds: string[] = [];
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
+  @StorageProp('keyboardHeightVp') keyboardHeightVp: number = 0;
   private avatarColors: string[] = ['#1B68B7', '#18B4ED', '#52C41A', '#FAAD14', '#97000C'];
 
   aboutToAppear(): void {
@@ -111,12 +118,12 @@ struct TodoPersonSelectedPage {
                 this.keyword = value;
               })
           }
-          .width('100%')
-          .height(32)
-          .margin({ right: 4 })
-          .borderRadius(8)
-          .backgroundColor($r('app.color.common_color_6'))
-          .alignItems(VerticalAlign.Center)
+            .layoutWeight(1)
+            .height(32)
+            .margin({ right: 4 })
+            .borderRadius(8)
+            .backgroundColor($r('app.color.common_color_6'))
+            .alignItems(VerticalAlign.Center)
 
           Text('取消')
             .fontSize(14)
@@ -127,9 +134,13 @@ struct TodoPersonSelectedPage {
         }
         .width('100%')
         .height(44)
-        .padding({ right: 12 })
+        .padding({
+          left: Math.max(8, this.avoidAreaLeftVp),
+          right: Math.max(12, this.avoidAreaRightVp)
+        })
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
         .alignItems(VerticalAlign.Center)
-        .backgroundColor($r('app.color.main_bg'))
 
         Divider()
           .color($r('app.color.common_color_5'))
@@ -137,6 +148,8 @@ struct TodoPersonSelectedPage {
           .width('100%')
       }
       .width('100%')
+      .backgroundColor($r('app.color.main_bg'))
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
 
       // ExpandableListView：分组 + 人员行
       List() {
@@ -165,33 +178,47 @@ struct TodoPersonSelectedPage {
         }, (group: SelectedGroup) => group.id)
       }
       .width('100%')
+      .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+      .alignSelf(ItemAlign.Center)
+      .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
+      .contentEndOffset(this.keyboardHeightVp)
       .layoutWeight(1)
       .scrollBar(BarState.Off)
       .backgroundColor($r('app.color.white'))
 
       // layoutBottom 高49 白底 padL12
-      Row() {
-        Text('已选择：' + this.checkedIds.length + '人')
-          .fontSize(16)
-          .fontColor($r('app.color.mobile_campus_primary_color_default'))
+      Column() {
+        Row() {
+          Text('已选择：' + this.checkedIds.length + '人')
+            .fontSize(16)
+            .fontColor($r('app.color.mobile_campus_primary_color_default'))
 
-        Blank()
+          Blank()
 
-        Text('确定')
-          .fontSize(17)
-          .fontColor($r('app.color.white'))
-          .backgroundColor($r('app.color.mobile_campus_primary_color_default'))
-          .width(80)
-          .height('100%')
-          .textAlign(TextAlign.Center)
-          .onClick(() => {
-            this.submit();
-          })
+          Text('确定')
+            .fontSize(17)
+            .fontColor($r('app.color.white'))
+            .backgroundColor($r('app.color.mobile_campus_primary_color_default'))
+            .width(80)
+            .height('100%')
+            .textAlign(TextAlign.Center)
+            .onClick(() => {
+              this.submit();
+            })
+        }
+        .width('100%')
+        .height(49)
+        .padding({ left: 12 })
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
+        .alignItems(VerticalAlign.Center)
       }
       .width('100%')
-      .height(49)
-      .padding({ left: 12 })
-      .alignItems(VerticalAlign.Center)
+      .padding({
+        left: this.avoidAreaLeftVp,
+        right: this.avoidAreaRightVp,
+        bottom: this.avoidAreaBottomVp
+      })
       .backgroundColor($r('app.color.white'))
     }
     .width('100%')

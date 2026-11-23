@@ -3,6 +3,7 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { SuperviseDepartment } from '../model/SuperviseModel';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 督导筛选页 — 源码级翻译 [W21 supervise]（SuperviseFilterActivity.java 逐行 → ArkTS）：
@@ -47,6 +48,11 @@ struct SuperviseFilterPage {
   /** 学院滚轮弹窗（SuperviseFilterDialog 等价 bindSheet） */
   @State wheelVisible: boolean = false;
   @State pickerIndex: number = 0;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
+  @StorageProp('keyboardHeightVp') keyboardHeightVp: number = 0;
 
   aboutToAppear(): void {
     this.loadDepartments();
@@ -147,6 +153,9 @@ struct SuperviseFilterPage {
         }
         .width('100%')
         .height(44)
+        .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
         .alignItems(VerticalAlign.Center)
 
         Divider()
@@ -156,83 +165,97 @@ struct SuperviseFilterPage {
       }
       .width('100%')
       .backgroundColor($r('app.color.main_bg'))
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
 
-      Blank()
-        .height(12)
+      Scroll() {
+        Column() {
+          Blank()
+            .height(12)
 
-      // 卡1：选择学院（"选择专业"行源码 gone，按 XML 保真省略）
-      Column() {
-        Row() {
-          Text('选择学院')
-            .fontSize(16)
-            .fontColor($r('app.color.common_color_1'))
-          Row() {
-            Text(this.schoolName === '' ? '请选择' : this.schoolName)
-              .fontSize(16)
-              .fontColor(this.schoolName === '' ? '#B4BDC8' : $r('app.color.common_color_1'))
-              .layoutWeight(1)
-              .maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-            Image($r('app.media.mobile_campus_supervise_arrow'))
-              .width(14)
-              .height(14)
-              .margin({ left: 6 })
-          }
-          .layoutWeight(1)
-          .margin({ left: 12 })
-          .alignItems(VerticalAlign.Center)
-          .onClick(() => {
-            // 源码 b.onClick：SuperviseFilterDialog.show()
-            this.pickerIndex = 0;
-            this.wheelVisible = true;
-          })
-        }
-        .width('100%')
-        .padding(12)
-        .alignItems(VerticalAlign.Center)
-      }
-      .width('100%')
-      .backgroundColor($r('app.color.white'))
-
-      Blank()
-        .height(12)
-
-      // 卡2：选择节次 GridView（5 列 × 14 项 checkbox）
-      Column() {
-        Row() {
-          Text('选择节次')
-            .fontSize(16)
-            .fontColor($r('app.color.common_color_1'))
-        }
-        .width('100%')
-        .padding(12)
-
-        Grid() {
-          ForEach(SECTIONS, (label: string, index: number) => {
-            GridItem() {
-              Text(label)
+          // 卡1：选择学院（"选择专业"行源码 gone，按 XML 保真省略）
+          Column() {
+            Row() {
+              Text('选择学院')
                 .fontSize(16)
-                .fontColor(this.checks[index] ? Color.White : '#B2BDC9')
-                .textAlign(TextAlign.Center)
-                .width('100%')
-                .height(48)
-                .backgroundColor(this.checks[index] ? '#1B68B7' : Color.Transparent)
-                .onClick(() => {
-                  this.onSectionCheck(index, !this.checks[index]);
-                })
+                .fontColor($r('app.color.common_color_1'))
+              Row() {
+                Text(this.schoolName === '' ? '请选择' : this.schoolName)
+                  .fontSize(16)
+                  .fontColor(this.schoolName === '' ? '#B4BDC8' : $r('app.color.common_color_1'))
+                  .layoutWeight(1)
+                  .maxLines(1)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis })
+                Image($r('app.media.mobile_campus_supervise_arrow'))
+                  .width(14)
+                  .height(14)
+                  .margin({ left: 6 })
+              }
+              .layoutWeight(1)
+              .margin({ left: 12 })
+              .alignItems(VerticalAlign.Center)
+              .onClick(() => {
+                // 源码 b.onClick：SuperviseFilterDialog.show()
+                this.pickerIndex = 0;
+                this.wheelVisible = true;
+              })
             }
-          }, (label: string) => label)
+            .width('100%')
+            .padding(12)
+            .alignItems(VerticalAlign.Center)
+          }
+          .width('100%')
+          .backgroundColor($r('app.color.white'))
+
+          Blank()
+            .height(12)
+
+          // 卡2：选择节次 GridView（5 列 × 14 项 checkbox）
+          Column() {
+            Row() {
+              Text('选择节次')
+                .fontSize(16)
+                .fontColor($r('app.color.common_color_1'))
+            }
+            .width('100%')
+            .padding(12)
+
+            Grid() {
+              ForEach(SECTIONS, (label: string, index: number) => {
+                GridItem() {
+                  Text(label)
+                    .fontSize(16)
+                    .fontColor(this.checks[index] ? Color.White : '#B2BDC9')
+                    .textAlign(TextAlign.Center)
+                    .width('100%')
+                    .height(48)
+                    .backgroundColor(this.checks[index] ? '#1B68B7' : Color.Transparent)
+                    .onClick(() => {
+                      this.onSectionCheck(index, !this.checks[index]);
+                    })
+                }
+              }, (label: string) => label)
+            }
+            .columnsTemplate('1fr 1fr 1fr 1fr 1fr')
+            .width('100%')
+            .padding({ left: 12, right: 12, bottom: 12 })
+            .height(150)
+          }
+          .width('100%')
+          .backgroundColor($r('app.color.white'))
         }
-        .columnsTemplate('1fr 1fr 1fr 1fr 1fr')
         .width('100%')
-        .padding({ left: 12, right: 12, bottom: 12 })
-        .height(150)
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
+        .padding({
+          left: this.avoidAreaLeftVp,
+          right: this.avoidAreaRightVp,
+          bottom: this.keyboardHeightVp
+        })
       }
       .width('100%')
-      .backgroundColor($r('app.color.white'))
-
-      Blank()
-        .layoutWeight(1)
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
+      .align(Alignment.Top)
 
       // superviseSubmit：selector_filter_btn 双态（enabled #1B68B7 / disabled 透明）+ 字色白/#999999
       Text('提交')
@@ -240,7 +263,14 @@ struct SuperviseFilterPage {
         .fontColor(this.submitEnabled ? Color.White : '#999999')
         .textAlign(TextAlign.Center)
         .width('100%')
-        .padding({ top: 10, bottom: 10 })
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
+        .padding({
+          top: 10,
+          bottom: 10 + this.avoidAreaBottomVp,
+          left: this.avoidAreaLeftVp,
+          right: this.avoidAreaRightVp
+        })
         .backgroundColor(this.submitEnabled ? '#1B68B7' : Color.Transparent)
         .onClick(() => {
           this.submitFilter();
@@ -251,6 +281,7 @@ struct SuperviseFilterPage {
     .backgroundColor('#F2F2F2')
     .bindSheet($$this.wheelVisible, this.departmentWheelBuilder(), {
       height: 280,
+      preferType: SheetType.CENTER,
       dragBar: false,
       showClose: false,
       backgroundColor: $r('app.color.ybg_white')

@@ -1,4 +1,5 @@
 import { router } from '@kit.ArkUI';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 import { TitleBar } from '../components/TitleBar';
 import { PreferencesUtil } from '../data/PreferencesUtil';
 
@@ -20,6 +21,8 @@ struct FontSizePage {
   @State previewText: string = '校园资讯早知道，学习生活更轻松。';
   @State previewSize: number = 20;
   @State currentGrade: number = 4;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   private savedGrade: number = 4;
 
   aboutToAppear(): void {
@@ -72,46 +75,52 @@ struct FontSizePage {
     Column() {
       TitleBar({ title: '字体大小', showBack: true, rightText: '保存', onRightClick: (): void => this.onSave() })
 
-      Column() {
-        // 源码 tv_show 预览文本（右对齐，颜色 common_color_2）
-        Text(this.previewText)
-          .fontSize(this.previewSize)
-          .fontColor($r('app.color.common_color_1'))
-          .width('90%')
-          .textAlign(TextAlign.End)
-          .margin({ top: 40, bottom: 30 })
+      Scroll() {
+        Column() {
+          // 源码 tv_show 预览文本（右对齐，颜色 common_color_2）
+          Text(this.previewText)
+            .fontSize(this.previewSize)
+            .fontColor($r('app.color.common_color_1'))
+            .width('90%')
+            .textAlign(TextAlign.End)
+            .margin({ top: 40, bottom: 30 })
 
-        // FontResizeView 滑条（5 档：小/标准/大/特大/超大）
-        Row() {
-          Text('小').fontSize(13).fontColor($r('app.color.common_color_3'))
-          Slider({
-            value: this.currentGrade,
-            min: 1,
-            max: 5,
-            step: 1,
-            style: SliderStyle.OutSet
-          })
-            .layoutWeight(1)
-            .margin({ left: 10, right: 10 })
-            .onChange((value: number, mode: SliderChangeMode) => {
-              if (mode === SliderChangeMode.End || mode === SliderChangeMode.Click) {
-                this.onGradeChange(Math.round(value) - 1);
-              }
+          // FontResizeView 滑条（5 档：小/标准/大/特大/超大）
+          Row() {
+            Text('小').fontSize(13).fontColor($r('app.color.common_color_3'))
+            Slider({
+              value: this.currentGrade,
+              min: 1,
+              max: 5,
+              step: 1,
+              style: SliderStyle.OutSet
             })
-          Text('大').fontSize(13).fontColor($r('app.color.common_color_3'))
-        }
-        .width('86%')
-        .margin({ top: 20 })
+              .layoutWeight(1)
+              .margin({ left: 10, right: 10 })
+              .onChange((value: number, mode: SliderChangeMode) => {
+                if (mode === SliderChangeMode.End || mode === SliderChangeMode.Click) {
+                  this.onGradeChange(Math.round(value) - 1);
+                }
+              })
+            Text('大').fontSize(13).fontColor($r('app.color.common_color_3'))
+          }
+          .width('86%')
+          .margin({ top: 20 })
 
-        Text('当前缩放：' + SCALE_TABLE[this.currentGrade - 1].toFixed(2) + ' 倍')
-          .fontSize(13)
-          .fontColor($r('app.color.common_color_3'))
-          .margin({ top: 26 })
+          Text('当前缩放：' + SCALE_TABLE[this.currentGrade - 1].toFixed(2) + ' 倍')
+            .fontSize(13)
+            .fontColor($r('app.color.common_color_3'))
+            .margin({ top: 26 })
+        }
+        .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignItems(HorizontalAlign.Start)
+        .padding({ left: 20, right: 20, bottom: Math.max(24, this.avoidAreaBottomVp) })
       }
       .width('100%')
       .layoutWeight(1)
-      .alignItems(HorizontalAlign.Start)
-      .padding({ left: 20, right: 20 })
+      .scrollBar(BarState.Off)
+      .align(Alignment.Top)
     }
     .width('100%')
     .height('100%')

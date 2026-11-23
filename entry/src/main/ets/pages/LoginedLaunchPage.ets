@@ -1,5 +1,6 @@
 import { router } from '@kit.ArkUI';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 import { LoginSession } from '../network/LoginSession';
 import { ApiService, RemoteHomeTabEntry } from '../network/ApiService';
 import { LunarCalendar } from '../model/LunarCalendar';
@@ -36,6 +37,11 @@ struct LoginedLaunchPage {
   @State monthText: string = '';
   /** dateView2 星期串 */
   @State weekText: string = '';
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaTopVp') avoidAreaTopVp: number = 0;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
   private timerId: number = -1;
 
   aboutToAppear(): void {
@@ -160,38 +166,51 @@ struct LoginedLaunchPage {
         .width('100%')
         .height('100%')
         .objectFit(ImageFit.Cover)
+        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
 
       // llLayout（源码 f1 加载完成后 setVisibility(0)）
-      Column() {
-        // nameView：userName + J2 问候；userName 空 → INVISIBLE（源码 setVisibility(4)）
-        Text(this.nameText)
-          .fontSize(20)
-          .fontColor($r('app.color.common_color_1'))
-          .margin({ left: 15, top: 37.5 })
-          .visibility(this.showName ? Visibility.Visible : Visibility.Hidden)
+      Scroll() {
+        Column() {
+          // nameView：userName + J2 问候；userName 空 → INVISIBLE（源码 setVisibility(4)）
+          Text(this.nameText)
+            .fontSize(20)
+            .fontColor($r('app.color.common_color_1'))
+            .margin({ left: 15, top: Math.max(37.5, this.avoidAreaTopVp + 12) })
+            .visibility(this.showName ? Visibility.Visible : Visibility.Hidden)
 
-        // dateView1：SpannableStringBuilder("dd MON")，dd RelativeSizeSpan(4.0f)=56fp
-        Text() {
-          Span(this.dayText)
-            .fontSize(56)
-          Span(' ' + this.monthText)
-            .fontSize(14)
+          // dateView1：SpannableStringBuilder("dd MON")，dd RelativeSizeSpan(4.0f)=56fp
+          Text() {
+            Span(this.dayText)
+              .fontSize(56)
+            Span(' ' + this.monthText)
+              .fontSize(14)
+          }
+          .fontColor($r('app.color.common_color_1'))
+          .margin({ left: 15, top: 40, bottom: 5 })
+
+          // dateView2：星期X
+          Text(this.weekText)
+            .fontSize(15)
+            .fontColor($r('app.color.common_color_1'))
+            .margin({ left: 15 })
         }
-        .fontColor($r('app.color.common_color_1'))
-        .margin({ left: 15, top: 40, bottom: 5 })
-
-        // dateView2：星期X
-        Text(this.weekText)
-          .fontSize(15)
-          .fontColor($r('app.color.common_color_1'))
-          .margin({ left: 15 })
+        .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .padding({
+          left: this.avoidAreaLeftVp,
+          right: this.avoidAreaRightVp,
+          bottom: this.avoidAreaBottomVp
+        })
+        .alignItems(HorizontalAlign.Start)
       }
       .width('100%')
       .height('100%')
-      .alignItems(HorizontalAlign.Start)
+      .scrollBar(BarState.Off)
+      .align(Alignment.Top)
     }
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.white'))
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 }

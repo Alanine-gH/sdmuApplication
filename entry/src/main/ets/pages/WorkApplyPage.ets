@@ -540,11 +540,14 @@ struct WorkApplyPage {
         this.openDetail(row);
       })
       // 左缩进 12 的 0.5 分隔线（schedule_color18）
-      Divider()
-        .color($r('app.color.mobile_campus_schedule_color18'))
-        .strokeWidth(0.5)
-        .width('100%')
-        .margin({ left: 12 })
+      Row() {
+        Divider()
+          .color($r('app.color.mobile_campus_schedule_color18'))
+          .strokeWidth(0.5)
+          .width('100%')
+      }
+      .width('100%')
+      .padding({ left: 12 })
     }
     .width('100%')
   }

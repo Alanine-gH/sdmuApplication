@@ -4,6 +4,7 @@ import { cameraPicker, camera } from '@kit.CameraKit';
 import { Context } from '@kit.AbilityKit';
 import { fileIo as fs } from '@kit.CoreFileKit';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 import { TitleBar } from '../components/TitleBar';
 import { ApiService } from '../network/ApiService';
 
@@ -40,6 +41,10 @@ struct PhotoPickerPage {
   @State maxCount: number = 9;
   @State showCamera: boolean = true;
   @State picking: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
 
   aboutToAppear(): void {
     const params: Record<string, Object> | undefined = router.getParams() as Record<string, Object> | undefined;
@@ -280,14 +285,18 @@ struct PhotoPickerPage {
           this.openPager(index);
         })
       if (item.selected) {
-        Column()
-          .width('100%')
-          .height('100%')
-          .margin(2)
-          .backgroundColor('#99000000')
-          .onClick(() => {
-            this.openPager(index);
-          })
+        Column() {
+          Column()
+            .width('100%')
+            .height('100%')
+            .backgroundColor('#99000000')
+            .onClick(() => {
+              this.openPager(index);
+            })
+        }
+        .width('100%')
+        .height('100%')
+        .padding(2)
       }
       Image(item.selected ? $r('app.media.pictures_selected') : $r('app.media.picture_unselected'))
         .width(28)
@@ -328,24 +337,42 @@ struct PhotoPickerPage {
         }
       })
 
-      Grid() {
-        if (this.showCamera) {
-          GridItem() {
-            this.cameraCell()
+      if (this.showCamera || this.photos.length > 0) {
+        Grid() {
+          if (this.showCamera) {
+            GridItem() {
+              this.cameraCell()
+            }
           }
+          ForEach(this.photos, (item: PickerPhotoItem, index: number) => {
+            GridItem() {
+              this.photoCell(item, index)
+            }
+          }, (item: PickerPhotoItem, index: number) => item.uri + '_' + String(index))
         }
-        ForEach(this.photos, (item: PickerPhotoItem, index: number) => {
-          GridItem() {
-            this.photoCell(item, index)
+        .columnsTemplate('1fr 1fr 1fr')
+        .columnsGap(1)
+        .rowsGap(1)
+        .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .layoutWeight(1)
+        .backgroundColor($r('app.color.ybg_white'))
+      } else {
+        Scroll() {
+          Column() {
+            Text('点击下方“所有图片”选择照片')
+              .fontSize(14)
+              .fontColor($r('app.color.common_color_3'))
           }
-        }, (item: PickerPhotoItem, index: number) => item.uri + '_' + String(index))
+          .width('100%')
+          .padding({ top: 80, bottom: 24 })
+          .alignItems(HorizontalAlign.Center)
+        }
+        .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .layoutWeight(1)
+        .scrollBar(BarState.Off)
       }
-      .columnsTemplate('1fr 1fr 1fr')
-      .columnsGap(1)
-      .rowsGap(1)
-      .width('100%')
-      .layoutWeight(1)
-      .backgroundColor($r('app.color.ybg_white'))
 
       Row() {
         Text('所有图片')
@@ -366,7 +393,13 @@ struct PhotoPickerPage {
           })
       }
       .width('100%')
-      .padding({ left: 5, right: 5, top: 5, bottom: 5 })
+      .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+      .padding({
+        left: Math.max(5, this.avoidAreaLeftVp),
+        right: Math.max(5, this.avoidAreaRightVp),
+        top: 5,
+        bottom: Math.max(5, this.avoidAreaBottomVp)
+      })
       .alignItems(VerticalAlign.Center)
       .backgroundColor($r('app.color.ybg_white'))
     }

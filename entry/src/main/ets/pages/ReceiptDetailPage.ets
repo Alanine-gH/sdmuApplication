@@ -1,5 +1,6 @@
 import { router } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
+import { image } from '@kit.ImageKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
@@ -8,6 +9,9 @@ import { TitleBar } from '../components/TitleBar';
 import { EmptyView } from '../components/EmptyView';
 import { LoadingView } from '../components/LoadingView';
 import { PrivacyWindowHelper } from '../common/PrivacyWindowHelper';
+import { BarcodeHelper } from '../common/BarcodeHelper';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 报销项目详情页 — 源码级翻译 [P-C placeholder]（ProjectDetailActivity.java 逐行 → ArkTS）：
@@ -39,6 +43,14 @@ struct ReceiptDetailPage {
   @State isLoading: boolean = true;
   @State showError: boolean = false;
   @State projectNumber: string = '';
+  @State showQrModal: boolean = false;
+  @State qrPixelMap: image.PixelMap | null = null;
+  @State qrLoading: boolean = false;
+  @State qrSaving: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 780;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
 
   aboutToAppear(): void {
     const params: object | undefined = router.getParams() as object | undefined;
@@ -61,8 +73,87 @@ struct ReceiptDetailPage {
   }
 
   aboutToDisappear(): void {
+    this.releaseQrPixelMap();
     const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
     PrivacyWindowHelper.leaveSensitivePage('ReceiptDetailPage', ctx);
+  }
+
+  private releaseQrPixelMap(): void {
+    if (this.qrPixelMap !== null) {
+      const pm: image.PixelMap = this.qrPixelMap;
+      this.qrPixelMap = null;
+      try {
+        pm.release();
+      } catch {
+        // 忽略释放异常
+      }
+    }
+  }
+
+  private closeQrModal(): void {
+    this.showQrModal = false;
+    if (!this.qrSaving) {
+      this.releaseQrPixelMap();
+    }
+  }
+
+  private async openProjectQrModal(): Promise<void> {
+    if (this.detail === null) {
+      this.getUIContext().getPromptAction().showToast({ message: '暂无项目详情' });
+      return;
+    }
+    const d: ReimburseProjectDetail = this.detail;
+    const payload: string = BarcodeHelper.buildProjectQrPayload(
+      this.projectNumber,
+      d.PROJECT_NAME,
+      d.PROJECT_TYPE,
+      d.PROJECT_STATUS,
+      this.money(d.CONTRACT_AMOUNT),
+      this.money(d.RECEIVE_AMOUNT),
+      this.money(d.PAY_AMOUNT)
+    );
+    if (payload === '') {
+      this.getUIContext().getPromptAction().showToast({ message: '暂无项目二维码内容' });
+      return;
+    }
+    this.releaseQrPixelMap();
+    this.qrLoading = true;
+    this.showQrModal = true;
+    const res = await BarcodeHelper.generateQrPixelMap(payload, 480);
+    this.qrLoading = false;
+    if (!this.showQrModal) {
+      if (res.pixelMap !== null) {
+        try {
+          res.pixelMap.release();
+        } catch {
+          // 忽略释放异常
+        }
+      }
+      return;
+    }
+    if (res.success && res.pixelMap !== null) {
+      this.qrPixelMap = res.pixelMap;
+    } else {
+      this.showQrModal = false;
+      this.getUIContext().getPromptAction().showToast({ message: res.message });
+    }
+  }
+
+  private async saveQrToGallery(): Promise<void> {
+    if (this.qrPixelMap === null || this.qrSaving) {
+      return;
+    }
+    this.qrSaving = true;
+    try {
+      const ctx = this.getUIContext().getHostContext() as common.Context;
+      const res = await BarcodeHelper.savePixelMapToGallery(ctx, this.qrPixelMap);
+      this.getUIContext().getPromptAction().showToast({ message: res.message });
+    } finally {
+      this.qrSaving = false;
+      if (!this.showQrModal) {
+        this.releaseQrPixelMap();
+      }
+    }
   }
 
   /** 源码 f1()→R2()：l.g(a).d(PROJECT_NUMBER) → ReimburseModel.T0 project/detail */
@@ -91,39 +182,150 @@ struct ReceiptDetailPage {
   }
 
   build() {
-    Column() {
-      // T1：项目详情
-      TitleBar({ title: '项目详情', showBack: true })
-
-      if (this.isLoading) {
-        LoadingView()
-      } else if (this.showError || this.detail === null) {
-        EmptyView({ tipText: '暂无项目详情' })
-      } else {
-        Scroll() {
-          Column() {
-            this.detailRow('项目名称', (this.detail as ReimburseProjectDetail).PROJECT_NAME)
-            this.detailRow('项目分类', (this.detail as ReimburseProjectDetail).PROJECT_TYPE, 12)
-            this.detailRow('项目成员', (this.detail as ReimburseProjectDetail).PROJECT_MEMBER, 12)
-            this.detailRow('项目状态', (this.detail as ReimburseProjectDetail).PROJECT_STATUS, 12)
-            this.detailRow('合同金额',
-              this.money((this.detail as ReimburseProjectDetail).CONTRACT_AMOUNT), 12)
-            this.detailRow('到账金额',
-              this.money((this.detail as ReimburseProjectDetail).RECEIVE_AMOUNT), 12)
-            this.detailRow('支付金额',
-              this.money((this.detail as ReimburseProjectDetail).PAY_AMOUNT), 12)
-            this.detailRow('外拨金额',
-              this.money((this.detail as ReimburseProjectDetail).OUTSIDE_AMOUNT), 12)
+    Stack() {
+      Column() {
+        // T1：项目详情
+        TitleBar({
+          title: '项目详情',
+          showBack: true,
+          rightText: '二维码',
+          onRightClick: () => {
+            this.openProjectQrModal();
           }
-          .width('100%')
-          .padding({ left: 18, right: 18, top: 21, bottom: 21 })
+        })
+
+        if (this.isLoading) {
+          LoadingView()
+        } else if (this.showError || this.detail === null) {
+          EmptyView({ tipText: '暂无项目详情' })
+        } else {
+          Scroll() {
+            Column() {
+              this.detailRow('项目名称', (this.detail as ReimburseProjectDetail).PROJECT_NAME)
+              this.detailRow('项目分类', (this.detail as ReimburseProjectDetail).PROJECT_TYPE, 12)
+              this.detailRow('项目成员', (this.detail as ReimburseProjectDetail).PROJECT_MEMBER, 12)
+              this.detailRow('项目状态', (this.detail as ReimburseProjectDetail).PROJECT_STATUS, 12)
+              this.detailRow('合同金额',
+                this.money((this.detail as ReimburseProjectDetail).CONTRACT_AMOUNT), 12)
+              this.detailRow('到账金额',
+                this.money((this.detail as ReimburseProjectDetail).RECEIVE_AMOUNT), 12)
+              this.detailRow('支付金额',
+                this.money((this.detail as ReimburseProjectDetail).PAY_AMOUNT), 12)
+              this.detailRow('外拨金额',
+                this.money((this.detail as ReimburseProjectDetail).OUTSIDE_AMOUNT), 12)
+            }
+            .width('100%')
+            .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+            .padding({ left: 18, right: 18, top: 21, bottom: Math.max(21, this.avoidAreaBottomVp + 12) })
+          }
+          .scrollBar(BarState.Off)
+          .layoutWeight(1)
         }
-        .scrollBar(BarState.Off)
-        .layoutWeight(1)
+      }
+      .width('100%').height('100%')
+      .backgroundColor($r('app.color.white'))
+
+      if (this.showQrModal) {
+        this.projectQrOverlay()
       }
     }
-    .width('100%').height('100%')
-    .backgroundColor($r('app.color.white'))
+    .width('100%')
+    .height('100%')
+  }
+
+  @Builder
+  projectQrOverlay() {
+    Column() {
+      Scroll() {
+        Column() {
+          Row() {
+            Text('报销项目二维码')
+              .fontSize(17)
+              .fontWeight(FontWeight.Medium)
+              .fontColor($r('app.color.common_color_1'))
+              .layoutWeight(1)
+            Text('关闭')
+              .fontSize(15)
+              .fontColor('#3A92ED')
+              .padding({ left: 8, right: 4, top: 4, bottom: 4 })
+              .onClick(() => {
+                this.closeQrModal();
+              })
+          }
+          .width('100%')
+
+          if (this.detail !== null) {
+            Text((this.detail as ReimburseProjectDetail).PROJECT_NAME)
+              .fontSize(15)
+              .fontWeight(FontWeight.Bold)
+              .fontColor($r('app.color.common_color_1'))
+              .margin({ top: 10 })
+              .maxLines(2)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
+
+          if (this.qrLoading) {
+            LoadingProgress()
+              .width(42)
+              .height(42)
+              .margin({ top: 40, bottom: 40 })
+          } else if (this.qrPixelMap !== null) {
+            Image(this.qrPixelMap)
+              .width(200)
+              .height(200)
+              .objectFit(ImageFit.Contain)
+              .margin({ top: 14, bottom: 10 })
+              .backgroundColor($r('app.color.white'))
+          }
+
+          Text('扫码查看项目经费与报销摘要')
+            .fontSize(12)
+            .fontColor($r('app.color.common_color_3'))
+            .margin({ bottom: 14 })
+
+          if (this.qrPixelMap !== null) {
+            SaveButton({
+              icon: SaveIconStyle.FULL_FILLED,
+              text: SaveDescription.SAVE_TO_GALLERY,
+              buttonType: ButtonType.Capsule
+            })
+              .height(38)
+              .fontSize(14)
+              .fontColor($r('app.color.white'))
+              .iconColor($r('app.color.white'))
+              .backgroundColor('#3A92ED')
+              .padding({ left: 18, right: 18 })
+              .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
+                if (result === SaveButtonOnClickResult.SUCCESS) {
+                  this.saveQrToGallery();
+                } else {
+                  this.getUIContext().getPromptAction().showToast({ message: '未获得保存授权' });
+                }
+              })
+          }
+        }
+        .width('100%')
+        .alignItems(HorizontalAlign.Center)
+        .padding({ left: 20, right: 20, top: 16, bottom: 20 })
+      }
+      .scrollBar(BarState.Off)
+      .width(AdaptiveLayoutHelper.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp))
+      .constraintSize({ maxHeight: AdaptiveLayoutHelper.getDialogMaxHeight(this.windowHeightVp) })
+      .backgroundColor($r('app.color.white'))
+      .borderRadius(12)
+      .onClick(() => {
+        // 拦截弹窗内点击
+      })
+    }
+    .width('100%')
+    .height('100%')
+    .padding({ left: 16, right: 16 })
+    .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
+    .backgroundColor('#66000000')
+    .onClick(() => {
+      this.closeQrModal();
+    })
   }
 
   @Builder

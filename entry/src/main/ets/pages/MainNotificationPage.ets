@@ -275,7 +275,8 @@ struct MainNotificationPage {
                 .layoutWeight(1)
             }
             .width('100%')
-            .margin({ right: 12, bottom: 8 })
+            .padding({ right: 12 })
+            .margin({ bottom: 8 })
             .alignItems(VerticalAlign.Center)
 
             if (item.SENDTIME !== '') {

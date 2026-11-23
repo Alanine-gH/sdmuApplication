@@ -6,6 +6,7 @@ import { SuperviseTeacher } from '../model/SuperviseModel';
 import { EmptyView } from '../components/EmptyView';
 import { LoadingView } from '../components/LoadingView';
 import { PreferencesUtil } from '../data/PreferencesUtil';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 督导教师搜索页 — 源码级翻译 [W21 supervise]（SuperviseSearchActivity.java 逐行 → ArkTS）：
@@ -44,6 +45,11 @@ struct SuperviseSearchPage {
   @State isLoading: boolean = false;
   /** MultiStateView 三态等价：content/empty/error */
   @State viewState: string = 'empty';
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
+  @StorageProp('keyboardHeightVp') keyboardHeightVp: number = 0;
   private readonly CACHE_KEY: string = 'supervise_search_cache';
   private static readonly SEARCH_RESULT_KEY: string = 'supervise_search_result';
 
@@ -228,7 +234,12 @@ struct SuperviseSearchPage {
         }
         .width('100%')
         .height(44)
-        .padding({ left: 12, right: 12 })
+        .padding({
+          left: Math.max(12, this.avoidAreaLeftVp),
+          right: Math.max(12, this.avoidAreaRightVp)
+        })
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
         .backgroundColor($r('app.color.main_bg'))
         .alignItems(VerticalAlign.Center)
 
@@ -238,6 +249,8 @@ struct SuperviseSearchPage {
           .width('100%')
       }
       .width('100%')
+      .backgroundColor($r('app.color.main_bg'))
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
 
       if (this.isLoading) {
         LoadingView()
@@ -248,6 +261,13 @@ struct SuperviseSearchPage {
           EmptyView({ tipText: '加载失败' })
         }
         .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
+        .padding({
+          left: this.avoidAreaLeftVp,
+          right: this.avoidAreaRightVp,
+          bottom: this.keyboardHeightVp + this.avoidAreaBottomVp
+        })
         .layoutWeight(1)
       } else if (this.viewState === 'content' && this.results.length > 0) {
         this.resultList()
@@ -256,6 +276,13 @@ struct SuperviseSearchPage {
           EmptyView()
         }
         .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
+        .padding({
+          left: this.avoidAreaLeftVp,
+          right: this.avoidAreaRightVp,
+          bottom: this.keyboardHeightVp + this.avoidAreaBottomVp
+        })
         .layoutWeight(1)
       }
     }
@@ -304,12 +331,16 @@ struct SuperviseSearchPage {
       }
     }
     .width('100%')
+    .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+    .alignSelf(ItemAlign.Center)
+    .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
+    .contentEndOffset(this.keyboardHeightVp + this.avoidAreaBottomVp)
     .layoutWeight(1)
     .scrollBar(BarState.Off)
     .backgroundColor($r('app.color.common_color_6'))
   }
 
-  /** mobile_campus_supervise_view_search_cache.xml：48dip pad12 tvCacheName 14sp + close_g p8 */
+  /** mobile_campus_supervise_view_search_cache.xml */
   @Builder
   cacheRow(word: string, index: number) {
     Column() {
@@ -384,6 +415,10 @@ struct SuperviseSearchPage {
       }, (item: SuperviseTeacher) => item.GH + '_' + item.XM)
     }
     .width('100%')
+    .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+    .alignSelf(ItemAlign.Center)
+    .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
+    .contentEndOffset(this.keyboardHeightVp + this.avoidAreaBottomVp)
     .layoutWeight(1)
     .scrollBar(BarState.Off)
     .backgroundColor($r('app.color.common_color_6'))

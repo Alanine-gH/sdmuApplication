@@ -361,9 +361,9 @@ struct CenterDetailPage {
       .borderRadius(5)
       .width('100%')
       .height(65)
-      .margin({ left: 10, right: 10, top: 10, bottom: 5 })
     }
     .width('100%')
+    .padding({ left: 10, right: 10, top: 10, bottom: 5 })
     .alignItems(HorizontalAlign.Center)
   }
 
@@ -373,49 +373,55 @@ struct CenterDetailPage {
     Column() {
       this.moduleTitle(sub.name)
       Column() {
-        List() {
-          ForEach(sub.news.slice(0, 5), (item: CenterNewsItem) => {
-            ListItem() {
-              Column() {
-                Text(item.name)
-                  .fontSize(15)
-                  .fontColor(Color.Black)
-                  .maxLines(1)
-                  .textOverflow({ overflow: TextOverflow.Ellipsis })
-                  .padding({ left: 6, right: 6, top: 5, bottom: 5 })
+        Column() {
+          List() {
+            ForEach(sub.news.slice(0, 5), (item: CenterNewsItem) => {
+              ListItem() {
+                Column() {
+                  Text(item.name)
+                    .fontSize(15)
+                    .fontColor(Color.Black)
+                    .maxLines(1)
+                    .textOverflow({ overflow: TextOverflow.Ellipsis })
+                    .padding({ left: 6, right: 6, top: 5, bottom: 5 })
+                    .width('100%')
+                  Row() {
+                    Row()
+                      .width('100%')
+                      .height(0.25)
+                      .backgroundColor(accent)
+                  }
                   .width('100%')
-                Row()
-                  .width('100%')
-                  .height(0.25)
-                  .margin({ left: 5, right: 5 })
-                  .backgroundColor(accent)
+                  .padding({ left: 5, right: 5 })
+                }
+                .width('100%')
+                .onClick(() => {
+                  this.openNewsUrl(item);
+                })
               }
-              .width('100%')
-              .onClick(() => {
-                this.openNewsUrl(item);
-              })
-            }
-          }, (item: CenterNewsItem) => 'news_' + item.id + '_' + item.name)
+            }, (item: CenterNewsItem) => 'news_' + item.id + '_' + item.name)
+          }
+          .width('100%')
+          .height(Math.min(sub.news.length, 5) * 26 + 6)
+          .scrollBar(BarState.Off)
+
+          Text('查看更多')
+            .fontSize(14)
+            .fontColor(accent)
+            .textAlign(TextAlign.Center)
+            .width('100%')
+            .padding({ top: 5, bottom: 5 })
+            .onClick(() => {
+              // tvMore → /main/NewsActivity（HAP 页集无该页，按钮保真不跳转）
+            })
         }
         .width('100%')
-        .height(Math.min(sub.news.length, 5) * 26 + 6)
-        .scrollBar(BarState.Off)
-
-        Text('查看更多')
-          .fontSize(14)
-          .fontColor(accent)
-          .textAlign(TextAlign.Center)
-          .width('100%')
-          .padding({ top: 5, bottom: 5 })
-          .onClick(() => {
-            // tvMore → /main/NewsActivity（HAP 页集无该页，按钮保真不跳转）
-          })
+        .borderRadius(4)
+        .backgroundColor(Color.White)
+        .padding({ left: 2.5, right: 2.5, top: 2.5 })
       }
       .width('100%')
-      .margin({ left: 6, right: 6, top: 5 })
-      .borderRadius(4)
-      .backgroundColor(Color.White)
-      .padding({ left: 2.5, right: 2.5, top: 2.5 })
+      .padding({ left: 6, right: 6, top: 5 })
     }
     .width('100%')
   }

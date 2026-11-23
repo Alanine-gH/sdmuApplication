@@ -341,79 +341,82 @@ struct AttendancePersonalPage {
           .height(110)
           .objectFit(ImageFit.Fill)
         Column() {
-          Row() {
-            Blank().layoutWeight(1)
+          Column() {
             Row() {
-              Text(this.monthText)
-                .fontSize(15)
-                .fontColor('#50B3FE')
-              Image($r('app.media.arrow_down_blue_desk_widget'))
-                .width(12)
-                .height(12)
-                .margin({ left: 8 })
-            }
-            .onClick((): void => { this.showPicker = true; })
-          }
-          .width('100%')
-          Row() {
-            if (this.avatarUrl() !== '') {
-              Image(this.avatarUrl())
-                .width(40)
-                .height(40)
-                .borderRadius(20)
-                .objectFit(ImageFit.Cover)
-            } else {
-              Image($r('app.media.default_avatar'))
-                .width(40)
-                .height(40)
-                .borderRadius(20)
-            }
-            Column() {
-              Text(this.detail.userName)
-                .fontSize(16)
-                .fontColor('#333333')
-              Text(this.detail.departmentName)
-                .fontSize(12)
-                .fontColor('#999999')
-                .margin({ top: 8 })
-            }
-            .margin({ left: 12 })
-            .alignItems(HorizontalAlign.Start)
-            Blank().layoutWeight(1)
-            Column() {
-              Text('正常打卡' + this.detail.dayOfAttendance + '天')
-                .fontSize(16)
-                .fontColor('#333333')
-              Text('月需打卡' + this.detail.days + '天')
-                .fontSize(16)
-                .fontColor('#333333')
-                .margin({ top: 6 })
-            }
-            .alignItems(HorizontalAlign.End)
-          }
-          .width('100%')
-          .margin({ top: 20 })
-          Divider().color('#E7E7E7').strokeWidth(0.5).width('100%').margin({ top: 16, bottom: 8 })
-          ForEach(this.detail.errorRecord, (record: AttendanceDetailErrorRecord) => {
-            Row() {
-              Text(record.errorDetailType)
-                .fontSize(16)
-                .fontColor('#999999')
               Blank().layoutWeight(1)
-              Text(record.errorDetailTimes + '次')
-                .fontSize(17)
-                .fontColor('#333333')
+              Row() {
+                Text(this.monthText)
+                  .fontSize(15)
+                  .fontColor('#50B3FE')
+                Image($r('app.media.arrow_down_blue_desk_widget'))
+                  .width(12)
+                  .height(12)
+                  .margin({ left: 8 })
+              }
+              .onClick((): void => { this.showPicker = true; })
             }
             .width('100%')
-            .margin({ top: 11 })
-          }, (record: AttendanceDetailErrorRecord) => record.errorDetailType + record.errorDetailTimes)
+            Row() {
+              if (this.avatarUrl() !== '') {
+                Image(this.avatarUrl())
+                  .width(40)
+                  .height(40)
+                  .borderRadius(20)
+                  .objectFit(ImageFit.Cover)
+              } else {
+                Image($r('app.media.default_avatar'))
+                  .width(40)
+                  .height(40)
+                  .borderRadius(20)
+              }
+              Column() {
+                Text(this.detail.userName)
+                  .fontSize(16)
+                  .fontColor('#333333')
+                Text(this.detail.departmentName)
+                  .fontSize(12)
+                  .fontColor('#999999')
+                  .margin({ top: 8 })
+              }
+              .margin({ left: 12 })
+              .alignItems(HorizontalAlign.Start)
+              Blank().layoutWeight(1)
+              Column() {
+                Text('正常打卡' + this.detail.dayOfAttendance + '天')
+                  .fontSize(16)
+                  .fontColor('#333333')
+                Text('月需打卡' + this.detail.days + '天')
+                  .fontSize(16)
+                  .fontColor('#333333')
+                  .margin({ top: 6 })
+              }
+              .alignItems(HorizontalAlign.End)
+            }
+            .width('100%')
+            .margin({ top: 20 })
+            Divider().color('#E7E7E7').strokeWidth(0.5).width('100%').margin({ top: 16, bottom: 8 })
+            ForEach(this.detail.errorRecord, (record: AttendanceDetailErrorRecord) => {
+              Row() {
+                Text(record.errorDetailType)
+                  .fontSize(16)
+                  .fontColor('#999999')
+                Blank().layoutWeight(1)
+                Text(record.errorDetailTimes + '次')
+                  .fontSize(17)
+                  .fontColor('#333333')
+              }
+              .width('100%')
+              .margin({ top: 11 })
+            }, (record: AttendanceDetailErrorRecord) => record.errorDetailType + record.errorDetailTimes)
+          }
+          .width('100%')
+          .padding({ left: 16, right: 16, top: 20, bottom: 10 })
+          .backgroundColor($r('app.color.white'))
+          .borderRadius(4)
+          .alignItems(HorizontalAlign.Start)
         }
         .width('100%')
-        .padding({ left: 16, right: 16, top: 20, bottom: 10 })
-        .backgroundColor($r('app.color.white'))
-        .borderRadius(4)
-        .margin({ top: 44, left: 12, right: 12 })
-        .alignItems(HorizontalAlign.Start)
+        .padding({ top: 44, left: 12, right: 12 })
       }
       .width('100%')
       .alignContent(Alignment.Top)

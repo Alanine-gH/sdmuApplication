@@ -1,6 +1,7 @@
 import { HttpClient } from '../network/HttpClient';
 import { ApiResponse } from '../model/ResponseModel';
 import { Constants } from '../data/Constants';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 常用功能设置页 — 源码级复刻 AppsSettingActivity（view 包，ARouter /app/editCommonApp，
@@ -40,6 +41,11 @@ struct AppsSettingPage {
   @State loading: boolean = false;
   /** Refresh 容器刷新态（PullToRefreshLayout 等价） */
   @State isRefreshing: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaTopVp') avoidAreaTopVp: number = 0;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
 
   aboutToAppear(): void {
     this.loadApps();
@@ -242,6 +248,13 @@ struct AppsSettingPage {
           }, (group: SettingAppGroup) => 'sg_' + group.type + '_' + group.yyfl)
         }
         .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
+        .padding({
+          left: this.avoidAreaLeftVp,
+          right: this.avoidAreaRightVp,
+          bottom: this.avoidAreaBottomVp
+        })
       }
       .scrollable(ScrollDirection.Vertical)
       .scrollBar(BarState.Off)
@@ -258,6 +271,8 @@ struct AppsSettingPage {
     }
     .width('100%')
     .height('100%')
+    .padding({ top: this.avoidAreaTopVp })
     .backgroundColor($r('app.color.ybg_white'))
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
   }
 }

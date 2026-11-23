@@ -3,6 +3,7 @@ import { userAuth } from '@kit.UserAuthenticationKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 指纹登录页 — 1:1 复刻 FingerLoginActivity（194 行）+ mobile_campus_activity_finger_login.xml
@@ -38,6 +39,9 @@ struct FingerLoginPage {
   /** 源码 q：raw（未用，保真字段） */
   private rawResult: string = '';
   private toastTimerId: number = -1;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaTopVp') avoidAreaTopVp: number = 0;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
 
   aboutToAppear(): void {
     const params: object | undefined = router.getParams() as object | undefined;
@@ -183,60 +187,75 @@ struct FingerLoginPage {
   }
 
   build() {
-    Column() {
-      Image($r('app.media.finger_login_close'))
-        .width(50)
-        .height(50)
-        .padding(9)
-        .margin({ top: 5 })
-        .onClick(() => {
-          // 源码 ivClose → finish()
-          router.back();
-        })
-
+    Scroll() {
       Column() {
-        Image($r('app.media.finger_login_icon_log'))
-          .padding(5)
+        Row() {
+          Image($r('app.media.finger_login_close'))
+            .width(50)
+            .height(50)
+            .padding(9)
+            .margin({ top: 5 })
+            .onClick(() => {
+              // 源码 ivClose → finish()
+              router.back();
+            })
+        }
+        .width('100%')
+        .justifyContent(FlexAlign.Start)
 
-        Text('电脑登录确认')
-          .fontSize(20)
-          .fontWeight(FontWeight.Bold)
-          .fontColor($r('app.color.black'))
-          .margin({ top: 5 })
+        Column() {
+          Image($r('app.media.finger_login_icon_log'))
+            .padding(5)
+
+          Text('电脑登录确认')
+            .fontSize(20)
+            .fontWeight(FontWeight.Bold)
+            .fontColor($r('app.color.black'))
+            .margin({ top: 5 })
+        }
+        .margin({ top: 48 })
+        .alignItems(HorizontalAlign.Center)
+
+        Blank()
+          .layoutWeight(1)
+
+        Text('登录')
+          .fontSize(17)
+          .fontColor($r('app.color.white'))
+          .textAlign(TextAlign.Center)
+          .width(180)
+          .padding(6)
+          .margin({ top: 24 })
+          .borderRadius(512)
+          .backgroundColor('#1790FF')
+          .onClick(() => {
+            // 源码 tvLogin → o.d()（指纹认证）
+            this.startFingerprint();
+          })
+
+        Text('取消登录')
+          .fontSize(17)
+          .fontColor('#4B749A')
+          .textAlign(TextAlign.Center)
+          .padding(6)
+          .margin({ top: 10, bottom: Math.max(24, this.avoidAreaBottomVp + 16) })
+          .onClick(() => {
+            // 源码 tvCancel → X0(browserId, buildTime, "0")
+            this.cancelLogin();
+          })
       }
-      .margin({ top: 66 })
+      .width('100%')
+      .constraintSize({
+        minHeight: '100%',
+        maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint)
+      })
+      .padding({ top: Math.max(10, this.avoidAreaTopVp + 6) })
       .alignItems(HorizontalAlign.Center)
-
-      Blank()
-        .layoutWeight(1)
-
-      Text('登录')
-        .fontSize(17)
-        .fontColor($r('app.color.white'))
-        .textAlign(TextAlign.Center)
-        .width(180)
-        .padding(6)
-        .borderRadius(512)
-        .backgroundColor('#1790FF')
-        .onClick(() => {
-          // 源码 tvLogin → o.d()（指纹认证）
-          this.startFingerprint();
-        })
-
-      Text('取消登录')
-        .fontSize(17)
-        .fontColor('#4B749A')
-        .textAlign(TextAlign.Center)
-        .padding(6)
-        .margin({ top: 10, bottom: 37 })
-        .onClick(() => {
-          // 源码 tvCancel → X0(browserId, buildTime, "0")
-          this.cancelLogin();
-        })
     }
     .width('100%')
     .height('100%')
-    .padding({ top: 10 })
+    .scrollBar(BarState.Off)
     .backgroundColor($r('app.color.common_color_6'))
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 }

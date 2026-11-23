@@ -790,18 +790,21 @@ struct AddCoursePage {
         .scrollBar(BarState.Off)
 
         // edit_course_tv_confirm_btn：selector enable #1B68B6（源码恒 enabled）
-        Text('提交')
-          .fontSize(16)
-          .fontColor($r('app.color.white'))
-          .width('100%')
-          .height(40)
-          .textAlign(TextAlign.Center)
-          .borderRadius(4)
-          .backgroundColor($r('app.color.mobile_campus_schedule_confirm_blue'))
-          .margin({ left: 12, right: 12, top: 48, bottom: 27 })
-          .onClick(() => {
-            this.submit();
-          })
+        Column() {
+          Text('提交')
+            .fontSize(16)
+            .fontColor($r('app.color.white'))
+            .width('100%')
+            .height(40)
+            .textAlign(TextAlign.Center)
+            .borderRadius(4)
+            .backgroundColor($r('app.color.mobile_campus_schedule_confirm_blue'))
+            .onClick(() => {
+              this.submit();
+            })
+        }
+        .width('100%')
+        .padding({ left: 12, right: 12, top: 48, bottom: 27 })
       }
       .width('100%')
       .height('100%')

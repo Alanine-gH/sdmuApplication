@@ -1,4 +1,5 @@
 ﻿import { router } from '@kit.ArkUI';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { ReadingBookEntry } from '../model/ContactModel';
@@ -38,6 +39,11 @@ struct ReadingDetailPage {
   @State book: ReadingBookEntry = new ReadingBookEntry();
   @State pageTab: number = 0;
   @State isBusy: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaTopVp') avoidAreaTopVp: number = 0;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
   private posName: string = '';
   private readonly tabs: ReadingTab[] = [
     { name: '寻书', icon: $r('app.media.mobile_campus_reading_icon_xunshu_default'),
@@ -261,6 +267,13 @@ struct ReadingDetailPage {
           }
         }
         .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .padding({
+          top: this.avoidAreaTopVp,
+          bottom: Math.max(16, this.avoidAreaBottomVp),
+          left: this.avoidAreaLeftVp,
+          right: this.avoidAreaRightVp
+        })
       }
       .width('100%')
       .layoutWeight(1)
@@ -271,6 +284,7 @@ struct ReadingDetailPage {
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.white'))
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 
   // mobile_campus_reading_fragment_detail_find.xml：8 行信息（mt15）

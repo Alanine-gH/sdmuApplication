@@ -1,5 +1,6 @@
 import { router } from '@kit.ArkUI';
 import { request } from '@kit.BasicServicesKit';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 应用更新页 — 源码级复刻 CustomAppUpdateActivity（baselibrary appUpdate 包，
@@ -30,6 +31,13 @@ struct AppUpdatePage {
   /** tv_update 文案（RootActivity.c 回调状态机） */
   @State btnText: string = '立即更新';
   @State downloading: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 640;
+  @StorageProp('avoidAreaTopVp') avoidAreaTopVp: number = 0;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
   private downloadTask: request.agent.Task | null = null;
 
   aboutToAppear(): void {
@@ -150,13 +158,18 @@ struct AppUpdatePage {
         .width('100%')
         .padding({ top: 24 })
 
-      Text(this.contentText)
-        .fontSize(16)
-        .fontColor($r('app.color.explain_color'))
-        .textAlign(TextAlign.Center)
-        .lineHeight(24)
-        .padding({ left: 20, right: 20, top: 24, bottom: 24 })
-        .width('100%')
+      Scroll() {
+        Text(this.contentText)
+          .fontSize(16)
+          .fontColor($r('app.color.explain_color'))
+          .textAlign(TextAlign.Center)
+          .lineHeight(24)
+          .padding({ left: 20, right: 20, top: 24, bottom: 24 })
+          .width('100%')
+      }
+      .width('100%')
+      .constraintSize({ maxHeight: Math.max(100, BreakpointSystem.getDialogMaxHeight(this.windowHeightVp) - 130) })
+      .scrollBar(BarState.Off)
 
       Divider()
         .color($r('app.color.update_dialog_divider'))
@@ -214,12 +227,23 @@ struct AppUpdatePage {
           this.cardStyle()
         }
         .width('86%')
+        .constraintSize({
+          maxWidth: BreakpointSystem.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp),
+          maxHeight: BreakpointSystem.getDialogMaxHeight(this.windowHeightVp)
+        })
+        .margin({
+          top: this.avoidAreaTopVp,
+          bottom: this.avoidAreaBottomVp,
+          left: this.avoidAreaLeftVp,
+          right: this.avoidAreaRightVp
+        })
         .justifyContent(FlexAlign.Center)
         .alignItems(HorizontalAlign.Center)
       }
       .width('100%')
       .height('100%')
       .backgroundColor('#FF1A1A1A')
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
     } else {
       // type2：dialog_update_bg 整幅背景 + tv_version + tv_content + tv_update + 下方 iv_close
       Column() {
@@ -231,45 +255,59 @@ struct AppUpdatePage {
 
           Column() {
             Blank()
-              .height(84)
-            if (this.versionText !== '') {
-              // tv_version：16sp bold 白 margin(20,28) padH10 padV2
-              Text(this.versionText)
-                .fontSize(16)
-                .fontWeight(FontWeight.Bold)
-                .fontColor('#FFFFFFFF')
-                .padding({ left: 10, right: 10, top: 2, bottom: 2 })
-                .width('100%')
-            }
-            // tv_content：14sp #4b4b4b marginH30 maxLines10
-            Text(this.contentText)
-              .fontSize(14)
-              .fontColor('#FF4B4B4B')
-              .lineHeight(19)
-              .maxLines(10)
-              .padding({ left: 30, right: 30 })
+              .height(this.windowHeightVp < 520 ? 48 : 84)
+            Scroll() {
+              Column() {
+                if (this.versionText !== '') {
+                  // tv_version：16sp bold 白 margin(20,28) padH10 padV2
+                  Text(this.versionText)
+                    .fontSize(16)
+                    .fontWeight(FontWeight.Bold)
+                    .fontColor('#FFFFFFFF')
+                    .padding({ left: 10, right: 10, top: 2, bottom: 2 })
+                    .width('100%')
+                }
+                // tv_content：14sp #4b4b4b marginH30 maxLines10
+                Text(this.contentText)
+                  .fontSize(14)
+                  .fontColor('#FF4B4B4B')
+                  .lineHeight(19)
+                  .padding({ left: 30, right: 30 })
+                  .width('100%')
+              }
               .width('100%')
-              .layoutWeight(1)
+            }
+            .width('100%')
+            .layoutWeight(1)
+            .scrollBar(BarState.Off)
+            .align(Alignment.Top)
 
             // tv_update：light_orange_button_round marginH30 V30
-            Text(this.btnText)
-              .fontSize(14)
-              .fontColor(Color.White)
-              .textAlign(TextAlign.Center)
-              .padding(10)
-              .borderRadius(25)
-              .backgroundColor($r('app.color.update_light_orange'))
-              .margin({ left: 30, right: 30, top: 15, bottom: 15 })
-              .width('calc(100% - 60vp)')
-              .onClick(() => {
-                // b：G1()
-                this.startDownload();
-              })
+            Column() {
+              Text(this.btnText)
+                .fontSize(14)
+                .fontColor(Color.White)
+                .textAlign(TextAlign.Center)
+                .padding(10)
+                .borderRadius(25)
+                .backgroundColor($r('app.color.update_light_orange'))
+                .width('100%')
+                .onClick(() => {
+                  // b：G1()
+                  this.startDownload();
+                })
+            }
+            .width('100%')
+            .padding({ left: 30, right: 30, top: 15, bottom: 15 })
           }
           .width('100%')
           .height('100%')
         }
         .width('100%')
+        .constraintSize({
+          maxWidth: BreakpointSystem.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp),
+          maxHeight: Math.max(240, BreakpointSystem.getDialogMaxHeight(this.windowHeightVp) - 48)
+        })
         .layoutWeight(1)
 
         // iv_close：下方居中关闭
@@ -290,7 +328,16 @@ struct AppUpdatePage {
       }
       .width('100%')
       .height('100%')
+      .padding({
+        top: Math.max(12, this.avoidAreaTopVp),
+        bottom: Math.max(12, this.avoidAreaBottomVp),
+        left: Math.max(16, this.avoidAreaLeftVp),
+        right: Math.max(16, this.avoidAreaRightVp)
+      })
+      .justifyContent(FlexAlign.Center)
+      .alignItems(HorizontalAlign.Center)
       .backgroundColor('#FF1A1A1A')
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
     }
   }
 }

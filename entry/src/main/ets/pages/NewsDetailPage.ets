@@ -1,5 +1,6 @@
 import { router } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 import { ApiService } from '../network/ApiService';
 import { NewsItem } from '../model/NewsModel';
 import { EmptyView } from '../components/EmptyView';
@@ -17,6 +18,11 @@ import { ShareHelper } from '../common/ShareHelper';
 struct NewsDetailPage {
   @State news: NewsItem = new NewsItem('', '', '', '', '', '', '', '', '');
   @State isLoading: boolean = true;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   private newsId: string = '';
 
   aboutToAppear(): void {
@@ -49,60 +55,67 @@ struct NewsDetailPage {
    */
   @Builder
   detailToolbar() {
-    Row() {
-      // ivBack：layout_width=70.0dip=70vp、layout_height=45vp、paddingTop/Bottom=12.0dip=12vp、
-      // src=@mipmap/icon_back_black、layout_alignParentLeft=true
-      // （XML 中 visibility=invisible 为 Tab 内场景；详情页需要返回，此处显示并响应点击）
+    Column() {
       Row() {
-        Image($r('app.media.icon_back_black'))
-          .height(21)
-          .objectFit(ImageFit.Contain)
-      }
-      .width(70)
-      .height(45)
-      .padding({ top: 12, bottom: 12 })
-      .alignItems(VerticalAlign.Center)
-      .onClick(() => {
-        router.back();
-      })
-      // 标题 TextView：textSize=18.0sp=18fp、textColor=@color/common_color_1、
-      // gravity=center、fill_parent、text="资讯"
-      Text($r('app.string.news_detail_title'))
-        .fontSize(18)
-        .fontColor($r('app.color.common_color_1'))
-        .textAlign(TextAlign.Center)
-        .layoutWeight(1)
-        .maxLines(1)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
-      Row() {
-        Text('分享')
-          .fontSize(14)
+        // ivBack：layout_width=70.0dip=70vp、layout_height=45vp、paddingTop/Bottom=12.0dip=12vp、
+        // src=@mipmap/icon_back_black、layout_alignParentLeft=true
+        // （XML 中 visibility=invisible 为 Tab 内场景；详情页需要返回，此处显示并响应点击）
+        Row() {
+          Image($r('app.media.icon_back_black'))
+            .height(21)
+            .objectFit(ImageFit.Contain)
+        }
+        .width(70)
+        .height(this.isCompactHeight ? 38 : 45)
+        .padding({ top: 12, bottom: 12 })
+        .alignItems(VerticalAlign.Center)
+        .onClick(() => {
+          router.back();
+        })
+        // 标题 TextView：textSize=18.0sp=18fp、textColor=@color/common_color_1、
+        // gravity=center、fill_parent、text="资讯"
+        Text($r('app.string.news_detail_title'))
+          .fontSize(18)
           .fontColor($r('app.color.common_color_1'))
+          .textAlign(TextAlign.Center)
+          .layoutWeight(1)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        Row() {
+          Text('分享')
+            .fontSize(14)
+            .fontColor($r('app.color.common_color_1'))
+        }
+        .height(this.isCompactHeight ? 38 : 45)
+        .padding({ left: 10, right: 8 })
+        .alignItems(VerticalAlign.Center)
+        .onClick(() => {
+          const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+          ShareHelper.shareText(ctx, this.news.title || '校园资讯', this.news.summary || this.news.content || '山东管理学院资讯', this.news.url || undefined);
+        })
+        // ivRefresh：paddingLeft/Right=15.0dip=15vp、paddingTop/Bottom=12.0dip=12vp、
+        // src=@mipmap/icon_refresh_black、layout_alignParentRight=true
+        Row() {
+          Image($r('app.media.icon_refresh_black'))
+            .height(21)
+            .objectFit(ImageFit.Contain)
+        }
+        .height(this.isCompactHeight ? 38 : 45)
+        .padding({ left: 15, right: 15, top: 12, bottom: 12 })
+        .alignItems(VerticalAlign.Center)
+        .onClick(() => {
+          this.loadDetail();
+        })
       }
-      .height(45)
-      .padding({ left: 10, right: 8 })
-      .alignItems(VerticalAlign.Center)
-      .onClick(() => {
-        const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
-        ShareHelper.shareText(ctx, this.news.title || '校园资讯', this.news.summary || this.news.content || '山东管理学院资讯', this.news.url || undefined);
-      })
-      // ivRefresh：paddingLeft/Right=15.0dip=15vp、paddingTop/Bottom=12.0dip=12vp、
-      // src=@mipmap/icon_refresh_black、layout_alignParentRight=true
-      Row() {
-        Image($r('app.media.icon_refresh_black'))
-          .height(21)
-          .objectFit(ImageFit.Contain)
-      }
-      .height(45)
-      .padding({ left: 15, right: 15, top: 12, bottom: 12 })
-      .alignItems(VerticalAlign.Center)
-      .onClick(() => {
-        this.loadDetail();
-      })
+      .width('100%')
+      .height(this.isCompactHeight ? 38 : 45)
+      .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
+      .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
     }
     .width('100%')
-    .height(45)
+    .alignItems(HorizontalAlign.Center)
     .backgroundColor($r('app.color.white'))
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
   }
 
   build() {
@@ -167,12 +180,20 @@ struct NewsDetailPage {
                 .margin({ top: 12 })
             }
             .alignItems(HorizontalAlign.Start)
-            .padding(16)
+            .width('100%')
+            .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+            .padding({
+              left: Math.max(16, this.avoidAreaLeftVp),
+              right: Math.max(16, this.avoidAreaRightVp),
+              top: 16,
+              bottom: Math.max(16, this.avoidAreaBottomVp)
+            })
           }
           .width('100%')
           .layoutWeight(1)
           .backgroundColor($r('app.color.white'))
           .scrollBar(BarState.Off)
+          .align(Alignment.Top)
         }
       }
     }

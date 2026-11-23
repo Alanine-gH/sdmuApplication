@@ -2,6 +2,7 @@ import { router } from '@kit.ArkUI';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { TitleBar } from '../components/TitleBar';
 import { ApiService } from '../network/ApiService';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 绑定/修改 QQ、微信号页 — 1:1 翻译 ChangeQqAndWechatActivity.java
@@ -28,6 +29,9 @@ struct ChangeQqWechatPage {
   @State kind: string = 'QQ';
   @State content: string = '';
   @State submitting: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('keyboardHeightVp') keyboardHeightVp: number = 0;
   private tipText: string = '';
   private clearText: string = '清空';
 
@@ -118,53 +122,70 @@ struct ChangeQqWechatPage {
     Column() {
       TitleBar({ title: this.kind, showBack: true })
 
-      TextInput({ text: this.content, placeholder: this.kind === 'QQ' ? '请输入您的QQ号' : '请输入您的微信号' })
-        .width('100%')
-        .backgroundColor($r('app.color.white'))
-        .fontSize(16)
-        .fontColor($r('app.color.common_color_1'))
-        .placeholderColor($r('app.color.common_color_3'))
-        .placeholderFont({ size: 16 })
-        .maxLength(this.kind === 'QQ' ? 15 : 20)
-        .padding(15)
-        .margin({ top: 20 })
-        .defaultFocus(true)
-        .type(this.kind === 'QQ' ? InputType.Number : InputType.Normal)
-        .onChange((value: string) => {
-          this.onInput(value);
-        })
+      Scroll() {
+        Column() {
+          TextInput({ text: this.content, placeholder: this.kind === 'QQ' ? '请输入您的QQ号' : '请输入您的微信号' })
+            .width('100%')
+            .backgroundColor($r('app.color.white'))
+            .fontSize(16)
+            .fontColor($r('app.color.common_color_1'))
+            .placeholderColor($r('app.color.common_color_3'))
+            .placeholderFont({ size: 16 })
+            .maxLength(this.kind === 'QQ' ? 15 : 20)
+            .padding(15)
+            .margin({ top: 20 })
+            .defaultFocus(true)
+            .type(this.kind === 'QQ' ? InputType.Number : InputType.Normal)
+            .onChange((value: string) => {
+              this.onInput(value);
+            })
 
-      Text(this.tipText)
-        .fontSize(14)
-        .fontColor($r('app.color.common_color_1'))
-        .width('100%')
-        .padding({ left: 15, right: 15, top: 12, bottom: 12 })
+          Text(this.tipText)
+            .fontSize(14)
+            .fontColor($r('app.color.common_color_1'))
+            .width('100%')
+            .padding({ left: 15, right: 15, top: 12, bottom: 12 })
 
-      Text('确定')
-        .fontSize(17)
-        .fontColor(this.canSubmit() ? $r('app.color.white') : $r('app.color.gray_text'))
-        .textAlign(TextAlign.Center)
-        .width('100%')
-        .padding({ top: 13, bottom: 13 })
-        .margin({ left: 15, right: 15, top: 20 })
-        .backgroundColor(this.canSubmit() ? '#1B68B7' : $r('app.color.gray_nickname'))
-        .borderRadius(8)
-        .onClick(() => {
-          this.submit(false);
-        })
+          Column() {
+            Text('确定')
+              .fontSize(17)
+              .fontColor(this.canSubmit() ? $r('app.color.white') : $r('app.color.gray_text'))
+              .textAlign(TextAlign.Center)
+              .width('100%')
+              .padding({ top: 13, bottom: 13 })
+              .backgroundColor(this.canSubmit() ? '#1B68B7' : $r('app.color.gray_nickname'))
+              .borderRadius(8)
+              .onClick(() => {
+                this.submit(false);
+              })
+          }
+          .width('100%')
+          .padding({ left: 15, right: 15, top: 20 })
 
-      Text(this.clearText)
-        .fontSize(17)
-        .fontColor('#e96161')
-        .textAlign(TextAlign.Center)
+          Column() {
+            Text(this.clearText)
+              .fontSize(17)
+              .fontColor('#e96161')
+              .textAlign(TextAlign.Center)
+              .width('100%')
+              .padding({ top: 13, bottom: 13 })
+              .borderRadius(8)
+              .border({ width: 0.5, color: '#e96161' })
+              .onClick(() => {
+                this.submit(true);
+              })
+          }
+          .width('100%')
+          .padding({ left: 15, right: 15, top: 16 })
+        }
         .width('100%')
-        .padding({ top: 13, bottom: 13 })
-        .margin({ left: 15, right: 15, top: 16 })
-        .borderRadius(8)
-        .border({ width: 0.5, color: '#e96161' })
-        .onClick(() => {
-          this.submit(true);
-        })
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .padding({ bottom: Math.max(24, this.avoidAreaBottomVp + this.keyboardHeightVp + 16) })
+      }
+      .width('100%')
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
+      .align(Alignment.Top)
     }
     .width('100%')
     .height('100%')

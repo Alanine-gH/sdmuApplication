@@ -3,6 +3,7 @@ import { common, Want } from '@kit.AbilityKit';
 import { scanBarcode, scanCore } from '@kit.ScanKit';
 import { geoLocationManager } from '@kit.LocationKit';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 import { HttpClient } from '../network/HttpClient';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
@@ -53,6 +54,11 @@ interface HttpHeader {
 struct QrCodeScanPage {
   @State scanLineOffset: number = 0;
   @State flashHint: string = '扫二维码/条码';
+  @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
+  @StorageProp('avoidAreaTopVp') avoidAreaTopVp: number = 0;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
   private scanAreaHeight: number = 0;
   private timerId: number = -1;
   /** 防重入：扫码中不再触发（源码连续扫码由 zxing 循环承担，HAP 每次 startScan 一次会话） */
@@ -370,6 +376,7 @@ struct QrCodeScanPage {
         .width('100%')
         .height('100%')
         .backgroundColor(Color.Black)
+        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
 
       Column() {
         Row() {
@@ -384,7 +391,8 @@ struct QrCodeScanPage {
         }
         .width('100%')
         .height(56)
-        .margin({ top: 60 })
+        .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
+        .margin({ top: Math.max(12, this.avoidAreaTopVp + 12) })
         .justifyContent(FlexAlign.Start)
         .alignItems(VerticalAlign.Center)
 
@@ -403,28 +411,32 @@ struct QrCodeScanPage {
         })
 
         // 源码 llLight：闪光灯提示（ScanKit 系统 UI 内置闪光灯，壳上文案保真）
-        Column() {
+        Scroll() {
           Column() {
-            Image($r('app.media.icon_scan_light_close'))
-              .width(19)
-              .height(33)
-              .objectFit(ImageFit.Contain)
+            Column() {
+              Image($r('app.media.icon_scan_light_close'))
+                .width(19)
+                .height(33)
+                .objectFit(ImageFit.Contain)
 
-            Text(this.flashHint)
-              .fontSize(14)
-              .fontColor($r('app.color.white'))
-              .margin({ top: 8 })
+              Text(this.flashHint)
+                .fontSize(14)
+                .fontColor($r('app.color.white'))
+                .margin({ top: 8 })
+            }
+            .padding({ left: 20, right: 20 })
+            .alignItems(HorizontalAlign.Center)
+            .onClick(() => {
+              this.startScan();
+            })
           }
-          .padding({ left: 20, right: 20 })
+          .width('100%')
+          .justifyContent(FlexAlign.Start)
           .alignItems(HorizontalAlign.Center)
-          .onClick(() => {
-            this.startScan();
-          })
         }
         .width('100%')
-        .height(100)
-        .justifyContent(FlexAlign.Start)
-        .alignItems(HorizontalAlign.Center)
+        .height(this.isCompactHeight ? 64 : 100)
+        .scrollBar(BarState.Off)
       }
       .width('100%')
       .height('100%')
@@ -452,10 +464,16 @@ struct QrCodeScanPage {
           })
         }
         .width('100%')
-        .height(100)
+        .height((this.isCompactHeight ? 64 : 100) + this.avoidAreaBottomVp)
+        .padding({
+          left: this.avoidAreaLeftVp,
+          right: this.avoidAreaRightVp,
+          bottom: this.avoidAreaBottomVp
+        })
         .backgroundColor(Color.Black)
         .justifyContent(FlexAlign.End)
         .alignItems(VerticalAlign.Center)
+        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
       }
       .width('100%')
       .height('100%')
@@ -464,5 +482,6 @@ struct QrCodeScanPage {
     .width('100%')
     .height('100%')
     .backgroundColor(Color.Black)
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 }

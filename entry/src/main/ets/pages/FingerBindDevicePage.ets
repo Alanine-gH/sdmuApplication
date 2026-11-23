@@ -5,6 +5,7 @@ import { ApiService } from '../network/ApiService';
 import { LoginSession } from '../network/LoginSession';
 import { ApiResponse } from '../model/ResponseModel';
 import { Constants } from '../data/Constants';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 指纹绑定设备页 — 1:1 复刻 FingerBindDeviceActivity（141 行）+ mobile_campus_activity_setting_bind_device.xml
@@ -47,6 +48,8 @@ struct FingerBindDevicePage {
   @State idCardText: string = '';
   @State phoneText: string = '';
   @State androidIdText: string = '';
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
 
   aboutToAppear(): void {
     // 源码 y(Intent)：w = Gson(result)
@@ -126,11 +129,14 @@ struct FingerBindDevicePage {
 
   @Builder
   private rowDivider() {
-    Divider()
-      .color($r('app.color.common_color_5'))
-      .strokeWidth(0.5)
-      .width('100%')
-      .margin({ left: 12 })
+    Row() {
+      Divider()
+        .color($r('app.color.common_color_5'))
+        .strokeWidth(0.5)
+        .width('100%')
+    }
+    .width('100%')
+    .padding({ left: 12 })
   }
 
   build() {
@@ -162,22 +168,27 @@ struct FingerBindDevicePage {
           this.rowDivider()
           this.infoRow('手机唯一码', this.androidIdText)
 
-          Text('绑定设备')
-            .fontSize(16)
-            .fontColor($r('app.color.white'))
-            .textAlign(TextAlign.Center)
-            .width('calc(100% - 24vp)')
-            .padding({ top: 6, bottom: 6 })
-            .borderRadius(22)
-            .backgroundColor('#1790FF')
-            .margin({ left: 12, right: 12, top: 10 })
-            .onClick(() => {
-              this.bindDevice();
-            })
+          Column() {
+            Text('绑定设备')
+              .fontSize(16)
+              .fontColor($r('app.color.white'))
+              .textAlign(TextAlign.Center)
+              .width('100%')
+              .padding({ top: 6, bottom: 6 })
+              .borderRadius(22)
+              .backgroundColor('#1790FF')
+              .onClick(() => {
+                this.bindDevice();
+              })
+          }
+          .width('100%')
+          .padding({ left: 12, right: 12, top: 10 })
 
           // tvHasQuestion"激活遇到问题了？"：XML visibility=gone 且源码无显示逻辑 → 保真省略
         }
         .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .padding({ bottom: Math.max(16, this.avoidAreaBottomVp + 12) })
       }
       .width('100%')
       .layoutWeight(1)

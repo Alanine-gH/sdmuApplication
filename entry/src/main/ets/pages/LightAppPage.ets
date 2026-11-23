@@ -1,6 +1,7 @@
 import { router } from '@kit.ArkUI';
 import { webview } from '@kit.ArkWeb';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 import { LoginSession } from '../network/LoginSession';
 import { HttpClient } from '../network/HttpClient';
 import { Constants } from '../data/Constants';
@@ -48,6 +49,11 @@ struct LightAppPage {
   @State viewState: string = 'web';
   // [R61] 主帧错误码（-7=超时等），错误页按码细分提示
   @State lastErrorCode: number = 0;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   private loadFailed: boolean = false;
   private yyid: string = '';
   private headers: HttpHeader[] = [];
@@ -199,29 +205,36 @@ struct LightAppPage {
 
   build() {
     Column() {
-      Row() {
-        Text('＜')
-          .fontSize(16)
-          .fontColor($r('app.color.common_color_1'))
-          .width(40)
-          .height('100%')
-          .textAlign(TextAlign.Center)
-          .margin({ left: 15 })
-          .onClick(() => {
-            router.back();
-          })
-        Text(this.pageTitle)
-          .fontColor($r('app.color.common_color_1'))
-          .layoutWeight(1)
-          .textAlign(TextAlign.Center)
-          .maxLines(1)
-        Blank()
-          .width(40)
+      Column() {
+        Row() {
+          Text('＜')
+            .fontSize(16)
+            .fontColor($r('app.color.common_color_1'))
+            .width(40)
+            .height('100%')
+            .textAlign(TextAlign.Center)
+            .margin({ left: 15 })
+            .onClick(() => {
+              router.back();
+            })
+          Text(this.pageTitle)
+            .fontColor($r('app.color.common_color_1'))
+            .layoutWeight(1)
+            .textAlign(TextAlign.Center)
+            .maxLines(1)
+          Blank()
+            .width(40)
+        }
+        .width('100%')
+        .height(this.isCompactHeight ? 38 : 44)
+        .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignItems(VerticalAlign.Center)
       }
       .width('100%')
-      .height(44)
-      .alignItems(VerticalAlign.Center)
+      .alignItems(HorizontalAlign.Center)
       .backgroundColor($r('app.color.main_bg'))
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
 
       Stack() {
         Column() {
@@ -377,6 +390,11 @@ struct LightAppPage {
       }
       .width('100%')
       .layoutWeight(1)
+      .padding({
+        left: this.avoidAreaLeftVp,
+        right: this.avoidAreaRightVp,
+        bottom: this.avoidAreaBottomVp
+      })
       .backgroundColor($r('app.color.main_bg'))
     }
     .width('100%')

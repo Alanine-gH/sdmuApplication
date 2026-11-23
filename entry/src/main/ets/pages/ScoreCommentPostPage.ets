@@ -3,6 +3,8 @@ import { TitleBar } from '../components/TitleBar';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 课评留言发布页 — 1:1 翻译原 APK ScoreCommentPostActivity.java（student_score/view）
@@ -32,6 +34,11 @@ struct ScoreCommentPostPage {
   @State showEmojiPanel: boolean = false;
   /** 源码 T1：g.setEnabled(false) 初始禁用；TextWatcher 按 trim 内容联动 */
   @State publishEnabled: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowHeightVp') windowHeightVp: number = 780;
+  @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('keyboardHeightVp') keyboardHeightVp: number = 0;
   // 源码 f1：j=xn i=xq k=kcdm
   private xn: string = '';
   private xq: string = '';
@@ -123,9 +130,15 @@ struct ScoreCommentPostPage {
     });
   }
 
+  private emojiPanelHeight(): number {
+    const safeH: number = Number.isFinite(this.windowHeightVp) && this.windowHeightVp > 0 ? this.windowHeightVp : 780;
+    const cap: number = this.isCompactHeight ? 160 : 240;
+    return Math.min(cap, Math.max(110, Math.round(safeH * 0.32)));
+  }
+
   @Builder
   emojiPanel() {
-    // EmoticonsKeyBoardLayout 480dip=240vp 等价：emoji 网格（点击插入输入框）
+    // EmoticonsKeyBoardLayout 480dip=240vp 等价：响应式 emoji 网格（点击插入输入框）
     Grid() {
       ForEach(this.emojiList, (emoji: string) => {
         GridItem() {
@@ -136,15 +149,19 @@ struct ScoreCommentPostPage {
             .textAlign(TextAlign.Center)
             .onClick(() => {
               this.inputContent = this.inputContent + emoji;
+              this.publishEnabled = this.inputContent.trim() !== '';
             })
         }
       }, (emoji: string) => emoji)
     }
-    .columnsTemplate('1 1 1 1 1 1 1 1')
+    .columnsTemplate(
+      AdaptiveLayoutHelper.buildColumnsTemplate(BreakpointSystem.getGridColumns(this.currentBreakpoint, 6))
+    )
     .rowsGap(4)
     .width('100%')
-    .height(240)
-    .padding({ left: 15, right: 15, top: 8, bottom: 8 })
+    .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+    .height(this.emojiPanelHeight())
+    .padding({ left: 15, right: 15, top: 8, bottom: Math.max(8, this.avoidAreaBottomVp) })
     .backgroundColor($r('app.color.white'))
   }
 
@@ -165,29 +182,33 @@ struct ScoreCommentPostPage {
       })
       // ScrollView 白底 fillViewport（above bottom bar, below toolbar）
       Scroll() {
-        TextArea({
-          placeholder: '',
-          text: this.inputContent
-        })
-          .fontSize(17)
-          .fontColor($r('app.color.common_color_1'))
-          .placeholderColor($r('app.color.common_color_4'))
-          .maxLength(this.maxLength)
-          .constraintSize({ minHeight: 132 })
-          .margin(6)
-          .backgroundColor(Color.Transparent)
-          .onChange((value: string) => {
-            // 源码 TextWatcher a.onTextChanged：trim 空 → 发布 disabled（g.setEnabled(false)）
-            this.inputContent = value;
-            this.publishEnabled = value.trim() !== '';
+        Column() {
+          TextArea({
+            placeholder: '',
+            text: this.inputContent
           })
+            .fontSize(17)
+            .fontColor($r('app.color.common_color_1'))
+            .placeholderColor($r('app.color.common_color_4'))
+            .maxLength(this.maxLength)
+            .constraintSize({ minHeight: 132 })
+            .margin(6)
+            .backgroundColor(Color.Transparent)
+            .onChange((value: string) => {
+              // 源码 TextWatcher a.onTextChanged：trim 空 → 发布 disabled（g.setEnabled(false)）
+              this.inputContent = value;
+              this.publishEnabled = value.trim() !== '';
+            })
+        }
+        .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
       }
       .width('100%')
       .layoutWeight(1)
       .backgroundColor($r('app.color.white'))
       .align(Alignment.Top)
 
-      // student_score_post_publish_bottom_bar：divider + 表情钮(padding 15/4, marginRight 20)
+      // student_score_post_publish_bottom_bar：divider + 表情钮
       Divider()
         .color($r('app.color.common_color_5'))
         .strokeWidth(0.5)
@@ -202,7 +223,13 @@ struct ScoreCommentPostPage {
           })
       }
       .width('100%')
-      .padding({ left: 15, right: 15, top: 4, bottom: 4 })
+      .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+      .padding({
+        left: 15,
+        right: 15,
+        top: 6,
+        bottom: this.showEmojiPanel ? 6 : Math.max(6, this.avoidAreaBottomVp + this.keyboardHeightVp)
+      })
       .alignItems(VerticalAlign.Center)
       .backgroundColor($r('app.color.white'))
       Divider()
@@ -215,6 +242,7 @@ struct ScoreCommentPostPage {
     }
     .width('100%')
     .height('100%')
+    .alignItems(HorizontalAlign.Center)
     .backgroundColor($r('app.color.white'))
   }
 }

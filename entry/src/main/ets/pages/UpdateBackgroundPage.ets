@@ -16,5 +16,6 @@ struct UpdateBackgroundPage {
       .width('100%')
       .height('100%')
       .backgroundColor(Color.Transparent)
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 }

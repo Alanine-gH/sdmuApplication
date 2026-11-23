@@ -1,5 +1,6 @@
 ﻿import { router } from '@kit.ArkUI';
 import { PreferencesUtil } from '../data/PreferencesUtil';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 关键词搜索页 — 源码级复刻 KeywordSearchActivity（main 包，ARouter /app/KeywordSearchActivity，
@@ -21,6 +22,11 @@ const HISTORY_MAX: number = 10;
 struct KeywordSearchPage {
   @State searchText: string = '';
   @State historyList: string[] = [];
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
+  @StorageProp('keyboardHeightVp') keyboardHeightVp: number = 0;
   /** y(Intent)：title/keyword/from */
   private pageTitle: string = '搜索';
   private fromKey: string = '';
@@ -147,6 +153,7 @@ struct KeywordSearchPage {
       }
       .width('100%')
       .height(44)
+      .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
       .alignItems(VerticalAlign.Center)
       .backgroundColor($r('app.color.main_bg'))
       .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
@@ -185,7 +192,6 @@ struct KeywordSearchPage {
           .height(28)
           .borderRadius(3)
           .backgroundColor('#f2f2f2')
-          .margin({ left: 15 })
           .alignItems(VerticalAlign.Center)
 
           if (this.searchText !== '') {
@@ -199,6 +205,7 @@ struct KeywordSearchPage {
               })
           }
         }
+        .padding({ left: 15 })
         .layoutWeight(1)
 
         Text('搜索')
@@ -212,68 +219,82 @@ struct KeywordSearchPage {
           })
       }
       .width('100%')
-      .padding({ top: 3, bottom: 3 })
+      .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+      .alignSelf(ItemAlign.Center)
+      .padding({ top: 3, bottom: 3, left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
       .alignItems(VerticalAlign.Center)
       .backgroundColor($r('app.color.white'))
 
       // 历史区（N2：空历史 q.setVisibility(8)）
-      if (this.historyList.length > 0) {
+      Scroll() {
         Column() {
-          Row() {
-            Text('历史搜索')
-              .fontSize(14)
-              .fontColor('#555555')
-              .padding({ left: 16, right: 16, top: 8, bottom: 8 })
-              .layoutWeight(1)
-            Image($r('app.media.icon_delete'))
-              .width(20)
-              .height(20)
-              .objectFit(ImageFit.Contain)
-              .padding({ left: 16, right: 16 })
-              .onClick(() => {
-                // h()：确认弹窗 → K2()
-                this.getUIContext().showAlertDialog({
-                  title: '',
-                  message: '确认删除全部历史记录？',
-                  primaryButton: {
-                    value: '取消',
-                    action: () => {
-                    }
-                  },
-                  secondaryButton: {
-                    value: '确认',
-                    action: () => {
-                      this.clearHistory();
-                    }
-                  }
-                });
-              })
-          }
-          .width('100%')
-          .alignItems(VerticalAlign.Center)
+          if (this.historyList.length > 0) {
+            Column() {
+              Row() {
+                Text('历史搜索')
+                  .fontSize(14)
+                  .fontColor('#555555')
+                  .padding({ left: 16, right: 16, top: 8, bottom: 8 })
+                  .layoutWeight(1)
+                Image($r('app.media.icon_delete'))
+                  .width(20)
+                  .height(20)
+                  .objectFit(ImageFit.Contain)
+                  .padding({ left: 16, right: 16 })
+                  .onClick(() => {
+                    // h()：确认弹窗 → K2()
+                    this.getUIContext().showAlertDialog({
+                      title: '',
+                      message: '确认删除全部历史记录？',
+                      primaryButton: {
+                        value: '取消',
+                        action: () => {
+                        }
+                      },
+                      secondaryButton: {
+                        value: '确认',
+                        action: () => {
+                          this.clearHistory();
+                        }
+                      }
+                    });
+                  })
+              }
+              .width('100%')
+              .alignItems(VerticalAlign.Center)
 
-          Flex({
-            direction: FlexDirection.Row,
-            wrap: FlexWrap.Wrap,
-            justifyContent: FlexAlign.Start,
-            alignItems: ItemAlign.Center
-          }) {
-            ForEach(this.historyList, (keyword: string) => {
-              this.historyChip(keyword)
-            }, (keyword: string) => 'chip_' + keyword)
+              Flex({
+                direction: FlexDirection.Row,
+                wrap: FlexWrap.Wrap,
+                justifyContent: FlexAlign.Start,
+                alignItems: ItemAlign.Center
+              }) {
+                ForEach(this.historyList, (keyword: string) => {
+                  this.historyChip(keyword)
+                }, (keyword: string) => 'chip_' + keyword)
+              }
+              .width('100%')
+              .padding({ left: 16, right: 16, top: 8, bottom: 8 })
+            }
+            .width('100%')
+            .padding({ top: 16 })
+            .backgroundColor($r('app.color.white'))
           }
-          .width('100%')
-          .padding({ left: 16, right: 16, top: 8, bottom: 8 })
         }
         .width('100%')
-        .padding({ top: 16 })
-        .backgroundColor($r('app.color.white'))
-      } else {
-        Column()
-          .width('100%')
-          .layoutWeight(1)
-          .backgroundColor($r('app.color.white'))
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
+        .padding({
+          left: this.avoidAreaLeftVp,
+          right: this.avoidAreaRightVp,
+          bottom: this.keyboardHeightVp + this.avoidAreaBottomVp
+        })
       }
+      .width('100%')
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
+      .align(Alignment.Top)
+      .backgroundColor($r('app.color.white'))
     }
     .width('100%')
     .height('100%')

@@ -5,9 +5,13 @@ import { OaFormField, OaTodoDetail } from '../model/OaTodoModel';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { picker } from '@kit.CoreFileKit';
 import { cameraPicker, camera } from '@kit.CameraKit';
-import { Context } from '@kit.AbilityKit';
+import { Context, common } from '@kit.AbilityKit';
+import { PdfView, pdfService, pdfViewManager } from '@kit.PDFKit';
 import { LoadingView } from '../components/LoadingView';
 import { EmptyView } from '../components/EmptyView';
+import { FilePreviewHelper } from '../common/FilePreviewHelper';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 待办编辑页 — 1:1 翻译原 APK EditTodoDetailActivity.java(746行)：
@@ -92,11 +96,62 @@ struct EditTodoDetailPage {
   /** select 选项弹窗 */
   @State showSelectDialog: boolean = false;
   @State selectVmIdx: number = -1;
+  @State showPdfModal: boolean = false;
+  @State pdfTitle: string = '';
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 780;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   private navParams: TodoNavParams | null = null;
   /** [W23 oa-remain] C3 bmpurl（itemBasicInfoMap.bpmRequestRuleUrl），提交时入 edited_todo_nav */
   private bpmurl: string = '';
   /** isTop(radio) 在 vms 中的下标（top input 关联必填） */
   private topRadioIdx: number = -1;
+  private pdfController: pdfViewManager.PdfController = new pdfViewManager.PdfController();
+
+  aboutToDisappear(): void {
+    this.closePdfModal();
+  }
+
+  private closePdfModal(): void {
+    if (this.showPdfModal) {
+      this.showPdfModal = false;
+      try {
+        this.pdfController.releaseDocument();
+      } catch {
+        // 忽略释放异常
+      }
+    }
+  }
+
+  private async previewAttachedFile(filePathOrUri: string): Promise<void> {
+    const trimmed: string = (filePathOrUri || '').trim();
+    if (trimmed === '') {
+      this.toast('附件路径为空');
+      return;
+    }
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    const title: string = this.fileNameOf(trimmed);
+    const res = await FilePreviewHelper.openUriPreview(ctx, trimmed, title);
+    if (res.success) {
+      return;
+    }
+    if (res.method === 'pdfView' && res.localPath !== '') {
+      try {
+        const parseRes = await this.pdfController.loadDocument(res.localPath);
+        if (parseRes === pdfService.ParseResult.PARSE_SUCCESS) {
+          this.pdfTitle = title;
+          this.showPdfModal = true;
+          return;
+        }
+      } catch {
+        // 降级提示
+      }
+    }
+    if (res.message !== '') {
+      this.toast(res.message);
+    }
+  }
 
   aboutToAppear(): void {
     const params: Object | undefined = router.getParams() as Object | undefined;
@@ -632,53 +687,117 @@ struct EditTodoDetailPage {
   }
 
   build() {
-    Column() {
-      this.topBar()
-      if (this.loading) {
-        LoadingView()
-      } else if (this.failed) {
-        Column() {
-          EmptyView({ tipText: this.loadErrMsg === '' ? '加载失败，点击重试' : this.loadErrMsg })
-        }
-        .width('100%')
-        .layoutWeight(1)
-        .onClick(() => {
-          this.loading = true;
-          this.failed = false;
-          this.fetchDetail();
-        })
-      } else {
-        Scroll() {
+    Stack() {
+      Column() {
+        this.topBar()
+        if (this.loading) {
+          LoadingView()
+        } else if (this.failed) {
           Column() {
-            this.detailHeader()
-            Row()
-              .width('100%')
-              .height(12)
-              .backgroundColor($r('app.color.common_color_6'))
-            this.formContainer()
+            EmptyView({ tipText: this.loadErrMsg === '' ? '加载失败，点击重试' : this.loadErrMsg })
           }
           .width('100%')
-        }
-        .layoutWeight(1)
-        .scrollBar(BarState.Off)
-        Text('确定')
-          .fontSize(17)
-          .fontColor($r('app.color.white'))
-          .textAlign(TextAlign.Center)
-          .width('100%')
-          .padding({ top: 15, bottom: 15 })
-          .backgroundColor($r('app.color.common_color_7'))
+          .layoutWeight(1)
           .onClick(() => {
-            this.onSureClick();
+            this.loading = true;
+            this.failed = false;
+            this.fetchDetail();
           })
+        } else {
+          Scroll() {
+            Column() {
+              this.detailHeader()
+              Row()
+                .width('100%')
+                .height(12)
+                .backgroundColor($r('app.color.common_color_6'))
+              this.formContainer()
+            }
+            .width('100%')
+            .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+          }
+          .layoutWeight(1)
+          .scrollBar(BarState.Off)
+          Text('确定')
+            .fontSize(17)
+            .fontColor($r('app.color.white'))
+            .textAlign(TextAlign.Center)
+            .width('100%')
+            .padding({ top: 15, bottom: Math.max(15, this.avoidAreaBottomVp + 10) })
+            .backgroundColor($r('app.color.common_color_7'))
+            .onClick(() => {
+              this.onSureClick();
+            })
+        }
       }
+      .width('100%')
+      .height('100%')
+      .backgroundColor($r('app.color.white'))
+
       if (this.showSelectDialog) {
         this.selectDialogOverlay()
+      }
+      if (this.showPdfModal) {
+        this.pdfPreviewOverlay()
       }
     }
     .width('100%')
     .height('100%')
-    .backgroundColor($r('app.color.white'))
+  }
+
+  @Builder
+  pdfPreviewOverlay() {
+    Column() {
+      Column() {
+        Row() {
+          Text(this.pdfTitle)
+            .fontSize(15)
+            .fontWeight(FontWeight.Medium)
+            .fontColor($r('app.color.common_color_1'))
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+            .layoutWeight(1)
+          Text('关闭')
+            .fontSize(14)
+            .fontColor('#3A92ED')
+            .padding({ left: 10, right: 4, top: 4, bottom: 4 })
+            .onClick(() => {
+              this.closePdfModal();
+            })
+        }
+        .width('100%')
+        .padding({ left: 14, right: 14, top: 10, bottom: 10 })
+        .backgroundColor($r('app.color.white'))
+
+        Divider().color($r('app.color.common_color_5')).strokeWidth(0.5).width('100%')
+
+        PdfView({
+          controller: this.pdfController,
+          pageLayout: pdfService.PageLayout.LAYOUT_SINGLE,
+          isContinuous: true,
+          showScroll: true
+        })
+          .width('100%')
+          .layoutWeight(1)
+      }
+      .width(AdaptiveLayoutHelper.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp))
+      .height(AdaptiveLayoutHelper.getDialogMaxHeight(this.windowHeightVp))
+      .backgroundColor($r('app.color.white'))
+      .borderRadius(10)
+      .clip(true)
+      .onClick(() => {
+        // 拦截点击
+      })
+    }
+    .width('100%')
+    .height('100%')
+    .padding({ left: 16, right: 16 })
+    .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
+    .backgroundColor('#66000000')
+    .onClick(() => {
+      this.closePdfModal();
+    })
   }
 
   /** 自定义头部 44vp：ivBack(nav_back_btn) + "编辑"18.5fp 居中 + 隐形占位 */
@@ -1081,6 +1200,9 @@ struct EditTodoDetailPage {
             .layoutWeight(1)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
+            .onClick(() => {
+              this.previewAttachedFile(file);
+            })
           Image($r('app.media.delete_icon'))
             .width(14)
             .height(14)

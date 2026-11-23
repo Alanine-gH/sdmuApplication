@@ -4,6 +4,7 @@ import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { SuperviseCourseItem, SuperviseDayGroup } from '../model/SuperviseModel';
 import { EmptyView } from '../components/EmptyView';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 督导听课主页 — 源码级翻译 [W21 supervise]（SuperviseMainActivity.java 逐行 → ArkTS）：
@@ -79,6 +80,10 @@ struct SupervisePage {
   @State listRows: SuperviseCourseItem[] = [];
   /** 源码 tvSelect/layoutTips：搜索或筛选回传后显示，空= gone */
   @State filterLabel: string = '';
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
   private static readonly SEARCH_RESULT_KEY: string = 'supervise_search_result';
   private static readonly FILTER_RESULT_KEY: string = 'supervise_filter_result';
 
@@ -228,6 +233,9 @@ struct SupervisePage {
         }
         .width('100%')
         .height(44)
+        .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
         .alignItems(VerticalAlign.Center)
 
         Divider()
@@ -237,6 +245,7 @@ struct SupervisePage {
       }
       .width('100%')
       .backgroundColor($r('app.color.main_bg'))
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
 
       // layoutTips：#1B68B7 提示行（源码 gone → onActivityResult 回传后 visible；teacher 图标白 tint）
       if (this.filterLabel !== '') {
@@ -286,6 +295,9 @@ struct SupervisePage {
         }, (day: SuperviseWeekDay) => day.dayLabel + day.dateNumber)
       }
       .width('100%')
+      .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+      .alignSelf(ItemAlign.Center)
+      .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
       .backgroundColor($r('app.color.main_bg'))
 
       // FrameLayout paddingTop 12：列表（f1() 初始空态；仅搜索/筛选回传后拉取）+ 右下角 imgMy
@@ -347,13 +359,14 @@ struct SupervisePage {
           }
           .width('100%')
           .height('100%')
+          .contentEndOffset(this.avoidAreaBottomVp)
           .backgroundColor($r('app.color.common_color_6'))
         }
 
         Image($r('app.media.mobile_campus_supervise_supervisor'))
           .width(52)
           .height(52)
-          .margin({ right: 12, bottom: 12 })
+          .margin({ right: 12 + this.avoidAreaRightVp, bottom: 12 + this.avoidAreaBottomVp })
           .onClick(() => {
             // 源码 b.onClick：g2(a.M0) → /supervise/mine
             router.pushUrl({ url: 'pages/SuperviseMinePage' });
@@ -361,7 +374,9 @@ struct SupervisePage {
       }
       .layoutWeight(1)
       .width('100%')
-      .padding({ top: 12 })
+      .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+      .alignSelf(ItemAlign.Center)
+      .padding({ top: 12, left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
     }
     .width('100%')
     .height('100%')

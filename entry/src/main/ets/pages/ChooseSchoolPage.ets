@@ -3,6 +3,7 @@ import { HttpClient } from '../network/HttpClient';
 import { ApiResponse } from '../model/ResponseModel';
 import { LoginSession } from '../network/LoginSession';
 import { PreferencesUtil } from '../data/PreferencesUtil';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 选择学校页 — 源码级复刻 ChooseSchoolActivity（launch 包，登录链"登录帮助"选校入口）。
@@ -41,6 +42,11 @@ struct ChooseSchoolPage {
   @State searchText: string = '';
   /** Refresh 容器刷新态（PullToRefreshLayout 下拉刷新等价） */
   @State isRefreshing: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
+  @StorageProp('keyboardHeightVp') keyboardHeightVp: number = 0;
   /** y(Intent)：isFirst=true → 登录前选校（选完进登录页） */
   private isFirst: boolean = false;
   /** U2：s++（上拉翻页游标） */
@@ -226,6 +232,9 @@ struct ChooseSchoolPage {
         }
         .width('100%')
         .height(44)
+        .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
         .alignItems(VerticalAlign.Center)
 
         Divider()
@@ -236,6 +245,7 @@ struct ChooseSchoolPage {
       .width('100%')
       .height(45)
       .backgroundColor($r('app.color.main_bg'))
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
 
       // common_refresh_lv_rl：列表 / 空态 / 错误态
       if (this.error) {
@@ -252,6 +262,13 @@ struct ChooseSchoolPage {
             })
         }
         .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
+        .padding({
+          left: this.avoidAreaLeftVp,
+          right: this.avoidAreaRightVp,
+          bottom: this.avoidAreaBottomVp
+        })
         .layoutWeight(1)
         .justifyContent(FlexAlign.Center)
         .alignItems(HorizontalAlign.Center)
@@ -263,6 +280,13 @@ struct ChooseSchoolPage {
             .fontColor($r('app.color.explain_color'))
         }
         .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
+        .padding({
+          left: this.avoidAreaLeftVp,
+          right: this.avoidAreaRightVp,
+          bottom: this.avoidAreaBottomVp
+        })
         .layoutWeight(1)
         .justifyContent(FlexAlign.Center)
         .alignItems(HorizontalAlign.Center)
@@ -343,6 +367,10 @@ struct ChooseSchoolPage {
           }
         }
         .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
+        .padding({ left: this.avoidAreaLeftVp, right: this.avoidAreaRightVp })
+        .contentEndOffset(this.keyboardHeightVp + this.avoidAreaBottomVp)
         .layoutWeight(1)
         .scrollBar(BarState.Off)
         .onReachEnd(() => {

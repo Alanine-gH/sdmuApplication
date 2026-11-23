@@ -193,13 +193,14 @@ struct MeetingAnnouncementPage {
           .margin({ left: 8 })
       }
       .width('100%')
-      .margin({ top: 27, left: 12, right: 12 })
+      .padding({ left: 12, right: 12 })
+      .margin({ top: 27 })
       .alignItems(VerticalAlign.Center)
       Text(item.MESSAGE)
         .fontSize(16)
         .fontColor($r('app.color.common_color_1'))
         .width('100%')
-        .margin({ top: 19, bottom: 19, left: 28, right: 19 })
+        .padding({ top: 19, bottom: 19, left: 28, right: 19 })
     }
     .width('100%')
     .backgroundColor($r('app.color.white'))

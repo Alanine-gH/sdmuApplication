@@ -1,4 +1,5 @@
 import { TitleBar } from '../components/TitleBar';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 运动步数设置页 — 源码级翻译（SportStepsSettingActivity.java 逐行 → ArkTS，[W25 misc-b]）：
@@ -16,6 +17,10 @@ import { TitleBar } from '../components/TitleBar';
 struct SportStepsSettingPage {
   /** 源码 J2 选中态（初始未调用 → XML 首项 select 图标 + tvDesc1 invisible，其余 un_select） */
   @State selected: number = 0;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
+  @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
   private readonly labels: string[] = ['姓名全称', '姓氏 + 老师', '姓氏 + **', '******'];
 
   /** 源码 J2(i)：i 1..4 → 选中项 */
@@ -27,38 +32,54 @@ struct SportStepsSettingPage {
     Column() {
       TitleBar({ title: '设置', showBack: true })
 
-      Text('打开后将在榜单中显示您的对应名称')
-        .fontSize(12)
-        .fontColor('#999999')
-        .padding({ left: 15, right: 15, top: 16 })
-        .maxLines(1)
-        .width('100%')
-
-      ForEach(this.labels, (label: string, idx: number) => {
-        Row() {
-          Text(label)
-            .fontSize(16)
-            .fontColor($r('app.color.black'))
-            .padding({ left: 15 })
-            .layoutWeight(1)
+      Scroll() {
+        Column() {
+          Text('打开后将在榜单中显示您的对应名称')
+            .fontSize(12)
+            .fontColor('#999999')
+            .padding({ left: 15, right: 15, top: 16 })
             .maxLines(1)
-          Text('当前显示')
-            .fontSize(14)
-            .fontColor('#3A7DF0')
-            .padding({ right: 8 })
-            .visibility(this.selected === idx ? Visibility.Visible : Visibility.Hidden)
-          Image(this.selected === idx ? $r('app.media.sport_steps_setting_btn_select')
-            : $r('app.media.sport_steps_setting_btn_un_select'))
-            .width(16)
-            .height(16)
+            .width('100%')
+
+          ForEach(this.labels, (label: string, idx: number) => {
+            Row() {
+              Text(label)
+                .fontSize(16)
+                .fontColor($r('app.color.black'))
+                .padding({ left: 15 })
+                .layoutWeight(1)
+                .maxLines(1)
+              Text('当前显示')
+                .fontSize(14)
+                .fontColor('#3A7DF0')
+                .padding({ right: 8 })
+                .visibility(this.selected === idx ? Visibility.Visible : Visibility.Hidden)
+              Image(this.selected === idx ? $r('app.media.sport_steps_setting_btn_select')
+                : $r('app.media.sport_steps_setting_btn_un_select'))
+                .width(16)
+                .height(16)
+            }
+            .width('100%')
+            .padding(15)
+            .alignItems(VerticalAlign.Center)
+            .onClick(() => {
+              this.select(idx);
+            })
+          }, (label: string) => label)
         }
         .width('100%')
-        .padding(15)
-        .alignItems(VerticalAlign.Center)
-        .onClick(() => {
-          this.select(idx);
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+        .alignSelf(ItemAlign.Center)
+        .padding({
+          left: this.avoidAreaLeftVp,
+          right: this.avoidAreaRightVp,
+          bottom: this.avoidAreaBottomVp
         })
-      }, (label: string) => label)
+      }
+      .width('100%')
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
+      .align(Alignment.Top)
     }
     .width('100%')
     .height('100%')

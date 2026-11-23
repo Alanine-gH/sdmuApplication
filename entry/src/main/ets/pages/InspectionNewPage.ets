@@ -177,20 +177,23 @@ struct InspectionNewPage {
           .margin({ top: 12 })
 
           // inspection_addrecord_submit 提交
-          Text('提交')
-            .fontSize(17)
-            .fontColor(this.canSubmit ? $r('app.color.white') : $r('app.color.common_color_33'))
-            .textAlign(TextAlign.Center)
-            .width('100%')
-            .padding({ top: 13, bottom: 13 })
-            .backgroundColor(this.canSubmit ? $r('app.color.ybg_blue') : $r('app.color.common_color_5'))
-            .borderRadius(4)
-            .margin({ left: 20, right: 20, top: 60 })
-            .onClick(() => {
-              if (this.canSubmit) {
-                router.back();
-              }
-            })
+          Column() {
+            Text('提交')
+              .fontSize(17)
+              .fontColor(this.canSubmit ? $r('app.color.white') : $r('app.color.common_color_33'))
+              .textAlign(TextAlign.Center)
+              .width('100%')
+              .padding({ top: 13, bottom: 13 })
+              .backgroundColor(this.canSubmit ? $r('app.color.ybg_blue') : $r('app.color.common_color_5'))
+              .borderRadius(4)
+              .onClick(() => {
+                if (this.canSubmit) {
+                  router.back();
+                }
+              })
+          }
+          .width('100%')
+          .padding({ left: 20, right: 20, top: 60 })
         }
         .width('100%')
         .padding({ bottom: 10 })

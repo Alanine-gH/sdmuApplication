@@ -303,13 +303,16 @@ struct DocNumberPage {
   /** 右侧字号/编号段：tag 12fp bg common_color_5 + ListView（singleChoice） */
   @Builder
   rightSection(tag: string, list: OaDocNumEntity[], picked: number, onPick: (index: number) => void) {
-    Text(tag)
-      .fontSize(12)
-      .fontColor($r('app.color.common_color_1'))
-      .backgroundColor($r('app.color.common_color_5'))
-      .width('100%')
-      .padding({ left: 6, right: 6, top: 4, bottom: 4 })
-      .margin({ top: 15, right: 12 })
+    Column() {
+      Text(tag)
+        .fontSize(12)
+        .fontColor($r('app.color.common_color_1'))
+        .backgroundColor($r('app.color.common_color_5'))
+        .width('100%')
+        .padding({ left: 6, right: 6, top: 4, bottom: 4 })
+    }
+    .width('100%')
+    .padding({ top: 15, right: 12 })
     List() {
       ForEach(list, (entity: OaDocNumEntity, index: number) => {
         ListItem() {
@@ -335,13 +338,16 @@ struct DocNumberPage {
   /** 年度段（DocNumYear {year:number}） */
   @Builder
   yearSection() {
-    Text('年度')
-      .fontSize(12)
-      .fontColor($r('app.color.common_color_1'))
-      .backgroundColor($r('app.color.common_color_5'))
-      .width('100%')
-      .padding({ left: 6, right: 6, top: 4, bottom: 4 })
-      .margin({ top: 15, right: 12 })
+    Column() {
+      Text('年度')
+        .fontSize(12)
+        .fontColor($r('app.color.common_color_1'))
+        .backgroundColor($r('app.color.common_color_5'))
+        .width('100%')
+        .padding({ left: 6, right: 6, top: 4, bottom: 4 })
+    }
+    .width('100%')
+    .padding({ top: 15, right: 12 })
     List() {
       ForEach(this.years, (year: number, index: number) => {
         ListItem() {

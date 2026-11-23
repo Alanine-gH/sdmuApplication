@@ -534,7 +534,6 @@ struct ScheduleMainActivity {
       .padding({ left: 17, right: 13, top: 10, bottom: 10 })
       .backgroundColor($r('app.color.white'))
       .borderRadius(6)
-      .margin({ left: 20, right: 20, top: 20 })
       .alignItems(HorizontalAlign.Start)
       .onClick(() => {
         this.openDetail(bean);
@@ -549,6 +548,7 @@ struct ScheduleMainActivity {
           ? Visibility.Visible : Visibility.None)
     }
     .width('100%')
+    .padding({ left: 20, right: 20, top: 20 })
   }
 
   /** 年份选择 bindSheet（源码 showYearSelectLayout 等价：选择后 o=YYYY年 + p/q gone） */

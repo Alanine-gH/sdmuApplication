@@ -3,6 +3,7 @@ import { router } from '@kit.ArkUI';
 import { call } from '@kit.TelephonyKit';
 import { common, abilityAccessCtrl, Want } from '@kit.AbilityKit';
 import { contact } from '@kit.ContactsKit';
+import { image } from '@kit.ImageKit';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { LoginSession } from '../network/LoginSession';
@@ -10,6 +11,9 @@ import { Constants } from '../data/Constants';
 import { ContactAddressBookUserInfo } from '../model/ContactModel';
 import { EmptyView } from '../components/EmptyView';
 import { LoadingView } from '../components/LoadingView';
+import { BarcodeHelper } from '../common/BarcodeHelper';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
 
 /**
  * 联系人个人详情页 — 源码级翻译（ContactPersonalDetailActivity.java 逐行 → ArkTS，[W25 misc-b]）：
@@ -58,10 +62,96 @@ struct ContactPersonalDetailPage {
   @State showMore: boolean = false;
   @State moreAddType: string = '0';
   @State moreRoleType: string = '0';
+  @State showQrModal: boolean = false;
+  @State qrPixelMap: image.PixelMap | null = null;
+  @State qrLoading: boolean = false;
+  @State qrSaving: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('windowHeightVp') windowHeightVp: number = 780;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   private gh: string = '';
   private contactSearchType: string = '';
   /** 源码 l 类 setResult(-1) 等价：拨号/常用变化刷新标记，上游 onPageShow 消费 */
   private refreshFlag: boolean = false;
+
+  aboutToDisappear(): void {
+    this.releaseQrPixelMap();
+  }
+
+  private releaseQrPixelMap(): void {
+    if (this.qrPixelMap !== null) {
+      const pm: image.PixelMap = this.qrPixelMap;
+      this.qrPixelMap = null;
+      try {
+        pm.release();
+      } catch {
+        // 忽略释放异常
+      }
+    }
+  }
+
+  private closeQrModal(): void {
+    this.showQrModal = false;
+    if (!this.qrSaving) {
+      this.releaseQrPixelMap();
+    }
+  }
+
+  private async openQrModal(): Promise<void> {
+    const u = this.info.userInfo;
+    const payload: string = BarcodeHelper.buildContactVCard({
+      name: this.info.name,
+      org: u.BMMC,
+      title: u.ZW !== '' ? u.ZW : u.GW,
+      phone: u.SJHM,
+      tel: u.BGDH !== '' ? u.BGDH : u.SJDH,
+      email: u.DZYJ,
+      address: u.BGDZ
+    });
+    if (payload === '') {
+      this.getUIContext().getPromptAction().showToast({ message: '暂无可生成的联系人信息' });
+      return;
+    }
+    this.releaseQrPixelMap();
+    this.qrLoading = true;
+    this.showQrModal = true;
+    const res = await BarcodeHelper.generateQrPixelMap(payload, 480);
+    this.qrLoading = false;
+    if (!this.showQrModal) {
+      if (res.pixelMap !== null) {
+        try {
+          res.pixelMap.release();
+        } catch {
+          // 忽略释放异常
+        }
+      }
+      return;
+    }
+    if (res.success && res.pixelMap !== null) {
+      this.qrPixelMap = res.pixelMap;
+    } else {
+      this.showQrModal = false;
+      this.getUIContext().getPromptAction().showToast({ message: res.message });
+    }
+  }
+
+  private async saveQrToGallery(): Promise<void> {
+    if (this.qrPixelMap === null || this.qrSaving) {
+      return;
+    }
+    this.qrSaving = true;
+    try {
+      const ctx = this.getUIContext().getHostContext() as common.Context;
+      const res = await BarcodeHelper.savePixelMapToGallery(ctx, this.qrPixelMap);
+      this.getUIContext().getPromptAction().showToast({ message: res.message });
+    } finally {
+      this.qrSaving = false;
+      if (!this.showQrModal) {
+        this.releaseQrPixelMap();
+      }
+    }
+  }
 
   onPageShow(): void {
     const params = router.getParams() as Record<string, string>;
@@ -414,104 +504,251 @@ struct ContactPersonalDetailPage {
   }
 
   build() {
-    Column() {
-      TitleBar({ title: '', showBack: true, rightIcon: $r('app.media.mobile_campus_contact_more') })
-      // 源码 T1：more 图标 padding 8dip（TitleBar 组件默认边距等价）
+    Stack() {
+      Column() {
+        TitleBar({
+          title: '',
+          showBack: true,
+          rightIcon: $r('app.media.mobile_campus_contact_more'),
+          onRightClick: () => {
+            this.showMore = true;
+          }
+        })
+        // 源码 T1：more 图标 padding 8dip（TitleBar 组件默认边距等价）
 
-      if (this.isLoading) {
-        LoadingView()
-      } else if (this.showError) {
-        Column() {
-          EmptyView({ tipText: '加载失败，请检查网络后重试' })
-        }
-        .width('100%')
-        .layoutWeight(1)
-      } else if (this.showEmpty) {
-        Column() {
-          EmptyView({ tipText: '暂无数据' })
-        }
-        .width('100%')
-        .layoutWeight(1)
-      } else {
-        Scroll() {
+        if (this.isLoading) {
+          LoadingView()
+        } else if (this.showError) {
           Column() {
-            // 头部白卡 padT8
-            Column() {
-              Column() {
-                if (this.avatarUrl() !== '') {
-                  Image(this.avatarUrl())
-                    .width(60)
-                    .height(60)
-                    .borderRadius(30)
-                } else {
-                  // icon：blue_circle 30fp 白字，post(setWidth(height)) 方形等价 40×40
-                  Text(this.info.name === '' ? '' : this.info.name.substring(0, 1))
-                    .fontSize(30)
-                    .fontColor($r('app.color.ybg_white'))
-                    .width(40)
-                    .height(40)
-                    .textAlign(TextAlign.Center)
-                    .backgroundColor(this.genderColor())
-                    .borderRadius(20)
-                }
-                Text(this.info.name)
-                  .fontSize(17)
-                  .fontColor($r('app.color.common_color_1'))
-                  .margin({ top: 12 })
-              }
-              .width('100%')
-              .alignItems(HorizontalAlign.Center)
-
-              // 操作行 mt25.5 pad5：四按钮 88dip #3a92ed
-              Row() {
-                this.actionItem('发短信', $r('app.media.mobile_campus_contact_msn_b'), () => {
-                  // 源码 i 类：q3(0) 短信链
-                  this.onActionPhoneTap(0);
-                })
-                this.actionItem('打电话', $r('app.media.mobile_campus_contact_call_b'), () => {
-                  // 源码 j 类：q3(1) 电话链
-                  this.onActionPhoneTap(1);
-                })
-                // [W23 协作解堵] @Builder 返回 void 不能链 .visibility（原 487:20）→ if 包裹等价
-                if (this.info.userInfo.DZYJ !== '') {
-                  this.actionItem('发邮件', $r('app.media.mobile_campus_contact_email_b'), () => {
-                    this.onMailTap();
-                  })
-                }
-                // tvIm：ImConstant 默认 false → 恒 gone（源码 r3 589-593）——不渲染等价 Visibility.None
-              }
-              .width('100%')
-              .justifyContent(FlexAlign.Center)
-              .padding(5)
-              .margin({ top: 25.5 })
-            }
-            .width('100%')
-            .padding({ top: 8 })
-            .backgroundColor($r('app.color.white'))
-
-            // layoutContainer mt12 白底
-            Column() {
-              this.detailRows()
-            }
-            .width('100%')
-            .margin({ top: 12 })
-            .backgroundColor($r('app.color.white'))
+            EmptyView({ tipText: '加载失败，请检查网络后重试' })
           }
           .width('100%')
+          .layoutWeight(1)
+        } else if (this.showEmpty) {
+          Column() {
+            EmptyView({ tipText: '暂无数据' })
+          }
+          .width('100%')
+          .layoutWeight(1)
+        } else {
+          Scroll() {
+            Column() {
+              // 头部白卡 padT8
+              Column() {
+                Column() {
+                  if (this.avatarUrl() !== '') {
+                    Image(this.avatarUrl())
+                      .width(60)
+                      .height(60)
+                      .borderRadius(30)
+                  } else {
+                    // icon：blue_circle 30fp 白字，post(setWidth(height)) 方形等价 40×40
+                    Text(this.info.name === '' ? '' : this.info.name.substring(0, 1))
+                      .fontSize(30)
+                      .fontColor($r('app.color.ybg_white'))
+                      .width(40)
+                      .height(40)
+                      .textAlign(TextAlign.Center)
+                      .backgroundColor(this.genderColor())
+                      .borderRadius(20)
+                  }
+                  Text(this.info.name)
+                    .fontSize(17)
+                    .fontColor($r('app.color.common_color_1'))
+                    .margin({ top: 12 })
+                }
+                .width('100%')
+                .alignItems(HorizontalAlign.Center)
+
+                // 操作行 mt25.5 pad5：自动折行避免窄屏溢出
+                Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Center, alignItems: ItemAlign.Start }) {
+                  this.actionItem('发短信', $r('app.media.mobile_campus_contact_msn_b'), () => {
+                    // 源码 i 类：q3(0) 短信链
+                    this.onActionPhoneTap(0);
+                  })
+                  this.actionItem('打电话', $r('app.media.mobile_campus_contact_call_b'), () => {
+                    // 源码 j 类：q3(1) 电话链
+                    this.onActionPhoneTap(1);
+                  })
+                  // [W23 协作解堵] @Builder 返回 void 不能链 .visibility（原 487:20）→ if 包裹等价
+                  if (this.info.userInfo.DZYJ !== '') {
+                    this.actionItem('发邮件', $r('app.media.mobile_campus_contact_email_b'), () => {
+                      this.onMailTap();
+                    })
+                  }
+                  this.qrActionItem('名片码', () => {
+                    this.openQrModal();
+                  })
+                  // tvIm：ImConstant 默认 false → 恒 gone（源码 r3 589-593）——不渲染等价 Visibility.None
+                }
+                .width('100%')
+                .padding(5)
+                .margin({ top: 25.5 })
+              }
+              .width('100%')
+              .padding({ top: 8 })
+              .backgroundColor($r('app.color.white'))
+
+              // layoutContainer mt12 白底
+              Column() {
+                this.detailRows()
+              }
+              .width('100%')
+              .margin({ top: 12 })
+              .backgroundColor($r('app.color.white'))
+            }
+            .width('100%')
+            .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+            .padding({ bottom: Math.max(12, this.avoidAreaBottomVp) })
+          }
+          .width('100%')
+          .layoutWeight(1)
+          .scrollBar(BarState.Off)
+          .align(Alignment.Top)
         }
-        .width('100%')
-        .layoutWeight(1)
-        .scrollBar(BarState.Off)
-        .align(Alignment.Top)
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor('#F2F2F2')
+
+      if (this.showQrModal) {
+        this.qrModalOverlay()
       }
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#F2F2F2')
     .bindSheet(this.showMore, this.moreSheetBuilder(), {
-      height: 320,
+      height: 380,
+      preferType: AdaptiveLayoutHelper.shouldUseCenterSheet(this.currentBreakpoint)
+        ? SheetType.CENTER : SheetType.BOTTOM,
       showClose: false,
-      backgroundColor: '#F2F2F2'
+      backgroundColor: '#F2F2F2',
+      onDisappear: () => {
+        this.showMore = false;
+      }
+    })
+  }
+
+  @Builder
+  qrActionItem(label: string, onTap: () => void) {
+    Column() {
+      SymbolGlyph($r('sys.symbol.qrcode'))
+        .fontSize(26)
+        .fontColor(['#3A92ED'])
+        .width(28)
+        .height(28)
+      Text(label)
+        .fontSize(14)
+        .fontColor('#3A92ED')
+        .margin({ top: 8 })
+    }
+    .width(84)
+    .alignItems(HorizontalAlign.Center)
+    .onClick(() => {
+      onTap();
+    })
+  }
+
+  @Builder
+  qrModalOverlay() {
+    Column() {
+      Scroll() {
+        Column() {
+          Row() {
+            Text('联系人名片二维码')
+              .fontSize(17)
+              .fontWeight(FontWeight.Medium)
+              .fontColor($r('app.color.common_color_1'))
+              .layoutWeight(1)
+            Text('关闭')
+              .fontSize(15)
+              .fontColor('#3A92ED')
+              .padding({ left: 8, right: 4, top: 4, bottom: 4 })
+              .onClick(() => {
+                this.closeQrModal();
+              })
+          }
+          .width('100%')
+
+          if (this.info.name !== '') {
+            Text(this.info.name)
+              .fontSize(16)
+              .fontWeight(FontWeight.Bold)
+              .fontColor($r('app.color.common_color_1'))
+              .margin({ top: 10 })
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
+          if (this.info.userInfo.BMMC !== '') {
+            Text(this.info.userInfo.BMMC)
+              .fontSize(13)
+              .fontColor($r('app.color.common_color_3'))
+              .margin({ top: 4 })
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
+
+          if (this.qrLoading) {
+            LoadingProgress()
+              .width(42)
+              .height(42)
+              .margin({ top: 40, bottom: 40 })
+          } else if (this.qrPixelMap !== null) {
+            Image(this.qrPixelMap)
+              .width(200)
+              .height(200)
+              .objectFit(ImageFit.Contain)
+              .margin({ top: 14, bottom: 10 })
+              .backgroundColor($r('app.color.white'))
+          }
+
+          Text('扫码可快速导入联系人名片（vCard 3.0）')
+            .fontSize(12)
+            .fontColor($r('app.color.common_color_3'))
+            .margin({ bottom: 14 })
+
+          if (this.qrPixelMap !== null) {
+            SaveButton({
+              icon: SaveIconStyle.FULL_FILLED,
+              text: SaveDescription.SAVE_TO_GALLERY,
+              buttonType: ButtonType.Capsule
+            })
+              .height(38)
+              .fontSize(14)
+              .fontColor($r('app.color.white'))
+              .iconColor($r('app.color.white'))
+              .backgroundColor('#3A92ED')
+              .padding({ left: 18, right: 18 })
+              .onClick((_event: ClickEvent, result: SaveButtonOnClickResult) => {
+                if (result === SaveButtonOnClickResult.SUCCESS) {
+                  this.saveQrToGallery();
+                } else {
+                  this.getUIContext().getPromptAction().showToast({ message: '未获得保存授权' });
+                }
+              })
+          }
+        }
+        .width('100%')
+        .alignItems(HorizontalAlign.Center)
+        .padding({ left: 20, right: 20, top: 16, bottom: 20 })
+      }
+      .scrollBar(BarState.Off)
+      .width(AdaptiveLayoutHelper.getDialogMaxWidth(this.currentBreakpoint, this.windowWidthVp))
+      .constraintSize({ maxHeight: AdaptiveLayoutHelper.getDialogMaxHeight(this.windowHeightVp) })
+      .backgroundColor($r('app.color.white'))
+      .borderRadius(12)
+      .onClick(() => {
+        // 拦截弹窗内部点击冒泡
+      })
+    }
+    .width('100%')
+    .height('100%')
+    .padding({ left: 16, right: 16 })
+    .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
+    .backgroundColor('#66000000')
+    .onClick(() => {
+      this.closeQrModal();
     })
   }
 
@@ -684,6 +921,18 @@ struct ContactPersonalDetailPage {
             this.onPermissionsTap();
           })
       }
+      Text('生成名片二维码')
+        .fontSize(18)
+        .fontColor('#3A92ED')
+        .width('100%')
+        .height(56)
+        .margin({ top: 1 })
+        .textAlign(TextAlign.Center)
+        .backgroundColor($r('app.color.white'))
+        .onClick(() => {
+          this.showMore = false;
+          this.openQrModal();
+        })
       Text('取消')
         .fontSize(20)
         .fontWeight(FontWeight.Bold)
