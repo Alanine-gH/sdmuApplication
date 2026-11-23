@@ -9,6 +9,7 @@ import { WMHTab } from '../components/WMHTab';
 import { ICampusTab } from '../components/ICampusTab';
 import { IOfficeTab } from '../components/IOfficeTab';
 import { MineTab } from '../components/MineTab';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /** APK 应用宫格项（服务端下发 7 组，本清单为 2026-11-17 实拍结果） */
 class AppGridItem {
@@ -574,8 +575,9 @@ struct Index {
   @State isReady: boolean = false;
   @State isLogged: boolean = false;
   @State currentTabIndex: number = 0;
-  /** [tablet-adapt] EntryAbility onWindowStageCreate 注册 windowSizeChange 写入的宽屏断点（≥600vp） */
+  /** [tablet-adapt] 多形态断点：sm(<600) / md(600~839) / lg(>=840) */
   @StorageProp('isWideScreen') isWideScreen: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
 
   aboutToAppear(): void {
     // 启动即恢复持久化会话（UC/aesKey/sessionKey），业务请求免重新协商
@@ -644,14 +646,13 @@ struct Index {
         // APK 实拍：学生端底栏 3 个按钮（首页/应用/我的）——BadgeLayout 中
         // cbNews 仅教师(userType=2)可见、cbContact 由 isHideContactTab 隐藏、
         // cbYiban 由 mobile_campus_yiban_visibility=false 隐藏、cbDaiBan/cbXueGong 未启用。
-        Tabs({ barPosition: BarPosition.End }) {
-          // [tablet-adapt] 宽屏内容区限宽 560vp 居中；窄屏 maxWidth='100%' 与改动前渲染一致。
-          // 根容器/Tabs 仍全宽、背景延续 main_bg，仅内容 Column 限宽（左右留白与背景同色）。
+        Tabs({ barPosition: this.currentBreakpoint === 'lg' ? BarPosition.Start : BarPosition.End }) {
+          // [tablet-adapt] sm:100% / md:720vp(阔直板/折叠屏) / lg:1080vp+左侧导航栏(平板/三折叠)
           TabContent() {
             Row() {
               ReportTab()
                 .width('100%')
-                .constraintSize({ maxWidth: this.isWideScreen ? 560 : '100%' })
+                .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
             }
             .width('100%')
             .height('100%')
@@ -663,7 +664,7 @@ struct Index {
             Row() {
               AppsTab()
                 .width('100%')
-                .constraintSize({ maxWidth: this.isWideScreen ? 560 : '100%' })
+                .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
             }
             .width('100%')
             .height('100%')
@@ -675,7 +676,7 @@ struct Index {
             Row() {
               MineTab()
                 .width('100%')
-                .constraintSize({ maxWidth: this.isWideScreen ? 560 : '100%' })
+                .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
             }
             .width('100%')
             .height('100%')
@@ -684,6 +685,9 @@ struct Index {
           .tabBar(this.bottomTab($r('app.media.mobile_campus_my'), $r('app.media.mobile_campus_my_select'),
             '我的', 2))
         }
+        .vertical(this.currentBreakpoint === 'lg')
+        .barWidth(this.currentBreakpoint === 'lg' ? 76 : '100%')
+        .barHeight(this.currentBreakpoint === 'lg' ? '100%' : 56)
         .scrollable(true)
         .barMode(BarMode.Fixed)
         .onChange((index: number) => {

@@ -1,4 +1,5 @@
 import { describe, beforeAll, beforeEach, afterEach, afterAll, it, expect } from '@ohos/hypium';
+import { BreakpointSystem } from '../main/ets/common/BreakpointSystem';
 
 export default function localUnitTest() {
   describe('localUnitTest', () => {
@@ -22,12 +23,23 @@ export default function localUnitTest() {
       // This API supports only one parameter: clear action function.
     });
     it('assertContain', 0, () => {
-      // Defines a test case. This API supports three parameters: test case name, filter parameter, and test case function.
       let a = 'abc';
       let b = 'b';
-      // Defines a variety of assertion methods, which are used to declare expected boolean conditions.
       expect(a).assertContain(b);
       expect(a).assertEqual(a);
+    });
+    it('breakpointSystemCompute', 0, () => {
+      expect(BreakpointSystem.computeBreakpoint(360)).assertEqual('sm');
+      expect(BreakpointSystem.computeBreakpoint(599)).assertEqual('sm');
+      expect(BreakpointSystem.computeBreakpoint(600)).assertEqual('md');
+      expect(BreakpointSystem.computeBreakpoint(839)).assertEqual('md');
+      expect(BreakpointSystem.computeBreakpoint(840)).assertEqual('lg');
+      expect(BreakpointSystem.getContentMaxWidth('sm')).assertEqual('100%');
+      expect(BreakpointSystem.getContentMaxWidth('md')).assertEqual(720);
+      expect(BreakpointSystem.getContentMaxWidth('lg')).assertEqual(1080);
+      expect(BreakpointSystem.getAppGridColumns('sm')).assertEqual(4);
+      expect(BreakpointSystem.getAppGridColumns('md')).assertEqual(6);
+      expect(BreakpointSystem.getAppGridColumns('lg')).assertEqual(8);
     });
   });
 }

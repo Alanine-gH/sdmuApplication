@@ -1,4 +1,5 @@
 import { router } from '@kit.ArkUI';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 通用标题栏 — 1:1 复刻 toolbar_normal.xml
@@ -30,8 +31,9 @@ export struct TitleBar {
   @Prop rightEnabled: boolean = true;
   /** [W20 social] 右侧文字自定义色（PostDetailActivity.T1 "更多" ybg_blue；null 保持黑色） */
   rightTextColor: string | null = null;
-  /** [tablet-adapt] EntryAbility 写入的宽屏断点（≥600vp）：标题栏内容区同步限宽 560vp 居中 */
+  /** [tablet-adapt] 多形态断点：sm(100%) / md(720vp) / lg(1080vp) */
   @StorageProp('isWideScreen') isWideScreen: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
 
   build() {
     Column() {
@@ -114,15 +116,15 @@ export struct TitleBar {
       .height(44)
       .alignItems(VerticalAlign.Center)
       .backgroundColor($r('app.color.main_bg'))
-      // [tablet-adapt] 宽屏标题栏内容限宽 560vp 居中（窄屏 100% 与改动前一致）
-      .constraintSize({ maxWidth: this.isWideScreen ? 560 : '100%' })
+      // [tablet-adapt] 宽屏标题栏内容按断点限宽居中（sm:100% / md:720 / lg:1080）
+      .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
       .alignSelf(ItemAlign.Center)
 
       Divider()
         .color($r('app.color.common_color_5'))
         .strokeWidth(0.5)
         .width('100%')
-        .constraintSize({ maxWidth: this.isWideScreen ? 560 : '100%' })
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
         .alignSelf(ItemAlign.Center)
     }
     .width('100%')

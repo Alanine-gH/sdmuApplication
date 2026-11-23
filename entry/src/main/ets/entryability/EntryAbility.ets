@@ -4,10 +4,9 @@ import { window, display } from '@kit.ArkUI';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { PreferencesUtil } from '../data/PreferencesUtil';
 import { LoginSession } from '../network/LoginSession';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 const DOMAIN = 0x0000;
-/** [tablet-adapt] 宽屏断点（vp）：≥600 视为平板/折叠屏展开态，内容区限宽居中 */
-const WIDE_SCREEN_VP = 600;
 
 export default class EntryAbility extends UIAbility {
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
@@ -36,9 +35,11 @@ export default class EntryAbility extends UIAbility {
         hilog.error(DOMAIN, 'testTag', 'getMainWindow failed: %{public}s', JSON.stringify(err));
         return;
       }
-      this.updateWideScreen(win.getWindowProperties().windowRect.width);
+      const rect = win.getWindowProperties().windowRect;
+      BreakpointSystem.updateFromPx(rect.width, rect.height);
+      BreakpointSystem.registerFoldListener();
       win.on('windowSizeChange', (size: window.Size) => {
-        this.updateWideScreen(size.width);
+        BreakpointSystem.updateFromPx(size.width, size.height);
       });
     });
 
@@ -60,15 +61,6 @@ export default class EntryAbility extends UIAbility {
     } catch (err) {
       hilog.error(DOMAIN, 'testTag', 'Failed to set colorMode. Cause: %{public}s', JSON.stringify(err));
     }
-  }
-
-  /** [tablet-adapt] px→vp 换算后写断点；窄屏恒 false，渲染与旧版完全一致 */
-  private updateWideScreen(widthPx: number): void {
-    const density: number = display.getDefaultDisplaySync().densityPixels;
-    const wide: boolean = density > 0 ? widthPx / density >= WIDE_SCREEN_VP : false;
-    AppStorage.setOrCreate<boolean>('isWideScreen', wide);
-    hilog.info(DOMAIN, 'testTag', 'windowSizeChange vp=%{public}f wide=%{public}s',
-      widthPx / Math.max(density, 1), String(wide));
   }
 
   onWindowStageDestroy(): void {
