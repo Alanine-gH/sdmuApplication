@@ -24,8 +24,6 @@ struct LoginPage {
   @State passwordVisible: boolean = false;
   @State privacyAgreed: boolean = false;
   @State isLogging: boolean = false;
-  @State loginPressed: boolean = false;
-  @State smsPressed: boolean = false;
   @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
 
   private async doLogin(): Promise<void> {
@@ -207,12 +205,10 @@ struct LoginPage {
             .width('100%')
             .height(46)
             .textAlign(TextAlign.Center)
-            .backgroundColor($r('app.color.mobile_campus_primary_color'))
+            .backgroundColor(ImmersiveLightHelper.fallbackBg($r('app.color.mobile_campus_primary_color')))
             .borderRadius(23)
-            .visualEffect(ImmersiveLightHelper.buttonGlow(this.loginPressed))
-            .onTouch((e: TouchEvent) => {
-              this.loginPressed = e.type === TouchType.Down;
-            })
+            .systemMaterial(ImmersiveLightHelper.primaryButtonMaterial())
+            .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
             .onClick(() => {
               this.doLogin();
             })
@@ -230,13 +226,14 @@ struct LoginPage {
             .width('100%')
             .height(46)
             .textAlign(TextAlign.Center)
-            .backgroundColor($r('app.color.white'))
+            .backgroundColor(ImmersiveLightHelper.fallbackBg($r('app.color.white')))
             .borderRadius(23)
-            .border({ width: 1, color: $r('app.color.mobile_campus_primary_color') })
-            .visualEffect(ImmersiveLightHelper.buttonGlow(this.smsPressed))
-            .onTouch((e: TouchEvent) => {
-              this.smsPressed = e.type === TouchType.Down;
+            .border(ImmersiveLightHelper.isSupported() ? undefined : {
+              width: 1,
+              color: $r('app.color.mobile_campus_primary_color')
             })
+            .systemMaterial(ImmersiveLightHelper.secondaryButtonMaterial())
+            .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
             .onClick(() => {
               // [W4 sms-login] 跳转手机号登录页（InputIdentifyCodeActivity 链路复刻）
               router.pushUrl({ url: 'pages/PhoneLoginPage' });

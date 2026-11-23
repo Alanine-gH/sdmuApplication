@@ -7,6 +7,7 @@ import { ApiResponse } from '../model/ResponseModel';
 import { UserInfo } from '../model/UserModel';
 import { PreferencesUtil } from '../data/PreferencesUtil';
 import { Constants } from '../data/Constants';
+import { ImmersiveLightHelper } from '../common/ImmersiveLightHelper';
 
 /**
  * 手机号登录页 — 1:1 复刻 APK 手机号登录链路（InputIdentifyCodeActivity 188 行 + IdentifyCodeModel）：
@@ -284,13 +285,16 @@ struct PhoneLoginPage {
               .width('100%')
               .height(46)
               .textAlign(TextAlign.Center)
-              .backgroundColor($r('app.color.mobile_campus_primary_color'))
+              .backgroundColor(ImmersiveLightHelper.fallbackBg($r('app.color.mobile_campus_primary_color')))
               .borderRadius(23)
+              .systemMaterial(ImmersiveLightHelper.primaryButtonMaterial())
+              .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
               .onClick(() => {
                 this.getSmsCode();
               })
           }
           .width('100%')
+          .constraintSize({ maxWidth: 480 })
           .padding({ left: 33, right: 33 })
           .margin({ top: 30 })
 

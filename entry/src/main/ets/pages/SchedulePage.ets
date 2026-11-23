@@ -6,6 +6,7 @@ import { CourseItem, ScheduleTermParams, SCHEDULE_FALLBACK_START, SCHEDULE_FALLB
 import { BusinessError } from '@kit.BasicServicesKit';
 import { common } from '@kit.AbilityKit';
 import { WidgetDataHelper, WidgetCourseSummary } from '../common/WidgetDataHelper';
+import { ImmersiveLightHelper } from '../common/ImmersiveLightHelper';
 
 /**
  * 课表页 — 源码级对齐 TimetableActivity + WeekCourseFragment + CourseBox + ChooseWeeksPopup + ChooseTermDialog
@@ -188,6 +189,9 @@ struct SchedulePage {
       this.maxWeek = total > MAX_WEEK ? MAX_WEEK : total;
     }
     this.applyWeek(this.todayWeek);
+    if (this.courseList.length > 0) {
+      this.syncScheduleToWidget();
+    }
   }
 
   private todayMidnightMs(): number {
@@ -221,19 +225,7 @@ struct SchedulePage {
   private syncScheduleToWidget(): void {
     try {
       const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
-      const jsDay: number = new Date().getDay();
-      const todayWeekday: number = jsDay === 0 ? 7 : jsDay;
-      const summaries: WidgetCourseSummary[] = [];
-      for (const c of this.weekCourses()) {
-        if (c.dayOfWeek === todayWeekday) {
-          summaries.push({
-            name: c.name,
-            time: `第${c.sectionStart}-${c.sectionEnd}节`,
-            place: c.location
-          });
-        }
-      }
-      WidgetDataHelper.saveTodaySchedule(ctx, `第${this.weekNumber}周·今日课表`, summaries);
+      WidgetDataHelper.saveSemesterSchedule(ctx, this.weekNumber, this.maxWeek, this.courseList);
     } catch {
       // 忽略桌面卡片同步异常
     }
@@ -611,38 +603,48 @@ struct SchedulePage {
         Text('＜')
           .fontSize(17)
           .fontColor($r('app.color.common_color_1'))
-          .width(40)
-          .height('100%')
+          .width(34)
+          .height(34)
+          .borderRadius(17)
           .textAlign(TextAlign.Center)
           .margin({ left: 15 })
+          .systemMaterial(ImmersiveLightHelper.pillMaterial())
+          .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.94 })
           .onClick(() => {
             router.back();
           })
         Row() {
-          Text('第' + this.weekNumber + '周')
-            .fontSize(17)
-            .fontColor($r('app.color.common_color_1'))
-          Image($r('app.media.schedule_down_btn'))
-            .width(11.5)
-            .height(6)
-            .margin({ left: 7.5 })
-            .rotate({ angle: this.showWeekPopup ? 180 : 0 })
+          Row() {
+            Text('第' + this.weekNumber + '周')
+              .fontSize(17)
+              .fontColor($r('app.color.common_color_1'))
+            Image($r('app.media.schedule_down_btn'))
+              .width(11.5)
+              .height(6)
+              .margin({ left: 7.5 })
+              .rotate({ angle: this.showWeekPopup ? 180 : 0 })
+          }
+          .padding({ left: 14, right: 14, top: 6, bottom: 6 })
+          .borderRadius(16)
+          .systemMaterial(ImmersiveLightHelper.pillMaterial())
+          .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.96 })
+          .onClick(() => {
+            this.showWeekPopup = !this.showWeekPopup;
+            if (this.showWeekPopup) {
+              setTimeout(() => {
+                this.weekScroller.scrollToIndex(Math.max(0, this.weekNumber - 3));
+              }, 60);
+            }
+          })
         }
         .layoutWeight(1)
         .justifyContent(FlexAlign.Center)
         .height('100%')
-        .onClick(() => {
-          this.showWeekPopup = !this.showWeekPopup;
-          if (this.showWeekPopup) {
-            setTimeout(() => {
-              this.weekScroller.scrollToIndex(Math.max(0, this.weekNumber - 3));
-            }, 60);
-          }
-        })
         Image($r('app.media.mobile_campus_timetable_termbtn'))
           .width(43.5)
           .height(14)
           .margin({ right: 15 })
+          .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.94 })
           .onClick(() => {
             this.termWheelIndex = 0;
             this.showTermDialog = true;

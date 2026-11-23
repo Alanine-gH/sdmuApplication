@@ -301,7 +301,9 @@ struct AppsTab {
             }
             .width('100%')
             .padding({ top: 14, bottom: 14 })
+            .borderRadius(12)
             .alignItems(HorizontalAlign.Center)
+            .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.95 })
             .onClick(() => {
               if (item.url !== '') {
                 // LX=2 轻应用：直接加载服务端下发的 H5 地址
@@ -322,7 +324,10 @@ struct AppsTab {
       .height(Math.ceil(items.length / BreakpointSystem.getAppGridColumns(this.currentBreakpoint)) * 90)
     }
     .width('100%')
-    .backgroundColor($r('app.color.white'))
+    .borderRadius(14)
+    .margin({ left: 12, right: 12, bottom: 10 })
+    .backgroundColor(ImmersiveLightHelper.fallbackBg($r('app.color.white')))
+    .systemMaterial(ImmersiveLightHelper.cardMaterial())
   }
 
   build() {
@@ -379,7 +384,9 @@ struct AppsTab {
                       }
                       .width('100%')
                       .padding({ top: 14, bottom: 14 })
+                      .borderRadius(12)
                       .alignItems(HorizontalAlign.Center)
+                      .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.95 })
                       .onClick(() => {
                         this.dispatchApp(item.yymc, item.yyid, item.lx, item.url);
                       })
@@ -391,7 +398,10 @@ struct AppsTab {
                 .height(Math.ceil(group.apps.length / BreakpointSystem.getAppGridColumns(this.currentBreakpoint)) * 90)
               }
               .width('100%')
-              .margin({ bottom: 8 })
+              .borderRadius(14)
+              .margin({ left: 12, right: 12, bottom: 10 })
+              .backgroundColor(ImmersiveLightHelper.fallbackBg($r('app.color.white')))
+              .systemMaterial(ImmersiveLightHelper.cardMaterial())
             }, (group: ServerAppGroup) => 'grp_' + group.name)
           }
 
@@ -449,6 +459,7 @@ struct AppsTab {
           }
         }
         .width('100%')
+        .padding({ bottom: 88 })
       }
       .scrollable(ScrollDirection.Vertical)
       .width('100%')
@@ -651,11 +662,13 @@ struct Index {
       }
       .width(this.currentBreakpoint === 'lg' ? 60 : '100%')
       .height(52)
-      .borderRadius(this.currentBreakpoint === 'lg' ? 12 : 0)
+      .borderRadius(this.currentBreakpoint === 'lg' ? 14 : 0)
       .justifyContent(FlexAlign.Center)
       .alignItems(HorizontalAlign.Center)
-      .backgroundColor(this.currentBreakpoint === 'lg' ? '#FFF0F0' : $r('app.color.main_bg'))
-      .visualEffect(ImmersiveLightHelper.cardGlow())
+      .backgroundColor(this.currentBreakpoint === 'lg' ?
+        ImmersiveLightHelper.fallbackBg('#FFF0F0') : Color.Transparent)
+      .systemMaterial(this.currentBreakpoint === 'lg' ? ImmersiveLightHelper.pillMaterial() : undefined)
+      .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.94 })
     } else {
       Column() {
         Image(iconNormal)
@@ -669,11 +682,11 @@ struct Index {
       }
       .width(this.currentBreakpoint === 'lg' ? 60 : '100%')
       .height(52)
-      .borderRadius(this.currentBreakpoint === 'lg' ? 12 : 0)
+      .borderRadius(this.currentBreakpoint === 'lg' ? 14 : 0)
       .justifyContent(FlexAlign.Center)
       .alignItems(HorizontalAlign.Center)
-      .backgroundColor($r('app.color.main_bg'))
-      .visualEffect(ImmersiveLightHelper.cardGlow())
+      .backgroundColor(this.currentBreakpoint === 'lg' ? $r('app.color.main_bg') : Color.Transparent)
+      .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.94 })
     }
   }
 
@@ -724,7 +737,14 @@ struct Index {
         }
         .vertical(this.currentBreakpoint === 'lg')
         .barWidth(this.currentBreakpoint === 'lg' ? 76 : '100%')
-        .barHeight(this.currentBreakpoint === 'lg' ? '100%' : 56)
+        .barHeight(this.currentBreakpoint === 'lg' ? '100%' : 62)
+        .barOverlap(this.currentBreakpoint !== 'lg')
+        .barBackgroundColor(this.currentBreakpoint !== 'lg' ? Color.Transparent : $r('app.color.main_bg'))
+        .barFloatingStyle(this.currentBreakpoint !== 'lg' && ImmersiveLightHelper.isSupported() ? {
+          barSideMargin: 16,
+          barBottomMargin: 10,
+          systemMaterial: ImmersiveLightHelper.tabBarMaterial()
+        } : undefined)
         .scrollable(true)
         .barMode(BarMode.Fixed)
         .onChange((index: number) => {

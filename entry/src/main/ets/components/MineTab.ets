@@ -82,8 +82,8 @@ export struct MineTab {
     .height(48)
     .padding({ left: 16, right: 16 })
     .alignItems(VerticalAlign.Center)
-    .backgroundColor($r('app.color.white'))
-    .visualEffect(ImmersiveLightHelper.cardGlow())
+    .backgroundColor(Color.Transparent)
+    .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.98 })
     .onClick(() => {
       router.pushUrl({ url: target });
     })
@@ -158,8 +158,11 @@ export struct MineTab {
         .height(88)
         .padding({ left: 16, right: 12 })
         .margin({ top: 12 })
+        .borderRadius(16)
         .alignItems(VerticalAlign.Center)
-        .backgroundColor($r('app.color.white'))
+        .backgroundColor(ImmersiveLightHelper.fallbackBg($r('app.color.white')))
+        .systemMaterial(ImmersiveLightHelper.cardMaterial())
+        .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.98 })
         .onClick(() => {
           router.pushUrl({ url: 'pages/PersonalDetailPage' });
         })
@@ -171,7 +174,9 @@ export struct MineTab {
         }
         .width('100%')
         .margin({ top: 12 })
-        .backgroundColor($r('app.color.white'))
+        .borderRadius(16)
+        .backgroundColor(ImmersiveLightHelper.fallbackBg($r('app.color.white')))
+        .systemMaterial(ImmersiveLightHelper.cardMaterial())
 
         // llLayout2：下载地址、下载文件管理
         Column() {
@@ -180,7 +185,9 @@ export struct MineTab {
         }
         .width('100%')
         .margin({ top: 12 })
-        .backgroundColor($r('app.color.white'))
+        .borderRadius(16)
+        .backgroundColor(ImmersiveLightHelper.fallbackBg($r('app.color.white')))
+        .systemMaterial(ImmersiveLightHelper.cardMaterial())
 
         // 设置
         Column() {
@@ -188,27 +195,33 @@ export struct MineTab {
         }
         .width('100%')
         .margin({ top: 12 })
-        .backgroundColor($r('app.color.white'))
+        .borderRadius(16)
+        .backgroundColor(ImmersiveLightHelper.fallbackBg($r('app.color.white')))
+        .systemMaterial(ImmersiveLightHelper.cardMaterial())
 
-        // tvLogout：退出登录 17fp #E96161、白底、paddingV 10vp、marginTop 32vp
+        // tvLogout：退出登录
         Text($r('app.string.logout'))
           .fontSize(17)
           .fontColor($r('app.color.logout_red'))
           .width('100%')
+          .height(48)
           .textAlign(TextAlign.Center)
-          .padding({ top: 10, bottom: 10 })
-          .margin({ top: 32 })
-          .backgroundColor($r('app.color.white'))
+          .margin({ top: 28 })
+          .borderRadius(24)
+          .backgroundColor(ImmersiveLightHelper.fallbackBg($r('app.color.white')))
+          .systemMaterial(ImmersiveLightHelper.secondaryButtonMaterial())
+          .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
           .onClick(() => {
             this.showLogoutConfirm();
           })
       }
       .width('100%')
+      .padding({ left: 12, right: 12, bottom: 92 })
     }
     .width('100%')
     .height('100%')
     .scrollBar(BarState.Off)
     .align(Alignment.Top)
-    .backgroundColor($r('app.color.mobile_campus_bg_color'))
+    .backgroundColor('#EEF1F6')
   }
 }

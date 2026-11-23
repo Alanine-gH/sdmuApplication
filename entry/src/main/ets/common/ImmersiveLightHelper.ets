@@ -1,39 +1,89 @@
-import { hdsEffect } from '@kit.UIDesignKit';
+import { uiMaterial } from '@kit.ArkUI';
 
 /**
- * 鸿蒙沉浸光感视效助手（基于 @kit.UIDesignKit hdsEffect）
- * 提供点光源（PointLight）边缘受光与按压流光阴影（PressShadow）
+ * 鸿蒙 API 26 原生沉浸光感材质助手（基于 @kit.ArkUI uiMaterial.ImmersiveMaterial）
+ * 配合 module.json5 中 ohos.arkui.UIMaterial.state=enable 使用；
+ * 挂载 systemMaterial 的组件需避免同时设置不透明 backgroundColor，使用 fallbackBg() 透出液态玻璃折射与光感。
  */
 export class ImmersiveLightHelper {
-  /** 按钮交互沉浸光感：默认边缘受光 + 按压渐隐渐变；按下时点亮亮光源 */
-  public static buttonGlow(pressed: boolean = false): VisualEffect | undefined {
-    if (!canIUse('SystemCapability.UIDesign.HDSComponent.Core')) {
-      return undefined;
+  /** 检测当前设备是否支持沉浸光感材质 */
+  public static isSupported(): boolean {
+    try {
+      return uiMaterial.isImmersiveMaterialSupported();
+    } catch {
+      return false;
     }
-    return new hdsEffect.HdsEffectBuilder()
-      .pointLight({
-        sourceType: pressed ? hdsEffect.PointLightSourceType.BRIGHT : hdsEffect.PointLightSourceType.NONE,
-        illuminatedType: hdsEffect.PointLightIlluminatedType.BORDER_CONTENT,
-        options: {
-          color: Color.White,
-          intensity: pressed ? 0.9 : 0.45,
-          height: 80
-        }
-      })
-      .pressShadow(hdsEffect.PressShadowType.BLEND_GRADIENT)
-      .buildEffect();
   }
 
-  /** 卡片/菜单项边缘受光 + 轻按压光影 */
-  public static cardGlow(): VisualEffect | undefined {
-    if (!canIUse('SystemCapability.UIDesign.HDSComponent.Core')) {
+  /** 支持沉浸光感时返回透明背景以防遮挡材质层；否则回退为原始纯色背景 */
+  public static fallbackBg(color: ResourceColor): ResourceColor {
+    return ImmersiveLightHelper.isSupported() ? Color.Transparent : color;
+  }
+
+  /** 主按钮沉浸光感材质（山管主题红半透玻璃 + 白色按压光感） */
+  public static primaryButtonMaterial(): uiMaterial.ImmersiveMaterial | undefined {
+    if (!ImmersiveLightHelper.isSupported()) {
       return undefined;
     }
-    return new hdsEffect.HdsEffectBuilder()
-      .pointLight({
-        illuminatedType: hdsEffect.PointLightIlluminatedType.BORDER
-      })
-      .pressShadow(hdsEffect.PressShadowType.BLEND_WHITE)
-      .buildEffect();
+    return new uiMaterial.ImmersiveMaterial({
+      style: uiMaterial.ImmersiveStyle.REGULAR,
+      materialColor: '#CC97000C',
+      applyShadow: true,
+      interactive: true,
+      lightEffect: { color: Color.White }
+    });
+  }
+
+  /** 次按钮沉浸光感材质（浅透白玻璃 + 主题红微光反馈） */
+  public static secondaryButtonMaterial(): uiMaterial.ImmersiveMaterial | undefined {
+    if (!ImmersiveLightHelper.isSupported()) {
+      return undefined;
+    }
+    return new uiMaterial.ImmersiveMaterial({
+      style: uiMaterial.ImmersiveStyle.THIN,
+      materialColor: '#B8FFFFFF',
+      applyShadow: true,
+      interactive: true,
+      lightEffect: { color: '#6697000C' }
+    });
+  }
+
+  /** 卡片沉浸光感材质 */
+  public static cardMaterial(): uiMaterial.ImmersiveMaterial | undefined {
+    if (!ImmersiveLightHelper.isSupported()) {
+      return undefined;
+    }
+    return new uiMaterial.ImmersiveMaterial({
+      style: uiMaterial.ImmersiveStyle.THIN,
+      materialColor: '#CCFFFFFF',
+      applyShadow: true,
+      interactive: true,
+      lightEffect: { color: '#5597000C' }
+    });
+  }
+
+  /** 标题栏/侧栏胶囊按钮沉浸光感材质 */
+  public static pillMaterial(): uiMaterial.ImmersiveMaterial | undefined {
+    if (!ImmersiveLightHelper.isSupported()) {
+      return undefined;
+    }
+    return new uiMaterial.ImmersiveMaterial({
+      style: uiMaterial.ImmersiveStyle.ULTRA_THIN,
+      materialColor: '#99FFFFFF',
+      applyShadow: true,
+      interactive: true,
+      lightEffect: { color: '#6697000C' }
+    });
+  }
+
+  /** 悬浮底栏 TabBar 专用沉浸光感材质 */
+  public static tabBarMaterial(): uiMaterial.ImmersiveMaterial {
+    return new uiMaterial.ImmersiveMaterial({
+      style: uiMaterial.ImmersiveStyle.THIN,
+      materialColor: '#B8FFFFFF',
+      applyShadow: true,
+      interactive: true,
+      lightEffect: { color: '#5597000C' }
+    });
   }
 }

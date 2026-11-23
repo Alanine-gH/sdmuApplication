@@ -43,12 +43,13 @@ export struct TitleBar {
           Text('＜')
             .fontSize(17)
             .fontColor($r('app.color.common_color_1'))
-            .width(40)
-            .height('100%')
+            .width(34)
+            .height(34)
             .textAlign(TextAlign.Center)
             .margin({ left: 15 })
-            .borderRadius(8)
-            .visualEffect(ImmersiveLightHelper.cardGlow())
+            .borderRadius(17)
+            .systemMaterial(ImmersiveLightHelper.pillMaterial())
+            .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.94 })
             .onClick(() => {
               if (this.onBack !== null) {
                 this.onBack();
@@ -100,7 +101,11 @@ export struct TitleBar {
             Text(this.rightText)
               .fontSize(16)
               .fontColor(this.rightTextColor === null ? $r('app.color.black') : this.rightTextColor)
+              .padding({ left: 10, right: 10, top: 5, bottom: 5 })
+              .borderRadius(14)
               .margin({ right: 12 })
+              .systemMaterial(ImmersiveLightHelper.pillMaterial())
+              .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.95 })
               .onClick(() => {
                 if (this.onRightClick !== null) {
                   this.onRightClick();

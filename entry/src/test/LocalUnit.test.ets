@@ -1,6 +1,6 @@
 import { describe, beforeAll, beforeEach, afterEach, afterAll, it, expect } from '@ohos/hypium';
 import { BreakpointSystem } from '../main/ets/common/BreakpointSystem';
-import { WidgetDataHelper } from '../main/ets/common/WidgetDataHelper';
+import { WidgetDataHelper, CompactWidgetCourse, WidgetGridCell, WidgetCourseSummary } from '../main/ets/common/WidgetDataHelper';
 
 export default function localUnitTest() {
   describe('localUnitTest', () => {
@@ -52,6 +52,41 @@ export default function localUnitTest() {
       expect(onePayload['courseCount']).assertEqual(1);
       expect(onePayload['c1Name']).assertEqual('操作系统');
       expect(onePayload['c1Info']).assertEqual('第1-2节 信工楼302');
+    });
+    it('weeklyWidgetGridAndFilter', 0, () => {
+      const courses: CompactWidgetCourse[] = [
+        { n: '数据结构', p: 'A101', d: 1, s: 1, e: 2, w: 3, wk: '1-16' },
+        { n: '大学英语', p: 'B202', d: 1, s: 5, e: 6, w: 3, wk: '1-16' },
+        { n: '线性代数', p: 'C303', d: 3, s: 3, e: 4, w: 0, wk: '1-16(单)' }
+      ];
+      // 第3周仅周一~周五有课 → 5列×5行=25格
+      const w3 = WidgetDataHelper.buildWeeklyFormPayload(3, 20, courses, 'week', 1, 1);
+      expect(w3['gridCols']).assertEqual(5);
+      const cells3 = w3['gridCells'] as WidgetGridCell[];
+      expect(cells3.length).assertEqual(25);
+      expect(cells3[0].name).assertEqual('数据结构');
+      expect(cells3[1 * 5 + 2].name).assertEqual('线性代数');
+      expect(w3['weekCourseCount']).assertEqual(3);
+
+      // 日视图按节次排序
+      const dayCourses = w3['dayCourses'] as WidgetCourseSummary[];
+      expect(dayCourses.length).assertEqual(2);
+      expect(dayCourses[0].name).assertEqual('数据结构');
+      expect(dayCourses[1].name).assertEqual('大学英语');
+
+      // 第4周（双周）：djz=3 与 单周课程均不显示
+      const w4 = WidgetDataHelper.buildWeeklyFormPayload(4, 20, courses, 'week', 1, 1);
+      expect(w4['weekCourseCount']).assertEqual(0);
+
+      // 含周六课程 → 自动扩展为 7 列（35 格）
+      const withWeekend: CompactWidgetCourse[] = [
+        { n: '创新实践', p: '实训楼', d: 6, s: 1, e: 2, w: 5, wk: '' }
+      ];
+      const w5 = WidgetDataHelper.buildWeeklyFormPayload(5, 20, withWeekend, 'week', 6, 6);
+      expect(w5['gridCols']).assertEqual(7);
+      expect((w5['gridCells'] as WidgetGridCell[]).length).assertEqual(35);
+      expect(WidgetDataHelper.clampWeek(0, 20)).assertEqual(1);
+      expect(WidgetDataHelper.clampWeek(25, 20)).assertEqual(20);
     });
   });
 }
