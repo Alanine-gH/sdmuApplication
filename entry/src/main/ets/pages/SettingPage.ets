@@ -22,7 +22,7 @@ import { GestureManager, GesturePwdBean } from '../model/GestureManager';
 struct SettingPage {
   @State cacheSize: string = '0.00M';
   /** 源码 version_name：显示当前版本号，主色红 */
-  @State versionName: string = 'V3.0.0';
+  @State versionName: string = 'V3.3.0';
 
   aboutToAppear(): void {
     this.calcCacheSize();
@@ -31,7 +31,7 @@ struct SettingPage {
   /** 源码 f1：Math.round(g.e(cacheDir))，>1MB 显示 MB 否则 KB */
   private calcCacheSize(): void {
     try {
-      const ctx = getContext(this) as common.UIAbilityContext;
+      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
       const total: number = this.dirSize(ctx.cacheDir);
       const kb = Math.round(total / 1024);
       if (kb / 1024 > 1) {
@@ -185,7 +185,7 @@ struct SettingPage {
   private clearCache(): void {
     this.getUIContext().getPromptAction().showToast({ message: '清除成功' });
     try {
-      const ctx = getContext(this) as common.UIAbilityContext;
+      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
       fs.rmdirSync(ctx.cacheDir);
     } catch {
     }

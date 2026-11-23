@@ -2,6 +2,7 @@ import { router } from '@kit.ArkUI';
 import { PreferencesUtil } from '../data/PreferencesUtil';
 import { Constants } from '../data/Constants';
 import { LoginSession } from '../network/LoginSession';
+import { ThemeConstants } from '../common/ThemeConstants';
 
 /**
  * 我的 Tab — 1:1 复刻 mobile_campus_fragment_my_page.xml
@@ -62,10 +63,6 @@ export struct MineTab {
     router.replaceUrl({ url: 'pages/LoginPage' });
   }
 
-  /** APK 菜单图标运行时 tint 主题红（原 ImageView app:tint） */
-  private static readonly TINT_RED: number[] =
-    [0, 0, 0, 0, 0.59, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.05, 0, 0, 0, 1, 0];
-
   /** APK 实拍：菜单行右侧无箭头，仅用户卡有 >；图标 tint 红色 */
   @Builder
   menuRow(icon: Resource, label: string | Resource, target: string) {
@@ -74,7 +71,7 @@ export struct MineTab {
         .width(24)
         .height(24)
         .margin({ right: 16 })
-        .colorFilter(MineTab.TINT_RED)
+        .colorFilter(ThemeConstants.TINT_RED)
       Text(label)
         .fontSize(17)
         .fontColor($r('app.color.common_color_1'))

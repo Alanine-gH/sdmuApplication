@@ -13,6 +13,26 @@ export default class EntryAbility extends UIAbility {
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onCreate');
     // 注入UIAbility上下文供会话持久化使用
     LoginSession.uiContext = this.context;
+    this.handleWidgetWant(want);
+  }
+
+  onNewWant(want: Want, _launchParam: AbilityConstant.LaunchParam): void {
+    this.handleWidgetWant(want);
+  }
+
+  /** 接收桌面服务卡片 postCardAction 路由参数 */
+  private handleWidgetWant(want: Want): void {
+    if (!want.parameters) {
+      return;
+    }
+    const targetPage = want.parameters['targetPage'];
+    if (typeof targetPage === 'string' && targetPage !== '') {
+      AppStorage.setOrCreate<string>('pendingWidgetPage', targetPage);
+      const yyid = want.parameters['yyid'];
+      const title = want.parameters['title'];
+      AppStorage.setOrCreate<string>('pendingWidgetYyid', typeof yyid === 'string' ? yyid : '');
+      AppStorage.setOrCreate<string>('pendingWidgetTitle', typeof title === 'string' ? title : '');
+    }
   }
 
   onDestroy(): void {

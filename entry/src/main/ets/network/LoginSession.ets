@@ -182,14 +182,9 @@ export class LoginSession {
     LoginSession.log('会话已清除（登录失效统一处理）');
   }
 
-  /** 兜底获取UIAbility上下文（EntryAbility未注入时） */
+  /** 兜底获取UIAbility上下文（避免调用已弃用的 globalThis.getContext） */
   private static fallbackContext(): common.UIAbilityContext | null {
-    try {
-      const ctx: Object = globalThis.getContext();
-      return ctx as common.UIAbilityContext;
-    } catch (error) {
-      return null;
-    }
+    return LoginSession.uiContext;
   }
   /** UI上下文（EntryAbility启动时注入） */
   static uiContext: common.UIAbilityContext | null = null;

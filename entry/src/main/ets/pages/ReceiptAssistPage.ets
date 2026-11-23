@@ -1,6 +1,10 @@
 import { BusinessError } from '@kit.BasicServicesKit';
 import { LengthMetrics } from '@kit.ArkUI';
+import { photoAccessHelper } from '@kit.MediaLibraryKit';
+import { image } from '@kit.ImageKit';
+import fs from '@ohos.file.fs';
 import { TitleBar } from '../components/TitleBar';
+import { AiHelper } from '../common/AiHelper';
 import { LoadingView } from '../components/LoadingView';
 import { EmptyView } from '../components/EmptyView';
 import { ApiService } from '../network/ApiService';
@@ -172,9 +176,46 @@ struct ReceiptAssistPage {
     }
   }
 
+  private async recognizeReceiptOcr(): Promise<void> {
+    try {
+      const picker = new photoAccessHelper.PhotoViewPicker();
+      const res = await picker.select({
+        MIMEType: photoAccessHelper.PhotoViewMIMETypes.IMAGE_TYPE,
+        maxSelectNumber: 1
+      });
+      if (!res.photoUris || res.photoUris.length === 0) {
+        return;
+      }
+      const file = fs.openSync(res.photoUris[0], fs.OpenMode.READ_ONLY);
+      try {
+        const source = image.createImageSource(file.fd);
+        const pixelMap = await source.createPixelMap();
+        const text = await AiHelper.recognizeTextFromPixelMap(pixelMap);
+        pixelMap.release();
+        source.release();
+        if (text !== '') {
+          this.getUIContext().showAlertDialog({ title: '票据识别结果', message: text });
+        } else {
+          this.getUIContext().getPromptAction().showToast({ message: '未识别到文字' });
+        }
+      } finally {
+        fs.closeSync(file);
+      }
+    } catch {
+      this.getUIContext().getPromptAction().showToast({ message: '票据识别失败' });
+    }
+  }
+
   build() {
     Column() {
-      TitleBar({ title: '发票助手', showBack: true })
+      TitleBar({
+        title: '发票助手',
+        showBack: true,
+        rightText: 'OCR识票',
+        onRightClick: () => {
+          this.recognizeReceiptOcr();
+        }
+      })
       this.contentView()
     }
     .width('100%')

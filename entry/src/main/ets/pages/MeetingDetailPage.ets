@@ -4,6 +4,7 @@ import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { TitleBar } from '../components/TitleBar';
+import { LiveViewIntentHelper } from '../common/LiveViewIntentHelper';
 import { LoadingView } from '../components/LoadingView';
 import { EmptyView } from '../components/EmptyView';
 import { MeetingObjEntity, MeetingAttachmentEntity, MeetingExtraEntity,
@@ -321,7 +322,20 @@ struct MeetingDetailPage {
   build() {
     Stack() {
       Column() {
-        TitleBar({ title: '会议详情', showBack: true })
+        TitleBar({
+          title: '会议详情',
+          showBack: true,
+          rightText: '实况窗',
+          onRightClick: () => {
+            LiveViewIntentHelper.startLocalLiveView(
+              1001,
+              this.obj.TITLE || '会议提醒',
+              (this.obj.KSSJ || '') + ' ' + (this.obj.ADDRESS || '')
+            ).then((ok: boolean) => {
+              this.toast(ok ? '已开启会议实况窗' : '当前设备暂不支持实况窗');
+            });
+          }
+        })
         // 右上图标（toolbar gVar.d()）：qrcode/scan，绝对定位在标题栏右端
         if (this.showToolbarIcon() && !this.loading && !this.loadFail) {
           Image(this.isCreator ? $r('app.media.mobile_campus_meeting_qrcode')

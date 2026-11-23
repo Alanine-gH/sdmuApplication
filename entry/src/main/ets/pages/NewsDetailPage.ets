@@ -1,7 +1,9 @@
 import { router } from '@kit.ArkUI';
+import { common } from '@kit.AbilityKit';
 import { ApiService } from '../network/ApiService';
 import { NewsItem } from '../model/NewsModel';
 import { EmptyView } from '../components/EmptyView';
+import { ShareHelper } from '../common/ShareHelper';
 
 /**
  * 新闻详情页 — 按源布局 1:1 复刻 mobile_campus_fragment_news.xml（资讯页）：
@@ -72,6 +74,18 @@ struct NewsDetailPage {
         .layoutWeight(1)
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
+      Row() {
+        Text('分享')
+          .fontSize(14)
+          .fontColor($r('app.color.common_color_1'))
+      }
+      .height(45)
+      .padding({ left: 10, right: 8 })
+      .alignItems(VerticalAlign.Center)
+      .onClick(() => {
+        const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+        ShareHelper.shareText(ctx, this.news.title || '校园资讯', this.news.summary || this.news.content || '山东管理学院资讯', this.news.url || undefined);
+      })
       // ivRefresh：paddingLeft/Right=15.0dip=15vp、paddingTop/Bottom=12.0dip=12vp、
       // src=@mipmap/icon_refresh_black、layout_alignParentRight=true
       Row() {

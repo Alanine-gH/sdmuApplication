@@ -10,6 +10,7 @@ import { ICampusTab } from '../components/ICampusTab';
 import { IOfficeTab } from '../components/IOfficeTab';
 import { MineTab } from '../components/MineTab';
 import { BreakpointSystem } from '../common/BreakpointSystem';
+import { ThemeConstants } from '../common/ThemeConstants';
 
 /** APK 应用宫格项（服务端下发 7 组，本清单为 2026-11-17 实拍结果） */
 class AppGridItem {
@@ -588,6 +589,8 @@ struct Index {
         this.isReady = true;
         if (!logged) {
           router.replaceUrl({ url: 'pages/LoginPage' });
+        } else {
+          this.consumePendingWidgetRoute();
         }
       })
       .catch(() => {
@@ -597,12 +600,28 @@ struct Index {
       });
   }
 
-  /** APK BadgeLayout.setCheckedDrawable 用 DrawableCompat.tint：选中染主题红、未选染灰。
-   *  png 无法用 fillColor，改用 4x5 colorFilter 全量替换 RGB、保留 alpha。 */
-  private static readonly TINT_RED: number[] =
-    [0, 0, 0, 0, 0.59, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.05, 0, 0, 0, 1, 0];
-  private static readonly TINT_GREY: number[] =
-    [0, 0, 0, 0, 0.49, 0, 0, 0, 0, 0.49, 0, 0, 0, 0, 0.49, 0, 0, 0, 1, 0];
+  onPageShow(): void {
+    if (this.isReady && this.isLogged) {
+      this.consumePendingWidgetRoute();
+    }
+  }
+
+  private consumePendingWidgetRoute(): void {
+    const targetPage: string | undefined = AppStorage.get<string>('pendingWidgetPage');
+    if (targetPage && targetPage !== '') {
+      const yyid: string = AppStorage.get<string>('pendingWidgetYyid') || '';
+      const title: string = AppStorage.get<string>('pendingWidgetTitle') || '';
+      AppStorage.setOrCreate<string>('pendingWidgetPage', '');
+      AppStorage.setOrCreate<string>('pendingWidgetYyid', '');
+      AppStorage.setOrCreate<string>('pendingWidgetTitle', '');
+      router.pushUrl({
+        url: targetPage,
+        params: { yyid: yyid, title: title }
+      }).catch(() => {
+        // 路由异常忽略
+      });
+    }
+  }
 
   @Builder
   bottomTab(iconNormal: Resource, iconChecked: Resource, label: string | Resource, index: number) {
@@ -612,7 +631,7 @@ struct Index {
         Image(iconChecked)
           .width(26)
           .height(26)
-          .colorFilter(Index.TINT_RED)
+          .colorFilter(ThemeConstants.TINT_RED)
         Text(label)
           .fontSize(12)
           .fontColor($r('app.color.sdmu_primary'))
@@ -627,7 +646,7 @@ struct Index {
         Image(iconNormal)
           .width(26)
           .height(26)
-          .colorFilter(Index.TINT_GREY)
+          .colorFilter(ThemeConstants.TINT_GREY)
         Text(label)
           .fontSize(12)
           .fontColor($r('app.color.common_color_2'))

@@ -5,6 +5,8 @@ import { ApiResponse } from '../model/ResponseModel';
 import { ScheduleDetailEntry } from '../model/ContactModel';
 import { EmptyView } from '../components/EmptyView';
 import { LoadingView } from '../components/LoadingView';
+import { common } from '@kit.AbilityKit';
+import { ReminderCalendarHelper } from '../common/ReminderCalendarHelper';
 
 /**
  * 日程详情页 — 源码级翻译（ScheduleDetailActivity.java + AddScheduleInputView +
@@ -167,7 +169,21 @@ struct ScheduleDetailPage {
           this.getUIContext().getPromptAction().showToast({ message: '保存失败' });
           return;
         }
-        // 源码 p tag==0（同步到系统日历）→ 系统日历写入（HAP 无系统日历写入 API，保留选择态）
+        // 源码 p tag==0（同步到系统日历）→ 接入系统日历写入与代理提醒
+        if (this.syncIndex === 0) {
+          const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+          const startMs: number = this.parseTime(this.startTime);
+          const endMs: number = this.endTime !== '' ? this.parseTime(this.endTime) : startMs + 3600000;
+          if (startMs > 0) {
+            ReminderCalendarHelper.addCalendarEvent(ctx, this.title, this.content, startMs, endMs, this.location);
+          }
+        }
+        if (this.notifyIndex === 2 && this.notifyTime !== '') {
+          const remindMs: number = this.parseTime(this.notifyTime);
+          if (remindMs > Date.now()) {
+            ReminderCalendarHelper.publishCalendarReminder(this.title, this.location || this.content, new Date(remindMs));
+          }
+        }
         this.getUIContext().getPromptAction().showToast({ message: '保存成功' });
         AppStorage.setOrCreate<string>('schedule_detail_changed', String(Date.now()));
       });
