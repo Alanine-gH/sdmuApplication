@@ -1,29 +1,30 @@
 import { formBindingData, FormExtensionAbility, formInfo } from '@kit.FormKit';
 import { Want } from '@kit.AbilityKit';
+import { WidgetDataHelper } from '../common/WidgetDataHelper';
 
 /**
  * 桌面服务卡片 FormExtensionAbility（今日课表 + 一卡通/待办快捷入口）
  */
 export default class EntryFormAbility extends FormExtensionAbility {
   onAddForm(want: Want): formBindingData.FormBindingData {
-    const formData: Record<string, Object> = {
-      'title': '今日课表',
-      'subtitle': '点击查看完整课表',
-      'cardTitle': '校园快捷入口'
-    };
-    return formBindingData.createFormBindingData(formData);
+    const formId = want.parameters ? String(want.parameters['ohos.extra.param.key.form_identity'] || '') : '';
+    if (formId !== '') {
+      WidgetDataHelper.saveFormId(this.context, formId);
+    }
+    return formBindingData.createFormBindingData(WidgetDataHelper.loadFormData(this.context));
   }
 
-  onUpdateForm(_formId: string): void {
-    // 定时/主动刷新预留
+  onUpdateForm(formId: string): void {
+    const data = formBindingData.createFormBindingData(WidgetDataHelper.loadFormData(this.context));
+    // 更新卡片数据在下次宿主刷新或主动 updateForm 时生效
   }
 
   onFormEvent(_formId: string, _message: string): void {
     // 卡片内事件回调预留
   }
 
-  onRemoveForm(_formId: string): void {
-    // 卡片移除清理预留
+  onRemoveForm(formId: string): void {
+    WidgetDataHelper.removeFormId(this.context, formId);
   }
 
   onAcquireFormState(_want: Want): formInfo.FormState {

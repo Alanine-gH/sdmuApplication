@@ -1,8 +1,11 @@
 import { router } from '@kit.ArkUI';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { common } from '@kit.AbilityKit';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { TodoItem } from '../model/TodoModel';
+import { ImmersiveLightHelper } from '../common/ImmersiveLightHelper';
+import { WidgetDataHelper } from '../common/WidgetDataHelper';
 
 /**
  * 微门户 Tab — 按 APK 实拍（学生账号登录后 getHomeTab/getList 下发结果）逐块复刻：
@@ -19,8 +22,20 @@ export struct WMHTab {
   /** 通知条未读数（getTodoTabCount 下发，缺省 1） */
   @State noticeCount: number = 1;
   @State noticeText: string = '【上课通知】您明天有课，请提前做好上课准备';
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @State todaySummary: string = '点击查看本周课表详情';
 
   aboutToAppear(): void {
+    try {
+      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      const widgetData = WidgetDataHelper.loadFormData(ctx);
+      const sub = widgetData['subtitle'];
+      if (typeof sub === 'string' && sub !== '') {
+        this.todaySummary = sub;
+      }
+    } catch {
+      // 忽略本地课表缓存读取失败
+    }
     // 拉取待办数填通知红点；失败保持 APK 同款缺省文案
     ApiService.getTodoTabCount('')
       .then((response: ApiResponse<Object>) => {
@@ -63,6 +78,8 @@ export struct WMHTab {
     .padding({ left: 16, right: 16 })
     .alignItems(VerticalAlign.Center)
     .backgroundColor($r('app.color.white'))
+    .borderRadius(this.currentBreakpoint === 'sm' ? 0 : 12)
+    .visualEffect(ImmersiveLightHelper.cardGlow())
     .onClick(() => {
       router.pushUrl({ url: 'pages/LightAppPage' });
     })
@@ -103,6 +120,8 @@ export struct WMHTab {
     .alignItems(VerticalAlign.Center)
     .backgroundColor($r('app.color.common_color_6'))
     .margin({ top: 9, bottom: 9 })
+    .borderRadius(this.currentBreakpoint === 'sm' ? 0 : 10)
+    .visualEffect(ImmersiveLightHelper.cardGlow())
     .onClick(() => {
       // APK MessageRemindAdapter：tvText(标题)/tvMore(更多>)/tvMessageCount(红点) 三处点击
       // 统一走 WMHFragment$i0 a()/b() → /main/MessageListActivity，即消息列表页。
@@ -136,6 +155,8 @@ export struct WMHTab {
     .layoutWeight(1)
     .padding({ top: 24, bottom: 20 })
     .backgroundColor($r('app.color.white'))
+    .borderRadius(this.currentBreakpoint === 'sm' ? 0 : 12)
+    .visualEffect(ImmersiveLightHelper.cardGlow())
     .onClick(() => {
       router.pushUrl({ url: target });
     })
@@ -151,23 +172,75 @@ export struct WMHTab {
           // 2. 通知条（灰底，与上一行间有灰缝）
           this.noticeBar()
 
-          // 3. 两列宫格：扫一扫 | 发票助手
-          Row() {
-            this.gridCell($r('app.color.wmh_grid_scan_pink'), $r('sys.symbol.qrcode'),
-              '扫一扫', '扫码', 'pages/QrCodeScanPage')
-            Divider()
-              .vertical(true)
-              .strokeWidth(1)
-              .height(120)
-              .color($r('app.color.common_color_6'))
-            this.gridCell($r('app.color.blue_default'), $r('sys.symbol.doc_text'),
-              '发票助手', '轻松开发票', 'pages/ReceiptAssistPage')
+          // 3. 宫格入口：窄屏维持 2 列原布局，宽屏/平板/折叠屏扩展为 4 列卡片 + 课表速览卡
+          if (this.currentBreakpoint === 'sm') {
+            Row() {
+              this.gridCell($r('app.color.wmh_grid_scan_pink'), $r('sys.symbol.qrcode'),
+                '扫一扫', '扫码', 'pages/QrCodeScanPage')
+              Divider()
+                .vertical(true)
+                .strokeWidth(1)
+                .height(120)
+                .color($r('app.color.common_color_6'))
+              this.gridCell($r('app.color.blue_default'), $r('sys.symbol.doc_text'),
+                '发票助手', '轻松开发票', 'pages/ReceiptAssistPage')
+            }
+            .width('100%')
+            .alignItems(VerticalAlign.Center)
+            .backgroundColor($r('app.color.white'))
+          } else {
+            GridRow({ columns: 4, gutter: { x: 12, y: 12 } }) {
+              GridCol() {
+                this.gridCell($r('app.color.wmh_grid_scan_pink'), $r('sys.symbol.qrcode'),
+                  '扫一扫', '扫码', 'pages/QrCodeScanPage')
+              }
+              GridCol() {
+                this.gridCell($r('app.color.blue_default'), $r('sys.symbol.doc_text'),
+                  '发票助手', '轻松开发票', 'pages/ReceiptAssistPage')
+              }
+              GridCol() {
+                this.gridCell($r('app.color.sdmu_primary'), $r('sys.symbol.calendar'),
+                  '课程表', '学期课表', 'pages/SchedulePage')
+              }
+              GridCol() {
+                this.gridCell($r('app.color.common_color_12'), $r('sys.symbol.person_2'),
+                  '通讯录', '校内联系', 'pages/ContactPage')
+              }
+            }
+            .width('100%')
+            .margin({ top: 4 })
+
+            Row() {
+              Column() {
+                Text('今日课表速览')
+                  .fontSize(16)
+                  .fontWeight(FontWeight.Bold)
+                  .fontColor($r('app.color.common_color_1'))
+                Text(this.todaySummary)
+                  .fontSize(13)
+                  .fontColor($r('app.color.common_color_3'))
+                  .margin({ top: 6 })
+              }
+              .layoutWeight(1)
+              .alignItems(HorizontalAlign.Start)
+
+              Text('查看课表 ＞')
+                .fontSize(14)
+                .fontColor($r('app.color.sdmu_primary'))
+            }
+            .width('100%')
+            .padding(16)
+            .margin({ top: 12 })
+            .borderRadius(12)
+            .backgroundColor($r('app.color.white'))
+            .visualEffect(ImmersiveLightHelper.cardGlow())
+            .onClick(() => {
+              router.pushUrl({ url: 'pages/SchedulePage' });
+            })
           }
-          .width('100%')
-          .alignItems(VerticalAlign.Center)
-          .backgroundColor($r('app.color.white'))
         }
         .width('100%')
+        .padding(this.currentBreakpoint === 'sm' ? 0 : { left: 16, right: 16, top: 8, bottom: 16 })
       }
       .scrollable(ScrollDirection.Vertical)
       .width('100%')

@@ -11,6 +11,7 @@ import { IOfficeTab } from '../components/IOfficeTab';
 import { MineTab } from '../components/MineTab';
 import { BreakpointSystem } from '../common/BreakpointSystem';
 import { ThemeConstants } from '../common/ThemeConstants';
+import { ImmersiveLightHelper } from '../common/ImmersiveLightHelper';
 
 /** APK 应用宫格项（服务端下发 7 组，本清单为 2026-11-17 实拍结果） */
 class AppGridItem {
@@ -116,6 +117,16 @@ struct AppsTab {
   @State dataSource: string = 'local';
   /** onActivityResult(5467) 返回刷新等价：编辑常用应用页 toggle 成功后置时间戳，本页监听重拉 */
   @StorageLink('common_app_changed') @Watch('onCommonAppChanged') commonAppChanged: number = 0;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+
+  private gridTemplate(): string {
+    const cols: number = BreakpointSystem.getAppGridColumns(this.currentBreakpoint);
+    let tpl: string = '1fr';
+    for (let i = 1; i < cols; i++) {
+      tpl += ' 1fr';
+    }
+    return tpl;
+  }
 
   aboutToAppear(): void {
     this.loadApps();
@@ -305,10 +316,10 @@ struct AppsTab {
           }
         }, (item: AppGridItem) => 'app_' + item.name)
       }
-      .columnsTemplate('1fr 1fr 1fr 1fr')
+      .columnsTemplate(this.gridTemplate())
       .rowsGap(0)
       .width('100%')
-      .height(items.length > 8 ? (items.length + 3) / 4 * 90 : Math.ceil(items.length / 4) * 90)
+      .height(Math.ceil(items.length / BreakpointSystem.getAppGridColumns(this.currentBreakpoint)) * 90)
     }
     .width('100%')
     .backgroundColor($r('app.color.white'))
@@ -375,9 +386,9 @@ struct AppsTab {
                     }
                   }, (item: ServerAppItem) => 'sv_' + item.yyid)
                 }
-                .columnsTemplate('1fr 1fr 1fr 1fr')
+                .columnsTemplate(this.gridTemplate())
                 .width('100%')
-                .height(Math.ceil(group.apps.length / 4) * 90)
+                .height(Math.ceil(group.apps.length / BreakpointSystem.getAppGridColumns(this.currentBreakpoint)) * 90)
               }
               .width('100%')
               .margin({ bottom: 8 })
@@ -510,15 +521,16 @@ struct ReportTab {
 
   build() {
     Column() {
-      // 顶部校名横幅：44vp 白底、fitXY
+      // 顶部校名横幅：固定比例居中，避免宽屏被横向压扁
       Row() {
         Image($r('app.media.mobile_campus_main_head_logo'))
-          .width('100%')
-          .height(44)
-          .objectFit(ImageFit.Fill)
+          .height(34)
+          .constraintSize({ maxWidth: 320 })
+          .objectFit(ImageFit.Contain)
       }
       .width('100%')
       .height(44)
+      .justifyContent(FlexAlign.Center)
       .backgroundColor($r('app.color.main_bg'))
 
       // SlidingTabLayout：微门户 / I校园 / I办公
@@ -637,10 +649,13 @@ struct Index {
           .fontColor($r('app.color.sdmu_primary'))
           .margin({ top: 2 })
       }
+      .width(this.currentBreakpoint === 'lg' ? 60 : '100%')
       .height(52)
+      .borderRadius(this.currentBreakpoint === 'lg' ? 12 : 0)
       .justifyContent(FlexAlign.Center)
       .alignItems(HorizontalAlign.Center)
-      .backgroundColor($r('app.color.main_bg'))
+      .backgroundColor(this.currentBreakpoint === 'lg' ? '#FFF0F0' : $r('app.color.main_bg'))
+      .visualEffect(ImmersiveLightHelper.cardGlow())
     } else {
       Column() {
         Image(iconNormal)
@@ -652,10 +667,13 @@ struct Index {
           .fontColor($r('app.color.common_color_2'))
           .margin({ top: 2 })
       }
+      .width(this.currentBreakpoint === 'lg' ? 60 : '100%')
       .height(52)
+      .borderRadius(this.currentBreakpoint === 'lg' ? 12 : 0)
       .justifyContent(FlexAlign.Center)
       .alignItems(HorizontalAlign.Center)
       .backgroundColor($r('app.color.main_bg'))
+      .visualEffect(ImmersiveLightHelper.cardGlow())
     }
   }
 

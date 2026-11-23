@@ -1,5 +1,6 @@
 import { router } from '@kit.ArkUI';
 import { BreakpointSystem } from '../common/BreakpointSystem';
+import { ImmersiveLightHelper } from '../common/ImmersiveLightHelper';
 
 /**
  * 通用标题栏 — 1:1 复刻 toolbar_normal.xml
@@ -46,6 +47,8 @@ export struct TitleBar {
             .height('100%')
             .textAlign(TextAlign.Center)
             .margin({ left: 15 })
+            .borderRadius(8)
+            .visualEffect(ImmersiveLightHelper.cardGlow())
             .onClick(() => {
               if (this.onBack !== null) {
                 this.onBack();

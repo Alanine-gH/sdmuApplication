@@ -3,6 +3,8 @@ import { ApiService } from '../network/ApiService';
 import { LoginSession } from '../network/LoginSession';
 import { PreferencesUtil } from '../data/PreferencesUtil';
 import { Constants } from '../data/Constants';
+import { ImmersiveLightHelper } from '../common/ImmersiveLightHelper';
+import { BreakpointSystem } from '../common/BreakpointSystem';
 
 /**
  * 登录页 — 按 APK 实拍（900x1600/240dpi 逐像素映射 600dp 宽）重构：
@@ -22,6 +24,9 @@ struct LoginPage {
   @State passwordVisible: boolean = false;
   @State privacyAgreed: boolean = false;
   @State isLogging: boolean = false;
+  @State loginPressed: boolean = false;
+  @State smsPressed: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
 
   private async doLogin(): Promise<void> {
     if (!this.privacyAgreed) {
@@ -204,11 +209,16 @@ struct LoginPage {
             .textAlign(TextAlign.Center)
             .backgroundColor($r('app.color.mobile_campus_primary_color'))
             .borderRadius(23)
+            .visualEffect(ImmersiveLightHelper.buttonGlow(this.loginPressed))
+            .onTouch((e: TouchEvent) => {
+              this.loginPressed = e.type === TouchType.Down;
+            })
             .onClick(() => {
               this.doLogin();
             })
         }
         .width('100%')
+        .constraintSize({ maxWidth: this.currentBreakpoint === 'sm' ? '100%' : 480 })
         .padding({ left: 33, right: 33 })
         .margin({ top: 14 })
 
@@ -223,12 +233,17 @@ struct LoginPage {
             .backgroundColor($r('app.color.white'))
             .borderRadius(23)
             .border({ width: 1, color: $r('app.color.mobile_campus_primary_color') })
+            .visualEffect(ImmersiveLightHelper.buttonGlow(this.smsPressed))
+            .onTouch((e: TouchEvent) => {
+              this.smsPressed = e.type === TouchType.Down;
+            })
             .onClick(() => {
               // [W4 sms-login] 跳转手机号登录页（InputIdentifyCodeActivity 链路复刻）
               router.pushUrl({ url: 'pages/PhoneLoginPage' });
             })
         }
         .width('100%')
+        .constraintSize({ maxWidth: this.currentBreakpoint === 'sm' ? '100%' : 480 })
         .padding({ left: 33, right: 33 })
         .margin({ top: 14 })
 

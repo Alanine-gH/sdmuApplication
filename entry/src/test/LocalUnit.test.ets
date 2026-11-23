@@ -1,5 +1,6 @@
 import { describe, beforeAll, beforeEach, afterEach, afterAll, it, expect } from '@ohos/hypium';
 import { BreakpointSystem } from '../main/ets/common/BreakpointSystem';
+import { WidgetDataHelper } from '../main/ets/common/WidgetDataHelper';
 
 export default function localUnitTest() {
   describe('localUnitTest', () => {
@@ -40,6 +41,17 @@ export default function localUnitTest() {
       expect(BreakpointSystem.getAppGridColumns('sm')).assertEqual(4);
       expect(BreakpointSystem.getAppGridColumns('md')).assertEqual(6);
       expect(BreakpointSystem.getAppGridColumns('lg')).assertEqual(8);
+    });
+    it('widgetPayloadBuild', 0, () => {
+      const emptyPayload = WidgetDataHelper.buildPayload('第12周·今日课表', []);
+      expect(emptyPayload['courseCount']).assertEqual(0);
+      expect(emptyPayload['title']).assertEqual('第12周·今日课表');
+      const onePayload = WidgetDataHelper.buildPayload('第12周·今日课表', [
+        { name: '操作系统', time: '第1-2节', place: '信工楼302' }
+      ]);
+      expect(onePayload['courseCount']).assertEqual(1);
+      expect(onePayload['c1Name']).assertEqual('操作系统');
+      expect(onePayload['c1Info']).assertEqual('第1-2节 信工楼302');
     });
   });
 }

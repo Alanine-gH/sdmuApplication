@@ -4,6 +4,8 @@ import { ApiResponse } from '../model/ResponseModel';
 import { CourseItem, ScheduleTermParams, SCHEDULE_FALLBACK_START, SCHEDULE_FALLBACK_END,
   parseYmdMs, apkCurrentWeek, apkTotalWeeks } from '../model/CourseModel';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { common } from '@kit.AbilityKit';
+import { WidgetDataHelper, WidgetCourseSummary } from '../common/WidgetDataHelper';
 
 /**
  * 课表页 — 源码级对齐 TimetableActivity + WeekCourseFragment + CourseBox + ChooseWeeksPopup + ChooseTermDialog
@@ -205,6 +207,7 @@ struct SchedulePage {
         console.info('TT SchedulePage loadCourses code=' + response.code + ' size=' + data.length);
         if (data.length > 0) {
           this.courseList = data;
+          this.syncScheduleToWidget();
         } else if (response.code !== 0) {
           console.info('SchedulePage degrade: code=' + response.code + ' msg=' + response.message);
         }
@@ -213,6 +216,27 @@ struct SchedulePage {
         console.info('TT SchedulePage loadCourses fail: ' + error.message);
         this.courseList = [];
       });
+  }
+
+  private syncScheduleToWidget(): void {
+    try {
+      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      const jsDay: number = new Date().getDay();
+      const todayWeekday: number = jsDay === 0 ? 7 : jsDay;
+      const summaries: WidgetCourseSummary[] = [];
+      for (const c of this.weekCourses()) {
+        if (c.dayOfWeek === todayWeekday) {
+          summaries.push({
+            name: c.name,
+            time: `第${c.sectionStart}-${c.sectionEnd}节`,
+            place: c.location
+          });
+        }
+      }
+      WidgetDataHelper.saveTodaySchedule(ctx, `第${this.weekNumber}周·今日课表`, summaries);
+    } catch {
+      // 忽略桌面卡片同步异常
+    }
   }
 
   private twoDigit(value: number): string {

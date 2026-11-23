@@ -3,6 +3,7 @@ import { PreferencesUtil } from '../data/PreferencesUtil';
 import { Constants } from '../data/Constants';
 import { LoginSession } from '../network/LoginSession';
 import { ThemeConstants } from '../common/ThemeConstants';
+import { ImmersiveLightHelper } from '../common/ImmersiveLightHelper';
 
 /**
  * 我的 Tab — 1:1 复刻 mobile_campus_fragment_my_page.xml
@@ -82,6 +83,7 @@ export struct MineTab {
     .padding({ left: 16, right: 16 })
     .alignItems(VerticalAlign.Center)
     .backgroundColor($r('app.color.white'))
+    .visualEffect(ImmersiveLightHelper.cardGlow())
     .onClick(() => {
       router.pushUrl({ url: target });
     })
