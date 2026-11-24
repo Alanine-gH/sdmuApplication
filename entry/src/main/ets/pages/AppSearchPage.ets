@@ -251,7 +251,9 @@ struct AppSearchPage {
       ['supervise', 'pages/SupervisePage'],
       ['workapply', 'pages/WorkApplyPage'],
       ['receipt', 'pages/ReceiptListPage'],
-      ['market', 'pages/MarketPage']
+      ['market', 'pages/MarketPage'],
+      ['inspection', 'pages/InspectionRecordPage'],
+      ['dormitorycheck', 'pages/InspectionRecordPage']
     ]);
   }
 

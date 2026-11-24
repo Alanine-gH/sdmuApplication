@@ -54,6 +54,7 @@ struct ScheduleMainActivity {
   @State weeks: MonthWeek[] = [];
   @State isLoading: boolean = true;
   @State showYearPicker: boolean = false;
+  @State showAddMenuSheet: boolean = false;
   @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
   @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
   /** 源码 x：canCreateMeeting（y 入参默认 true） */
@@ -184,33 +185,119 @@ struct ScheduleMainActivity {
     this.loadMonth();
   }
 
-  /** 源码 f3 PopupMenu：添加课程/添加日程/创建会议（showActionSheet 等价） */
+  /** 源码 f3 PopupMenu：添加课程/添加日程/创建会议（使用宽敞卡片弹出面板，避免三个按钮挤在一起过小） */
   private showAddMenu(): void {
-    const sheets: SheetInfo[] = [];
-    sheets.push({
-      title: '添加课程',
-      action: (): void => {
-        // 源码 a 类 course → /message/addcourse 3417
-        router.pushUrl({ url: 'pages/AddCoursePage' });
+    this.showAddMenuSheet = true;
+  }
+
+  @Builder
+  addMenuItemCard(icon: Resource, title: string, desc: string, onTap: () => void) {
+    Row({ space: 14 }) {
+      Image(icon)
+        .width(34)
+        .height(34)
+        .objectFit(ImageFit.Contain)
+      Column({ space: 4 }) {
+        Text(title)
+          .fontSize(17)
+          .fontWeight(FontWeight.Medium)
+          .fontColor('#222222')
+        Text(desc)
+          .fontSize(13)
+          .fontColor('#888888')
       }
-    });
-    sheets.push({
-      title: '添加日程',
-      action: (): void => {
-        // 源码 a 类 event → /message/addschedule 3417
-        router.pushUrl({ url: 'pages/ScheduleAddPage' });
-      }
-    });
-    if (this.canCreateMeeting) {
-      sheets.push({
-        title: '创建会议',
-        action: (): void => {
-          // 源码 a 类 meeting → /meeting/create（AddMeetingActivity）
-          router.pushUrl({ url: 'pages/MeetingAddPage' });
-        }
-      });
+      .alignItems(HorizontalAlign.Start)
+      .layoutWeight(1)
+      Text('＞')
+        .fontSize(15)
+        .fontColor('#999999')
     }
-    this.getUIContext().showActionSheet({ title: '', message: '', sheets: sheets });
+    .width('100%')
+    .height(64)
+    .padding({ left: 18, right: 16 })
+    .borderRadius(12)
+    .backgroundColor($r('app.color.white'))
+    .alignItems(VerticalAlign.Center)
+    .hoverEffect(HoverEffect.Highlight)
+    .onClick(() => {
+      onTap();
+    })
+  }
+
+  @Builder
+  addMenuOverlay() {
+    Stack({ alignContent: Alignment.Center }) {
+      Column()
+        .width('100%')
+        .height('100%')
+        .backgroundColor('#66000000')
+        .onClick(() => {
+          this.showAddMenuSheet = false;
+        })
+      Column({ space: 14 }) {
+        Text('新增日程或事项')
+          .fontSize(18)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#222222')
+          .width('100%')
+          .textAlign(TextAlign.Center)
+          .padding({ top: 4, bottom: 4 })
+
+        this.addMenuItemCard(
+          $r('app.media.mobile_campus_schedule_icon_class'),
+          '添加课程',
+          '录入新的课程节次、上课周次与教室地点',
+          (): void => {
+            this.showAddMenuSheet = false;
+            router.pushUrl({ url: 'pages/AddCoursePage' });
+          }
+        )
+
+        this.addMenuItemCard(
+          $r('app.media.mobile_campus_schedule_icon_schedule'),
+          '添加日程',
+          '设置个人学习或工作提醒日程与时间',
+          (): void => {
+            this.showAddMenuSheet = false;
+            router.pushUrl({ url: 'pages/ScheduleAddPage' });
+          }
+        )
+
+        if (this.canCreateMeeting) {
+          this.addMenuItemCard(
+            $r('app.media.mobile_campus_schedule_icon_meeting'),
+            '创建会议',
+            '发起校园会议、选择参会人员与会议室',
+            (): void => {
+              this.showAddMenuSheet = false;
+              router.pushUrl({ url: 'pages/MeetingAddPage' });
+            }
+          )
+        }
+
+        Text('取消')
+          .fontSize(16)
+          .fontWeight(FontWeight.Medium)
+          .fontColor('#666666')
+          .textAlign(TextAlign.Center)
+          .width('100%')
+          .height(50)
+          .borderRadius(12)
+          .backgroundColor($r('app.color.white'))
+          .margin({ top: 4 })
+          .hoverEffect(HoverEffect.Highlight)
+          .onClick(() => {
+            this.showAddMenuSheet = false;
+          })
+      }
+      .width('88%')
+      .constraintSize({ maxWidth: 420 })
+      .padding({ left: 18, right: 18, top: 20, bottom: 20 })
+      .borderRadius(18)
+      .backgroundColor('#F5F6F8')
+    }
+    .width('100%')
+    .height('100%')
   }
 
   /** 源码 a 类（ListNewFragment）：条目点击分流 */
@@ -315,43 +402,51 @@ struct ScheduleMainActivity {
   }
 
   build() {
-    Column() {
-      TitleBar({ title: '今日日程', showBack: true,
-        rightIcon: $r('app.media.mobile_campus_schedule_add_schedule'),
-        onRightClick: (): void => {
-          // 源码 T1：add_schedule 图标 → f3(view) PopupMenu
-          this.showAddMenu();
-        } })
+    Stack() {
+      Column() {
+        TitleBar({ title: '今日日程', showBack: true,
+          rightIcon: $r('app.media.mobile_campus_schedule_add_schedule'),
+          onRightClick: (): void => {
+            // 源码 T1：add_schedule 图标 → f3(view) PopupMenu
+            this.showAddMenu();
+          } })
 
-      this.calendarHeader()
-      this.calendarGrid()
+        this.calendarHeader()
+        this.calendarGrid()
 
-      if (this.isLoading) {
-        LoadingView()
-      } else if (this.dayDetailList.length === 0) {
-        // 源码 X1：空 → EMPTY_SCHEDULE
-        Column() {
-          EmptyView({ tipText: '暂无日程' })
+        if (this.isLoading) {
+          LoadingView()
+        } else if (this.dayDetailList.length === 0) {
+          // 源码 X1：空 → EMPTY_SCHEDULE
+          Column() {
+            EmptyView({ tipText: '暂无日程' })
+          }
+          .width('100%')
+          .layoutWeight(1)
+        } else {
+          List() {
+            ForEach(this.dayDetailList, (bean: ScheduleDetailRow, idx: number) => {
+              ListItem() {
+                this.scheduleRow(bean, idx)
+              }
+            }, (bean: ScheduleDetailRow, idx: number) => bean.xlh + '_' + idx)
+          }
+          .width('100%')
+          .layoutWeight(1)
+          .scrollBar(BarState.Off)
+          .backgroundColor('#F2F2F2')
         }
-        .width('100%')
-        .layoutWeight(1)
-      } else {
-        List() {
-          ForEach(this.dayDetailList, (bean: ScheduleDetailRow, idx: number) => {
-            ListItem() {
-              this.scheduleRow(bean, idx)
-            }
-          }, (bean: ScheduleDetailRow, idx: number) => bean.xlh + '_' + idx)
-        }
-        .width('100%')
-        .layoutWeight(1)
-        .scrollBar(BarState.Off)
-        .backgroundColor('#F2F2F2')
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor('#F2F2F2')
+
+      if (this.showAddMenuSheet) {
+        this.addMenuOverlay()
       }
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#F2F2F2')
     .bindSheet(this.showYearPicker, this.yearPickerBuilder(), {
       height: 280,
       preferType: AdaptiveLayoutHelper.getSheetPreferType(this.currentBreakpoint, this.isCompactHeight),

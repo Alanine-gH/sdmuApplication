@@ -4,6 +4,7 @@ import { common } from '@kit.AbilityKit';
 import { formBindingData } from '@kit.FormKit';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
+import { MainNotificationV2 } from '../model/MessageModel';
 import { ImmersiveLightHelper } from '../common/ImmersiveLightHelper';
 import { WidgetDataHelper } from '../common/WidgetDataHelper';
 import { BreakpointSystem } from '../common/BreakpointSystem';
@@ -20,8 +21,8 @@ import { BreakpointSystem } from '../common/BreakpointSystem';
  */
 @Component
 export struct WMHTab {
-  /** 通知条未读数（getTodoTabCount 下发，缺省 1） */
-  @State noticeCount: number = 1;
+  /** 通知条未读消息数（与 MessageListPage 通过 AppStorage 实时联动，无未读时为 0 隐藏小红点） */
+  @StorageLink('unreadNoticeCount') noticeCount: number = 0;
   @State noticeText: string = '【上课通知】您明天有课，请提前做好上课准备';
   @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
   @StorageProp('heightBreakpoint') heightBreakpoint: string = 'lg';
@@ -69,19 +70,18 @@ export struct WMHTab {
     } catch {
       // 忽略本地课表缓存读取失败
     }
-    // 拉取待办数填通知红点；失败保持 APK 同款缺省文案
-    ApiService.getTodoTabCount('')
-      .then((response: ApiResponse<Object>) => {
-        if (ApiService.isSuccess(response)) {
-          const rec: Record<string, Object> = response.data as Record<string, Object>;
-          const v: Object = rec['count'];
-          if (typeof v === 'number' && (v as number) > 0) {
-            this.noticeCount = v as number;
+    // 拉取真实未读消息列表（stateCode='1'）更新未读红点数与最新通知标题；全部已读时清零红点
+    ApiService.getMessageList('1', 1)
+      .then((response: ApiResponse<MainNotificationV2[]>) => {
+        if (response.code === 0 && Array.isArray(response.data)) {
+          this.noticeCount = response.data.length;
+          if (response.data.length > 0 && response.data[0].TITLE !== '') {
+            this.noticeText = response.data[0].TITLE;
           }
         }
       })
       .catch((_error: BusinessError) => {
-        // 静默：与 APK 相同，通知条常显
+        // 静默：保留通知条
       });
   }
 
@@ -163,7 +163,18 @@ export struct WMHTab {
     .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
     .onClick(() => {
       this.payTrigger = this.nextTrigger(this.payTrigger);
-      router.pushUrl({ url: 'pages/LightAppPage' });
+      const payYyid: string = AppStorage.get<string>('ecard_pay_yyid') ?? 'ewm';
+      const payLx: string = AppStorage.get<string>('ecard_pay_lx') ?? '2';
+      const payUrl: string = AppStorage.get<string>('ecard_pay_url') ?? '';
+      router.pushUrl({
+        url: 'pages/LightAppPage',
+        params: {
+          title: '一卡通付款码',
+          yyid: payYyid !== '' ? payYyid : 'ewm',
+          lx: payLx !== '' ? payLx : '2',
+          url: payUrl
+        }
+      });
     })
   }
 

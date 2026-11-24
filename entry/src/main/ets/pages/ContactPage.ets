@@ -1,4 +1,6 @@
 import { router } from '@kit.ArkUI';
+import { common } from '@kit.AbilityKit';
+import { contact } from '@kit.ContactsKit';
 import { call } from '@kit.TelephonyKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { ApiService } from '../network/ApiService';
@@ -924,6 +926,72 @@ struct ContactPage {
     .backgroundColor($r('app.color.white'))
   }
 
+  private saveSelectedPersonToContacts(): void {
+    if (this.selectedPersonDetail === null) {
+      return;
+    }
+    const u = this.selectedPersonDetail.userInfo;
+    const list: string[] = [];
+    if (u.BGDH !== '') {
+      list.push(u.BGDH.replace('/', ',').split(',')[0].trim());
+    }
+    if (u.SJDH !== '') {
+      list.push(u.SJDH.replace('/', ',').split(',')[0].trim());
+    }
+    if (u.SJHM !== '') {
+      list.push(u.SJHM.replace('/', ',').split(',')[0].trim());
+    }
+    const displayName: string = this.selectedPersonDetail.name !== '' ? this.selectedPersonDetail.name : u.XM;
+    if (list.length === 0 && displayName === '' && u.DZYJ === '') {
+      this.getUIContext().getPromptAction().showToast({ message: '该联系人暂无可保存的号码或姓名信息' });
+      return;
+    }
+    try {
+      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      const phones: contact.PhoneNumber[] = [];
+      for (const p of list) {
+        if (p !== '') {
+          phones.push({ phoneNumber: p } as contact.PhoneNumber);
+        }
+      }
+      const c: contact.Contact = {
+        name: { fullName: displayName !== '' ? displayName : this.selectedPersonGh } as contact.Name
+      } as contact.Contact;
+      if (phones.length > 0) {
+        c.phoneNumbers = phones;
+      }
+      if (u.DZYJ !== '') {
+        const emailAddr: string = u.DZYJ.replace('/', ',').split(',')[0].trim();
+        if (emailAddr !== '') {
+          c.emails = [{ email: emailAddr } as contact.Email];
+        }
+      }
+      if (u.BMMC !== '' || u.ZW !== '') {
+        c.organization = {
+          name: u.BMMC,
+          title: u.ZW
+        } as contact.Organization;
+      }
+      contact.addContactViaUI(ctx, c)
+        .then((contactId: number) => {
+          if (contactId >= 0) {
+            this.getUIContext().getPromptAction().showToast({ message: '已保存到本地通讯录' });
+          } else {
+            this.getUIContext().getPromptAction().showToast({
+              message: list.length === 0 ? '该联系人未公开电话，已打开通讯录编辑' : '已取消或当前设备未完成通讯录保存'
+            });
+          }
+        })
+        .catch(() => {
+          ApiService.logError('ContactPage addContactViaUI fail');
+          this.getUIContext().getPromptAction().showToast({ message: '拉起系统通讯录失败，请检查设备通讯录服务' });
+        });
+    } catch (_e) {
+      ApiService.logError('ContactPage saveSelectedPersonToContacts exception');
+      this.getUIContext().getPromptAction().showToast({ message: '拉起系统通讯录失败' });
+    }
+  }
+
   /** 双栏右侧联系人详情预览面板 */
   @Builder
   contactDetailPane() {
@@ -1011,6 +1079,16 @@ struct ContactPage {
                     }
                   })
               }
+              Text('保存到通讯录')
+                .fontSize(14)
+                .fontColor('#3A92ED')
+                .padding({ left: 16, right: 16, top: 9, bottom: 9 })
+                .borderRadius(6)
+                .backgroundColor('#EEF5FC')
+                .hoverEffect(HoverEffect.Highlight)
+                .onClick(() => {
+                  this.saveSelectedPersonToContacts();
+                })
               Text('打开完整页面')
                 .fontSize(14)
                 .fontColor($r('app.color.white'))

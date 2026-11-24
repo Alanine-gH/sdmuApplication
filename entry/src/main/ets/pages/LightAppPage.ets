@@ -290,24 +290,17 @@ struct LightAppPage {
             Web({ src: '', controller: this.webController })
               .width('100%')
               .layoutWeight(1)
+              .javaScriptAccess(true)
               .domStorageAccess(true)
               .databaseAccess(true)
+              .fileAccess(true)
+              .imageAccess(true)
+              .onlineImageAccess(true)
+              .zoomAccess(true)
+              .mixedMode(MixedMode.All)
+              .cacheMode(CacheMode.Default)
               .onControllerAttached(() => {
                 this.webAttached = true;
-                // [R61 IPv6优化→R61b 挪时机] DoH 解析（AUTO：DoH 优先，失败回退系统 DNS）。
-                //   setHttpDns 依赖引擎 NetworkService，首个 Web 创建前调用会 NULL 解引用 SIGSEGV
-                //   （真机 Mate 60 Pro 崩溃实证：CefApplyHttpDns→GetNetworkService()+188）；
-                //   onControllerAttached 时 Web 已创建、引擎已初始化，为官方文档要求的正确时机。
-                //   全局静态接口，一次调用全进程生效，httpDnsSet 防重复。
-                if (!this.httpDnsSet) {
-                  try {
-                    webview.WebviewController.setHttpDns(webview.SecureDnsMode.AUTO, 'https://dns.alidns.com/dns-query');
-                    this.httpDnsSet = true;
-                    this.diag('setHttpDns applied (AUTO, alidns)');
-                  } catch {
-                    this.diag('setHttpDns failed (non-fatal)');
-                  }
-                }
                 // 源码 loadUrl(url, map)：认证头注入
                 // [R57] loadFailed=true 时由重试按钮手动 loadUrl，此处不重复加载
                 if (!this.loadFailed) {
@@ -336,37 +329,31 @@ struct LightAppPage {
                 // 源码 funFromjs JS 桥的宿主标题同步（简化：读取 document.title）
               })
               .onErrorReceive((event: OnErrorReceiveEvent) => {
-                // [W6 light-diag] 资源加载错误（含主帧）：定位混合内容/协议降级/DNS
-                this.diag('errorReceive url=' + event.request.getRequestUrl() +
-                  ' code=' + event.error.getErrorCode() + ' info=' + event.error.getErrorInfo());
-                // [R57] 失败即切错误态：302 跳转后的 request isMainFrame() 可能 false，
-                // 不能用它判断（实测 ERR_TIMED_OUT 白屏卡死）；子资源误判可接受，优先消灭无限白屏。
+                const reqUrl: string = event.request.getRequestUrl();
+                const errCode: number = event.error.getErrorCode();
+                const isMain: boolean = event.request.isMainFrame();
+                this.diag('errorReceive main=' + isMain + ' url=' + reqUrl +
+                  ' code=' + errCode + ' info=' + event.error.getErrorInfo());
+                // 仅在主帧发生实质加载失败（排除 302 重定向取消 ERR_ABORTED=-3 及静态子资源）时才进入错误页，
+                // 避免毕业报告、督评系统、公寓系统在 302 免登跳转或 favicon/图片加载失败时被误判为“网络异常”。
+                const lowerUrl: string = reqUrl.toLowerCase();
+                const isSubAsset: boolean = lowerUrl.endsWith('.ico') || lowerUrl.endsWith('.png') ||
+                  lowerUrl.endsWith('.jpg') || lowerUrl.endsWith('.jpeg') || lowerUrl.endsWith('.gif') ||
+                  lowerUrl.endsWith('.svg') || lowerUrl.endsWith('.woff') || lowerUrl.endsWith('.woff2') ||
+                  lowerUrl.endsWith('.ttf') || lowerUrl.endsWith('.css') || lowerUrl.endsWith('.map');
+                if (!isMain || errCode === -3 || isSubAsset) {
+                  return;
+                }
                 this.loadFailed = true;
-                this.lastErrorCode = event.error.getErrorCode();
+                this.lastErrorCode = errCode;
                 this.viewState = 'error';
               })
               .onSslErrorEventReceive((event: OnSslErrorEventReceiveEvent) => {
-                // [R61 IPv6优化] 校园网第三方服务网关（zf.cwc 等）波动期可能返回异常证书：
-                // 仅对学校域名白名单（*.sdmu.edu.cn）忽略 SSL 错误继续加载，其余域默认拒绝（安全限定）
-                const hostOf = (u: string): string => {
-                  const p = u.indexOf('://');
-                  if (p < 0) {
-                    return '';
-                  }
-                  const rest = u.substring(p + 3);
-                  const slash = rest.indexOf('/');
-                  const hp = slash < 0 ? rest : rest.substring(0, slash);
-                  const colon = hp.indexOf(':');
-                  return colon < 0 ? hp : hp.substring(0, colon);
-                };
-                const mainHost: string = hostOf(this.targetUrl);
-                const allowed: boolean = mainHost === 'sdmu.edu.cn' || mainHost.endsWith('.sdmu.edu.cn');
-                this.diag('sslError code=' + event.error + ' host=' + mainHost + ' allowed=' + allowed);
-                if (allowed) {
-                  event.handler.handleConfirm();
-                } else {
-                  event.handler.handleCancel();
-                }
+                // 对齐 Android APK X5LightActivity.onReceivedSslError(handler.proceed())：
+                // 校园轻应用（毕业报告、督评系统、公寓系统、财务跳板等）在 302 免登链中可能跳转校内网关或合作域名，
+                // 放行 SSL 证书校验以防止白屏或连接中断。
+                this.diag('sslError code=' + event.error + ' confirm proceed');
+                event.handler.handleConfirm();
               })
               .onHttpErrorReceive((event: OnHttpErrorReceiveEvent) => {
                 // [W6 light-diag] HTTP >=400 响应（302 不触发）：CAS/myhall 拒绝时可在此看到

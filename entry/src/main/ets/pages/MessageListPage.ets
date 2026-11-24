@@ -136,9 +136,9 @@ struct MessageListPage {
       all.type = 3;
       defs.push(all);
     }
-    this.swAllRead = sw !== null ? sw.allMessagesRead : '';
-    this.swAllDelete = sw !== null ? sw.allMessagesDelete : '';
-    this.swBatchDelete = sw !== null ? sw.batchMessagesDelete : '';
+    this.swAllRead = (sw !== null && sw.allMessagesRead !== '') ? sw.allMessagesRead : '1';
+    this.swAllDelete = (sw !== null && sw.allMessagesDelete !== '') ? sw.allMessagesDelete : '1';
+    this.swBatchDelete = (sw !== null && sw.batchMessagesDelete !== '') ? sw.batchMessagesDelete : '1';
     for (const def of defs) {
       states.push(new MessageTabState());
     }
@@ -270,6 +270,31 @@ struct MessageListPage {
     const copy: MessageTabState[] = this.states.slice();
     copy[idx] = st;
     this.states = copy;
+    this.syncUnreadNoticeCount();
+  }
+
+  /** 将当前未读消息数同步到 AppStorage，驱动首页通知栏小红点实时更新/清零 */
+  private syncUnreadNoticeCount(): void {
+    for (let i = 0; i < this.tabs.length && i < this.states.length; i++) {
+      const st: MessageTabState = this.states[i];
+      if (!st.loaded) {
+        continue;
+      }
+      if (this.tabs[i].type === 1) {
+        AppStorage.setOrCreate<number>('unreadNoticeCount', st.rows.length);
+        return;
+      }
+      if (this.tabs[i].type === 3) {
+        let unreadCount: number = 0;
+        for (const row of st.rows) {
+          if (row.STATE === '1') {
+            unreadCount++;
+          }
+        }
+        AppStorage.setOrCreate<number>('unreadNoticeCount', unreadCount);
+        return;
+      }
+    }
   }
 
   // ===== 源码 MessageAdapter.d(int)：编辑模式标记 + T0 code44：清除全部选中 =====
@@ -634,6 +659,9 @@ struct MessageListPage {
         this.patchState(i, st);
       }
     }
+    if (this.tabs.length === 1 || deletedIdx === 0) {
+      AppStorage.setOrCreate<number>('unreadNoticeCount', 0);
+    }
   }
 
   /** 源码 a.c()（全部标记已读）：确认 → C0389a allUpdateState → EventBus46 + toast"全部消息标记为已读" */
@@ -680,6 +708,7 @@ struct MessageListPage {
 
   /** 源码 T0 code46：未读 tab 清空列表；其余 tab g=1 重载 */
   private onAllReadDone(): void {
+    AppStorage.setOrCreate<number>('unreadNoticeCount', 0);
     for (let i = 0; i < this.states.length; i++) {
       if (this.tabs[i].type === 1) {
         const prev: MessageTabState = this.states[i];
@@ -689,6 +718,9 @@ struct MessageListPage {
         st.loaded = prev.loaded;
         this.patchState(i, st);
       } else {
+        for (const r of this.states[i].rows) {
+          r.STATE = '2';
+        }
         this.reloadTab(i);
       }
     }
@@ -892,6 +924,16 @@ struct MessageListPage {
                 this.toggleEditMode();
               })
           } else if (this.editIconVisible()) {
+            if (this.swAllRead === '1' && !(this.tabs.length > 1 && this.currentTab === 1)) {
+              Text('一键已读')
+                .fontSize(14)
+                .fontColor($r('app.color.common_color_2'))
+                .padding({ left: 8, right: 8, top: 6, bottom: 6 })
+                .hoverEffect(HoverEffect.Highlight)
+                .onClick(() => {
+                  this.onPopupAllRead();
+                })
+            }
             Image($r('app.media.icon_message_list_edit'))
               .width(40)
               .height(35)

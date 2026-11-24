@@ -110,7 +110,9 @@ const YYID_ROUTES: Map<string, string> = new Map([
   ['supervise', 'pages/SupervisePage'],
   ['workapply', 'pages/WorkApplyPage'],
   ['receipt', 'pages/ReceiptListPage'],
-  ['market', 'pages/MarketPage']
+  ['market', 'pages/MarketPage'],
+  ['inspection', 'pages/InspectionRecordPage'],
+  ['dormitorycheck', 'pages/InspectionRecordPage']
 ]);
 
 @Component
@@ -188,6 +190,11 @@ struct AppsTab {
                 item.url = pick('URL');
                 item.yytb = pick('YYTB');
                 item.pxh = pick('PXH');
+                if (item.yymc.includes('付款码') || item.yyid === 'ewm') {
+                  AppStorage.setOrCreate<string>('ecard_pay_yyid', item.yyid);
+                  AppStorage.setOrCreate<string>('ecard_pay_lx', item.lx);
+                  AppStorage.setOrCreate<string>('ecard_pay_url', item.url);
+                }
                 group.apps.push(item);
               }
               if (group.apps.length > 0) {
@@ -250,7 +257,7 @@ struct AppsTab {
     new AppGridItem('问卷课堂', $r('app.media.mobile_campus_main_message_remind'), 'pages/LightAppPage', 'YiClassroom')
   ];
   private cardApps: AppGridItem[] = [
-    new AppGridItem('一卡通付款码', $r('app.media.default_app_icon'), 'pages/LightAppPage', 'cardPayment'),
+    new AppGridItem('一卡通付款码', $r('app.media.default_app_icon'), 'pages/LightAppPage', 'ewm'),
     new AppGridItem('一卡通首页', $r('app.media.app_icon'), 'pages/LightAppPage', 'cardHome'),
     new AppGridItem('我的余额', $r('app.media.my_account'), 'pages/LightAppPage', 'cardBalance'),
     new AppGridItem('我的账单', $r('app.media.my_password'), 'pages/LightAppPage', 'cardBill'),

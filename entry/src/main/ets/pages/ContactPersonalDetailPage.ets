@@ -362,35 +362,55 @@ struct ContactPersonalDetailPage {
     if (this.info.userInfo.SJHM !== '') {
       list.push(this.info.userInfo.SJHM.replace('/', ',').split(',')[0].trim());
     }
-    if (list.length === 0) {
-      // 源码 arrayList.isEmpty() → return（无反馈）
+    const displayName: string = this.info.name !== '' ? this.info.name : this.info.userInfo.XM;
+    if (list.length === 0 && displayName === '' && this.info.userInfo.DZYJ === '') {
+      this.getUIContext().getPromptAction().showToast({ message: '该联系人暂无可保存的号码或姓名信息' });
       return;
     }
-    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
-    const phones: contact.PhoneNumber[] = [];
-    for (const p of list) {
-      const phone: contact.PhoneNumber = new contact.PhoneNumber();
-      phone.phoneNumber = p;
-      phones.push(phone);
-    }
-    const c: contact.Contact = new contact.Contact();
-    c.name = { fullName: this.info.name } as contact.Name;
-    c.phoneNumbers = phones;
-    if (this.info.userInfo.DZYJ !== '') {
-      const emailObj: contact.Email = new contact.Email();
-      emailObj.email = this.info.userInfo.DZYJ.replace('/', ',').split(',')[0].trim();
-      c.emails = [emailObj];
-    }
-    contact.addContactViaUI(ctx, c)
-      .then((contactId: number) => {
-        if (contactId >= 0) {
-          this.getUIContext().getPromptAction().showToast({ message: '已保存到本地通讯录' });
+    try {
+      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      const phones: contact.PhoneNumber[] = [];
+      for (const p of list) {
+        if (p !== '') {
+          phones.push({ phoneNumber: p } as contact.PhoneNumber);
         }
-      })
-      .catch(() => {
-        ApiService.logError('ContactPersonalDetailPage addContactViaUI fail');
-        this.getUIContext().getPromptAction().showToast({ message: '保存联系人失败' });
-      });
+      }
+      const c: contact.Contact = {
+        name: { fullName: displayName !== '' ? displayName : this.gh } as contact.Name
+      } as contact.Contact;
+      if (phones.length > 0) {
+        c.phoneNumbers = phones;
+      }
+      if (this.info.userInfo.DZYJ !== '') {
+        const emailAddr: string = this.info.userInfo.DZYJ.replace('/', ',').split(',')[0].trim();
+        if (emailAddr !== '') {
+          c.emails = [{ email: emailAddr } as contact.Email];
+        }
+      }
+      if (this.info.userInfo.BMMC !== '' || this.info.userInfo.ZW !== '') {
+        c.organization = {
+          name: this.info.userInfo.BMMC,
+          title: this.info.userInfo.ZW
+        } as contact.Organization;
+      }
+      contact.addContactViaUI(ctx, c)
+        .then((contactId: number) => {
+          if (contactId >= 0) {
+            this.getUIContext().getPromptAction().showToast({ message: '已保存到本地通讯录' });
+          } else {
+            this.getUIContext().getPromptAction().showToast({
+              message: list.length === 0 ? '该联系人未公开电话，已打开通讯录编辑' : '已取消或当前设备未完成通讯录保存'
+            });
+          }
+        })
+        .catch(() => {
+          ApiService.logError('ContactPersonalDetailPage addContactViaUI fail');
+          this.getUIContext().getPromptAction().showToast({ message: '拉起系统通讯录失败，请检查设备通讯录服务' });
+        });
+    } catch (_e) {
+      ApiService.logError('ContactPersonalDetailPage saveToLocal exception');
+      this.getUIContext().getPromptAction().showToast({ message: '拉起系统通讯录失败' });
+    }
   }
 
   /** 源码 h 类 tvAddToNet："0"→h3 addTopContact{scyhid:gh,type:"1"}；else k3 delTopContact{gh} */
@@ -908,7 +928,9 @@ struct ContactPersonalDetailPage {
           .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
             this.showMore = false;
-            this.saveToLocal();
+            setTimeout(() => {
+              this.saveToLocal();
+            }, 120);
           })
         if (this.moreRoleType !== '0') {
           Text(this.permissionsText())
