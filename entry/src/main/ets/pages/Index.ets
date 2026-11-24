@@ -11,6 +11,11 @@ import { IOfficeTab } from '../components/IOfficeTab';
 import { MineTab } from '../components/MineTab';
 import { BreakpointSystem } from '../common/BreakpointSystem';
 import { ImmersiveLightHelper } from '../common/ImmersiveLightHelper';
+import {
+  PerformanceSchedulerHelper,
+  FAST_SCENE_PAGE_TRANSITION,
+  FAST_DURATION_SHORT
+} from '../common/PerformanceSchedulerHelper';
 
 /** APK 应用宫格项（服务端下发 7 组，本清单为 2026-11-17 实拍结果） */
 class AppGridItem {
@@ -793,12 +798,14 @@ struct Index {
         .scrollable(!this.useSideRail())
         .barMode(BarMode.Fixed)
         .onChange((index: number) => {
+          PerformanceSchedulerHelper.reportSceneBegin(FAST_SCENE_PAGE_TRANSITION, FAST_DURATION_SHORT);
           this.currentTabIndex = index;
           const next: number[] = this.tabTriggers.slice();
           if (index >= 0 && index < next.length) {
             next[index] = next[index] < 0 ? 1 : next[index] + 1;
             this.tabTriggers = next;
           }
+          PerformanceSchedulerHelper.reportSceneEnd(FAST_SCENE_PAGE_TRANSITION, FAST_DURATION_SHORT);
         })
       }
     }

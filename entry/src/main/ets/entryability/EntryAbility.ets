@@ -6,6 +6,12 @@ import { PreferencesUtil } from '../data/PreferencesUtil';
 import { LoginSession } from '../network/LoginSession';
 import { BreakpointSystem } from '../common/BreakpointSystem';
 import { PrivacyWindowHelper } from '../common/PrivacyWindowHelper';
+import {
+  PerformanceSchedulerHelper,
+  FAST_SCENE_APP_LAUNCH,
+  FAST_DURATION_SHORT
+} from '../common/PerformanceSchedulerHelper';
+import { HoldingHandHelper } from '../common/HoldingHandHelper';
 
 const DOMAIN = 0x0000;
 
@@ -19,6 +25,7 @@ export default class EntryAbility extends UIAbility {
 
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onCreate');
+    PerformanceSchedulerHelper.reportSceneBegin(FAST_SCENE_APP_LAUNCH, FAST_DURATION_SHORT);
     // 注入UIAbility上下文供会话持久化使用
     LoginSession.uiContext = this.context;
     this.handleWidgetWant(want);
@@ -150,6 +157,8 @@ export default class EntryAbility extends UIAbility {
         return;
       }
       hilog.info(DOMAIN, 'testTag', 'Succeeded in loading the content.');
+      PerformanceSchedulerHelper.reportSceneEnd(FAST_SCENE_APP_LAUNCH, FAST_DURATION_SHORT);
+      HoldingHandHelper.subscribeHoldingHandChanged();
       if (this.mainWindow !== null) {
         this.registerLayoutBreakpointObserver(this.mainWindow);
       } else {
@@ -202,6 +211,7 @@ export default class EntryAbility extends UIAbility {
     this.mainUIContext = null;
     this.mainWindow = null;
     BreakpointSystem.unregisterFoldListener();
+    HoldingHandHelper.unsubscribeHoldingHandChanged();
     PrivacyWindowHelper.detachMainWindow();
   }
 

@@ -50,6 +50,7 @@ export class WidgetDataHelper {
   public static readonly FORM_SCHEDULE_WIDGET: string = 'schedule_widget';
   public static readonly FORM_QUICK_ENTRY_WIDGET: string = 'quick_entry_widget';
   public static readonly DIMENSION_2_2: number = 2;
+  public static readonly DIMENSION_2_4: number = 3;
   public static readonly DIMENSION_4_4: number = 4;
 
   /** 纯函数：构建 formProvider.openFormManager / AddFormMenuItem 所需 Want */
@@ -87,6 +88,14 @@ export class WidgetDataHelper {
     return WidgetDataHelper.buildFormManagerWant(
       WidgetDataHelper.FORM_QUICK_ENTRY_WIDGET,
       WidgetDataHelper.DIMENSION_2_2
+    );
+  }
+
+  /** 纯函数：校园快捷入口 2x4 宽幅桌面卡片 Want */
+  public static buildQuickEntryWideWidgetWant(): Want {
+    return WidgetDataHelper.buildFormManagerWant(
+      WidgetDataHelper.FORM_QUICK_ENTRY_WIDGET,
+      WidgetDataHelper.DIMENSION_2_4
     );
   }
 

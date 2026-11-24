@@ -5,6 +5,12 @@ import { ApiResponse } from '../model/ResponseModel';
 import { TitleBar } from '../components/TitleBar';
 import { LoadingView } from '../components/LoadingView';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import {
+  PerformanceSchedulerHelper,
+  FAST_SCENE_PAGE_LOAD,
+  FAST_DURATION_SHORT
+} from '../common/PerformanceSchedulerHelper';
 
 /**
  * 成绩页 — 1:1 翻译原 APK ScoreMainFragment.java：
@@ -62,8 +68,11 @@ struct ScorePage {
    * Web 用默认学期加载、后续 URL 重建不触发重载 → 学期错位 */
   @State semesterReady: boolean = false;
   @State chartUrlsReady: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
 
   aboutToAppear(): void {
+    PerformanceSchedulerHelper.reportSceneBegin(FAST_SCENE_PAGE_LOAD, FAST_DURATION_SHORT);
     // 源码 N1(): strE=d.a.e(null,false)；M1() 四字段 token；UC=d.a.d()=onlyCode；AppType=ydxy
     ApiService.getNewsPageWebViewHeaders()
       .then((headers: NewsWebViewHeaders | null) => {
@@ -131,10 +140,12 @@ struct ScorePage {
           this.subjectCode = typeof code === 'number' ? code : Number(code);
         }
         this.isLoading = false;
+        PerformanceSchedulerHelper.reportSceneEnd(FAST_SCENE_PAGE_LOAD, FAST_DURATION_SHORT);
       })
       .catch((error: BusinessError) => {
         ApiService.logError('Score hasSubject fail: ' + error.message);
         this.isLoading = false;
+        PerformanceSchedulerHelper.reportSceneEnd(FAST_SCENE_PAGE_LOAD, FAST_DURATION_SHORT);
       });
   }
 
@@ -191,28 +202,39 @@ struct ScorePage {
             // 源码：code==0 → chartTwo 全屏（setLayoutParams(-1,-1)=MATCH_PARENT → '100%'）
             this.chartWeb(this.webBottomController, this.chartUrlBottom, '100%')
           } else {
-            // 源码：三段——top chartOne / mid chartTh（高 (code+1)*72vp）/ bottom chartTwo
-            this.chartWeb(this.webTopController, this.chartUrlTop, 260)
-            Row() {
-              Text('查看学生具体成绩')
-                .fontSize(16)
-                .fontColor($r('app.color.sdmu_primary'))
-                .padding(12)
-                .layoutWeight(1)
+            Scroll() {
+              Column() {
+                // 源码：三段——top chartOne / mid chartTh（高 (code+1)*72vp）/ bottom chartTwo
+                this.chartWeb(this.webTopController, this.chartUrlTop, 260)
+                Row() {
+                  Text('查看学生具体成绩')
+                    .fontSize(16)
+                    .fontColor($r('app.color.sdmu_primary'))
+                    .padding(12)
+                    .layoutWeight(1)
+                }
+                .width('100%')
+                .backgroundColor($r('app.color.white'))
+                .hoverEffect(HoverEffect.Highlight)
+                .onClick(() => {
+                  // 源码链：ScoreMainActivity → Q0(/score/studentList)=StudentListActivity（PARAMS=xn_xq[,xn_xq]）
+                  // → 班级页签 → 点学生 → StudentScoreActivity{studentName,studentId}（HAP StudentScorePage）
+                  // [W27 final-a] StudentListPage 已源码级落地，按源码入口传 PARAMS。
+                  router.pushUrl({
+                    url: 'pages/StudentListPage',
+                    params: { 'PARAMS': this.xn + '_' + this.xq } as Record<string, Object>
+                  });
+                })
+                this.chartWeb(this.webMidController, this.chartUrlMid, (this.subjectCode + 1) * 72)
+                this.chartWeb(this.webBottomController, this.chartUrlBottom, 320)
+              }
+              .width('100%')
+              .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+              .padding({ bottom: this.avoidAreaBottomVp })
             }
             .width('100%')
-            .backgroundColor($r('app.color.white'))
-            .onClick(() => {
-              // 源码链：ScoreMainActivity → Q0(/score/studentList)=StudentListActivity（PARAMS=xn_xq[,xn_xq]）
-              // → 班级页签 → 点学生 → StudentScoreActivity{studentName,studentId}（HAP StudentScorePage）
-              // [W27 final-a] StudentListPage 已源码级落地，按源码入口传 PARAMS。
-              router.pushUrl({
-                url: 'pages/StudentListPage',
-                params: { 'PARAMS': this.xn + '_' + this.xq } as Record<string, Object>
-              });
-            })
-            this.chartWeb(this.webMidController, this.chartUrlMid, (this.subjectCode + 1) * 72)
-            this.chartWeb(this.webBottomController, this.chartUrlBottom, 320)
+            .layoutWeight(1)
+            .scrollBar(BarState.Off)
           }
         }
         .width('100%')

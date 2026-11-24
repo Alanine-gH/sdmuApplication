@@ -10,6 +10,12 @@ import { WidgetDataHelper, WidgetCourseSummary } from '../common/WidgetDataHelpe
 import { ImmersiveLightHelper } from '../common/ImmersiveLightHelper';
 import { BreakpointSystem, CreaseRegionVp } from '../common/BreakpointSystem';
 import { AdaptiveLayoutHelper, SplitPaneConfig } from '../common/AdaptiveLayoutHelper';
+import { HoldingHandHelper, FabHandAlignment } from '../common/HoldingHandHelper';
+import {
+  PerformanceSchedulerHelper,
+  FAST_SCENE_PAGE_LOAD,
+  FAST_DURATION_SHORT
+} from '../common/PerformanceSchedulerHelper';
 
 /**
  * 课表页 — 源码级对齐 TimetableActivity + WeekCourseFragment + CourseBox + ChooseWeeksPopup + ChooseTermDialog
@@ -141,6 +147,7 @@ struct SchedulePage {
   @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
   @StorageProp('avoidAreaRightVp') avoidAreaRightVp: number = 0;
   @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+  @StorageProp('holdingHandStatus') holdingHandStatus: number = 16;
   // 学期起止毫秒（termInfo 失败时用服务器实测兜底值，与 APK 常量语义一致）
   @State semesterStartMs: number = 0;
   @State semesterEndMs: number = 0;
@@ -1011,6 +1018,20 @@ struct SchedulePage {
     .padding({ top: 25, bottom: 25 })
   }
 
+  private getFabHandConfig(): FabHandAlignment {
+    const useTwoPane: boolean = AdaptiveLayoutHelper.getSplitPaneConfigWithRatio(
+      this.currentBreakpoint, this.windowWidthVp, 3, 2
+    ).useTwoPane;
+    return HoldingHandHelper.computeFabHandAlignment(
+      this.holdingHandStatus,
+      this.currentBreakpoint,
+      this.avoidAreaLeftVp,
+      this.avoidAreaRightVp,
+      AXIS_WIDTH,
+      useTwoPane
+    );
+  }
+
   // v3/D3/F3：主钮 45° 旋转 + custom/audit 从主钮位置 translationY 上滑展开（500ms 减速）
   @Builder
   fabCluster() {
@@ -1018,7 +1039,8 @@ struct SchedulePage {
       .width(71.5)
       .height(71.5)
       .margin({
-        right: Math.max(10, this.avoidAreaRightVp + 10),
+        left: this.getFabHandConfig().alignLeft ? this.getFabHandConfig().leftMarginVp : 0,
+        right: this.getFabHandConfig().alignLeft ? 0 : this.getFabHandConfig().rightMarginVp,
         bottom: Math.max(15, this.avoidAreaBottomVp + 10) + this.creaseExtraBottomVp() + 71.5
       })
       .opacity(this.fabExpanded ? 1 : 0)
@@ -1033,7 +1055,8 @@ struct SchedulePage {
       .width(71.5)
       .height(71.5)
       .margin({
-        right: Math.max(10, this.avoidAreaRightVp + 10),
+        left: this.getFabHandConfig().alignLeft ? this.getFabHandConfig().leftMarginVp : 0,
+        right: this.getFabHandConfig().alignLeft ? 0 : this.getFabHandConfig().rightMarginVp,
         bottom: Math.max(15, this.avoidAreaBottomVp + 10) + this.creaseExtraBottomVp() + 143
       })
       .opacity(this.fabExpanded ? 1 : 0)
@@ -1048,12 +1071,14 @@ struct SchedulePage {
       .width(71.5)
       .height(71.5)
       .margin({
-        right: Math.max(10, this.avoidAreaRightVp + 10),
+        left: this.getFabHandConfig().alignLeft ? this.getFabHandConfig().leftMarginVp : 0,
+        right: this.getFabHandConfig().alignLeft ? 0 : this.getFabHandConfig().rightMarginVp,
         bottom: Math.max(15, this.avoidAreaBottomVp + 10) + this.creaseExtraBottomVp()
       })
       .rotate({ angle: this.fabExpanded ? 45 : 0 })
       .hoverEffect(HoverEffect.Highlight)
       .onClick(() => {
+        PerformanceSchedulerHelper.reportSceneBegin(FAST_SCENE_PAGE_LOAD, FAST_DURATION_SHORT);
         this.getUIContext().animateTo({ duration: 500, curve: Curve.EaseOut }, () => {
           this.fabExpanded = !this.fabExpanded;
         });
@@ -1184,7 +1209,7 @@ struct SchedulePage {
         .width('100%')
         .height(0.3)
         .backgroundColor($r('app.color.common_color_4'))
-      Stack({ alignContent: Alignment.BottomEnd }) {
+      Stack({ alignContent: this.getFabHandConfig().alignLeft ? Alignment.BottomStart : Alignment.BottomEnd }) {
         if (this.courseList.length === 0) {
           Column() {
             this.emptyCourseView()

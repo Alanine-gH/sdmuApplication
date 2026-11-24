@@ -6,6 +6,15 @@ import { TitleBar } from '../components/TitleBar';
 import { ApiService, FeedbackTypeEntry } from '../network/ApiService';
 import { LoginSession } from '../network/LoginSession';
 import { PasteHelper } from '../common/PasteHelper';
+import { VisionEnhancementHelper } from '../common/VisionEnhancementHelper';
+import {
+  DocumentScanner,
+  DocumentScannerConfig,
+  DocType,
+  FilterId,
+  ShootingMode,
+  SaveOption
+} from '@kit.VisionKit';
 
 /**
  * 意见反馈页 — 1:1 复刻 FeedbackActivity.java + mobile_campus_feedback_activity.xml(v22)
@@ -49,7 +58,9 @@ struct FeedbackPage {
   private feedbackTypes: FeedbackTypeEntry[] = [];
   /** 提交中防重复（源码 loading g0.i / a.e dismiss） */
   @State submitting: boolean = false;
+  @State showDocScannerSheet: boolean = false;
   @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
   @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   @StorageProp('keyboardHeightVp') keyboardHeightVp: number = 0;
 
@@ -145,6 +156,45 @@ struct FeedbackPage {
   /** 源码 i onClick：标题栏"反馈记录" → FeedbackRecordActivity（E0 路由同族） */
   private openRecord(): void {
     router.pushUrl({ url: 'pages/FeedbackRecordPage' });
+  }
+
+  private buildScannerConfig(): DocumentScannerConfig {
+    const cfg: DocumentScannerConfig = new DocumentScannerConfig();
+    cfg.maxShotCount = VisionEnhancementHelper.clampDocScanMaxShots(6 - this.photos.length);
+    cfg.supportType = [DocType.DOC];
+    cfg.isGallerySupported = true;
+    cfg.defaultFilterId = FilterId.STRENGTHEN;
+    cfg.defaultShootingMode = ShootingMode.MANUAL;
+    cfg.isShareable = false;
+    cfg.saveOptions = [SaveOption.JPG];
+    return cfg;
+  }
+
+  @Builder
+  docScannerSheetBuilder() {
+    Column() {
+      DocumentScanner({
+        scannerConfig: this.buildScannerConfig(),
+        onResult: (code: number, _saveType: SaveOption, uris: string[]) => {
+          this.showDocScannerSheet = false;
+          if (code === 200 && Array.isArray(uris) && uris.length > 0) {
+            const next: string[] = this.photos.slice();
+            for (let i = 0; i < uris.length && next.length < 6; i++) {
+              next.push(uris[i]);
+            }
+            this.photos = next;
+          } else if (code !== -1) {
+            this.getUIContext().getPromptAction().showToast({
+              message: VisionEnhancementHelper.formatVisionError(code)
+            });
+          }
+        }
+      })
+        .width('100%')
+        .height('100%')
+    }
+    .width('100%')
+    .height('100%')
   }
 
   @Builder
@@ -263,11 +313,25 @@ struct FeedbackPage {
                 .fontSize(16)
                 .fontColor($r('app.color.black'))
                 .layoutWeight(1)
+              if (this.photos.length < 6) {
+                Text('AI文档扫描')
+                  .fontSize(13)
+                  .fontColor($r('app.color.mobile_campus_primary_color'))
+                  .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+                  .borderRadius(4)
+                  .backgroundColor('#F2F7FD')
+                  .margin({ right: 8 })
+                  .hoverEffect(HoverEffect.Highlight)
+                  .onClick(() => {
+                    this.showDocScannerSheet = true;
+                  })
+              }
               Text(this.photos.length + '/6')
                 .fontSize(16)
                 .fontColor($r('app.color.black'))
             }
             .width('100%')
+            .alignItems(VerticalAlign.Center)
 
             // gv：GridLayoutManager 3 列、marginTop 16(px32/2)；
             // SpaceItemDecoration(y.a(16))：列间视觉 16dp（col1 左偏移16、col2 左偏移32）、行间 10dp
@@ -419,5 +483,11 @@ struct FeedbackPage {
     .height('100%')
     .backgroundColor($r('app.color.white'))
     .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+    .bindSheet($$this.showDocScannerSheet, this.docScannerSheetBuilder(), {
+      height: SheetSize.LARGE,
+      preferType: AdaptiveLayoutHelper.getSheetPreferType(this.currentBreakpoint, this.isCompactHeight),
+      showClose: true,
+      title: { title: 'AI 文档/单据扫描' }
+    })
   }
 }

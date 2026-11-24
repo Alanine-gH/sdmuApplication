@@ -3,9 +3,11 @@ import { promptAction } from '@kit.ArkUI';
 import { photoAccessHelper } from '@kit.MediaLibraryKit';
 import { http } from '@kit.NetworkKit';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { image } from '@kit.ImageKit';
 import fs from '@ohos.file.fs';
 import { CreaseRegionVp } from '../common/BreakpointSystem';
 import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
+import { VisionEnhancementHelper } from '../common/VisionEnhancementHelper';
 
 /**
  * 照片全屏浏览页 — 源码级复刻 BrowsePhotosActivity（baseapp weiget 包，PhotoView+ViewPager）。
@@ -33,6 +35,9 @@ struct BrowsePhotosPage {
   private extraOperation: string = 'none';
   /** PhotoView 缩放态（pinch 手势） */
   @State scaleValue: number = 1;
+  @State superResPixelMap: image.PixelMap | null = null;
+  @State superResIndex: number = -1;
+  @State superResLoading: boolean = false;
   @StorageProp('avoidAreaTopVp') avoidAreaTopVp: number = 0;
   @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   @StorageProp('avoidAreaLeftVp') avoidAreaLeftVp: number = 0;
@@ -125,6 +130,54 @@ struct BrowsePhotosPage {
     }
   }
 
+  /** API 26 CoreVisionKit 端侧图像超分辨率增强当前图片 */
+  private async enhanceCurrentPhotoSuperRes(): Promise<void> {
+    if (this.superResLoading || this.currentIndex < 0 || this.currentIndex >= this.photos.length) {
+      return;
+    }
+    const url: string = this.photos[this.currentIndex].url;
+    if (url === '' || (!url.startsWith('http://') && !url.startsWith('https://'))) {
+      promptAction.showToast({ message: '当前内置图片无需超分增强' });
+      return;
+    }
+    this.superResLoading = true;
+    const client: http.HttpRequest = http.createHttp();
+    try {
+      const response: http.HttpResponse = await client.request(url, {
+        method: http.RequestMethod.GET,
+        expectDataType: http.HttpDataType.ARRAY_BUFFER,
+        connectTimeout: 15000,
+        readTimeout: 30000
+      });
+      if (response.responseCode !== 200 || !(response.result instanceof ArrayBuffer)) {
+        promptAction.showToast({ message: '获取原图数据失败' });
+        return;
+      }
+      const source: image.ImageSource = image.createImageSource(response.result as ArrayBuffer);
+      const rawMap: image.PixelMap = await source.createPixelMap();
+      const srResult = await VisionEnhancementHelper.enhancePixelMapSuperResolution(rawMap);
+      source.release();
+      if (srResult.success && srResult.pixelMap) {
+        if (this.superResPixelMap !== null && this.superResPixelMap !== srResult.pixelMap) {
+          this.superResPixelMap.release();
+        }
+        this.superResPixelMap = srResult.pixelMap;
+        this.superResIndex = this.currentIndex;
+      }
+      if (srResult.pixelMap !== rawMap) {
+        rawMap.release();
+      }
+      promptAction.showToast({ message: srResult.message });
+    } catch (err) {
+      promptAction.showToast({
+        message: VisionEnhancementHelper.formatVisionError(err as Object)
+      });
+    } finally {
+      client.destroy();
+      this.superResLoading = false;
+    }
+  }
+
   /** 右上角操作按钮资源（DELETE→rubbish_icon / SHARE→school_share_and / NONE→无） */
   private opRes(): Resource | null {
     if (this.extraOperation === 'delete') {
@@ -137,8 +190,8 @@ struct BrowsePhotosPage {
   }
 
   @Builder
-  photoPage(item: BrowsePhotoItem) {
-    Image(item.url)
+  photoPage(item: BrowsePhotoItem, index: number) {
+    Image(this.superResIndex === index && this.superResPixelMap !== null ? this.superResPixelMap : item.url)
       .width('100%')
       .height('100%')
       .objectFit(ImageFit.Contain)
@@ -190,8 +243,8 @@ struct BrowsePhotosPage {
         // HackyViewPager：全屏翻页（PhotoView 单击/长按绑定）
         if (this.photos.length > 0) {
           Swiper() {
-            ForEach(this.photos, (item: BrowsePhotoItem) => {
-              this.photoPage(item)
+            ForEach(this.photos, (item: BrowsePhotoItem, index: number) => {
+              this.photoPage(item, index)
             }, (item: BrowsePhotoItem) => 'bp_' + item.url)
           }
           .index(this.currentIndex)
@@ -231,6 +284,21 @@ struct BrowsePhotosPage {
             })
 
           Blank()
+
+          if (this.photos.length > 0) {
+            Text(this.superResLoading ? '超分中...' : (this.superResIndex === this.currentIndex ? '已超分' : 'AI超清'))
+              .height(28)
+              .fontSize(12)
+              .fontColor($r('app.color.white'))
+              .backgroundColor('#4D000000')
+              .borderRadius(14)
+              .padding({ left: 10, right: 10, top: 5, bottom: 5 })
+              .margin({ right: 8 })
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick(() => {
+                this.enhanceCurrentPhotoSuperRes();
+              })
+          }
 
           if (this.extraOperation !== 'delete' && this.photos.length > 0) {
             Row() {

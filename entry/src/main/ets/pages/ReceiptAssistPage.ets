@@ -5,6 +5,17 @@ import { image } from '@kit.ImageKit';
 import fs from '@ohos.file.fs';
 import { TitleBar } from '../components/TitleBar';
 import { AiHelper } from '../common/AiHelper';
+import { BreakpointSystem } from '../common/BreakpointSystem';
+import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
+import { VisionEnhancementHelper } from '../common/VisionEnhancementHelper';
+import {
+  DocumentScanner,
+  DocumentScannerConfig,
+  DocType,
+  FilterId,
+  ShootingMode,
+  SaveOption
+} from '@kit.VisionKit';
 import { LoadingView } from '../components/LoadingView';
 import { EmptyView } from '../components/EmptyView';
 import { ApiService } from '../network/ApiService';
@@ -39,6 +50,11 @@ struct ReceiptAssistPage {
   @State rows: RatepayingEntry[] = [];
   @State pageState: string = 'loading';
   @State current: number = 0;
+  @State showDocScannerSheet: boolean = false;
+  @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
+  @StorageProp('windowWidthVp') windowWidthVp: number = 360;
+  @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
+  @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
 
   aboutToAppear(): void {
     this.loadData();
@@ -120,14 +136,41 @@ struct ReceiptAssistPage {
             .textAlign(TextAlign.Center)
             .padding({ top: 9, bottom: 12 })
             .margin({ top: 5 })
+
+          Row({ space: 10 }) {
+            Button('相册OCR识票')
+              .layoutWeight(1)
+              .height(36)
+              .fontSize(13)
+              .fontColor($r('app.color.white'))
+              .backgroundColor($r('app.color.mobile_campus_primary_color_default'))
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick(() => {
+                this.recognizeReceiptOcr();
+              })
+            Button('AI文档扫描识票')
+              .layoutWeight(1)
+              .height(36)
+              .fontSize(13)
+              .fontColor($r('app.color.mobile_campus_primary_color_default'))
+              .backgroundColor('#EEF5FD')
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick(() => {
+                this.showDocScannerSheet = true;
+              })
+          }
+          .width('100%')
+          .padding({ top: 4, bottom: 14 })
         }
         .width('100%')
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
         .padding({ left: 15, right: 15 })
         .backgroundColor(Color.White)
         .borderRadius(4)
       }
       .width('100%')
-      .padding({ left: 20, right: 20, top: 15 })
+      .alignItems(HorizontalAlign.Center)
+      .padding({ left: 20, right: 20, top: 15, bottom: Math.max(15, this.avoidAreaBottomVp + 8) })
     }
     .width('100%')
     .height('100%')
@@ -179,6 +222,29 @@ struct ReceiptAssistPage {
     }
   }
 
+  private async recognizeFromUri(uri: string): Promise<void> {
+    const file = fs.openSync(uri, fs.OpenMode.READ_ONLY);
+    try {
+      const source = image.createImageSource(file.fd);
+      const pixelMap = await source.createPixelMap();
+      const srRes = await VisionEnhancementHelper.enhancePixelMapSuperResolution(pixelMap);
+      const targetMap: image.PixelMap = (srRes.success && srRes.pixelMap) ? srRes.pixelMap : pixelMap;
+      const text = await AiHelper.recognizeTextFromPixelMap(targetMap);
+      if (targetMap !== pixelMap) {
+        targetMap.release();
+      }
+      pixelMap.release();
+      source.release();
+      if (text !== '') {
+        this.getUIContext().showAlertDialog({ title: '票据识别结果', message: text });
+      } else {
+        this.getUIContext().getPromptAction().showToast({ message: '未识别到文字' });
+      }
+    } finally {
+      fs.closeSync(file);
+    }
+  }
+
   private async recognizeReceiptOcr(): Promise<void> {
     try {
       const picker = new photoAccessHelper.PhotoViewPicker();
@@ -189,24 +255,45 @@ struct ReceiptAssistPage {
       if (!res.photoUris || res.photoUris.length === 0) {
         return;
       }
-      const file = fs.openSync(res.photoUris[0], fs.OpenMode.READ_ONLY);
-      try {
-        const source = image.createImageSource(file.fd);
-        const pixelMap = await source.createPixelMap();
-        const text = await AiHelper.recognizeTextFromPixelMap(pixelMap);
-        pixelMap.release();
-        source.release();
-        if (text !== '') {
-          this.getUIContext().showAlertDialog({ title: '票据识别结果', message: text });
-        } else {
-          this.getUIContext().getPromptAction().showToast({ message: '未识别到文字' });
-        }
-      } finally {
-        fs.closeSync(file);
-      }
+      await this.recognizeFromUri(res.photoUris[0]);
     } catch {
       this.getUIContext().getPromptAction().showToast({ message: '票据识别失败' });
     }
+  }
+
+  private buildScannerConfig(): DocumentScannerConfig {
+    const cfg: DocumentScannerConfig = new DocumentScannerConfig();
+    cfg.maxShotCount = VisionEnhancementHelper.clampDocScanMaxShots(1);
+    cfg.supportType = [DocType.DOC];
+    cfg.isGallerySupported = true;
+    cfg.defaultFilterId = FilterId.STRENGTHEN;
+    cfg.defaultShootingMode = ShootingMode.MANUAL;
+    cfg.isShareable = false;
+    cfg.saveOptions = [SaveOption.JPG];
+    return cfg;
+  }
+
+  @Builder
+  docScannerSheetBuilder() {
+    Column() {
+      DocumentScanner({
+        scannerConfig: this.buildScannerConfig(),
+        onResult: (code: number, _saveType: SaveOption, uris: string[]) => {
+          this.showDocScannerSheet = false;
+          if (code === 200 && Array.isArray(uris) && uris.length > 0) {
+            this.recognizeFromUri(uris[0]);
+          } else if (code !== -1) {
+            this.getUIContext().getPromptAction().showToast({
+              message: VisionEnhancementHelper.formatVisionError(code)
+            });
+          }
+        }
+      })
+        .width('100%')
+        .height('100%')
+    }
+    .width('100%')
+    .height('100%')
   }
 
   build() {
@@ -224,5 +311,11 @@ struct ReceiptAssistPage {
     .width('100%')
     .height('100%')
     .backgroundColor('#E7E7E7')
+    .bindSheet($$this.showDocScannerSheet, this.docScannerSheetBuilder(), {
+      height: SheetSize.LARGE,
+      preferType: AdaptiveLayoutHelper.getSheetPreferType(this.currentBreakpoint, this.isCompactHeight),
+      showClose: true,
+      title: { title: 'AI 票据文档扫描' }
+    })
   }
 }

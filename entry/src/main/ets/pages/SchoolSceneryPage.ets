@@ -11,6 +11,7 @@ import { SchoolSceneryItem } from '../model/ContactModel';
 import { LoginSession } from '../network/LoginSession';
 import { BreakpointSystem } from '../common/BreakpointSystem';
 import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
+import { VisionEnhancementHelper, VisionCaptionCandidate } from '../common/VisionEnhancementHelper';
 
 /**
  * 校园风光 — SchoolSceneryActivity + SchoolSceneryFragment + SchoolSceneryAdapter 源码级翻译。
@@ -46,6 +47,8 @@ struct SchoolSceneryPage {
   @State isLoading: boolean = true;
   @State loadError: string = '';
   @State currentIndex: number = 0;
+  @State searchKeyword: string = '';
+  @State aiMatchedPaths: string[] = [];
   @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
   @StorageProp('windowWidthVp') windowWidthVp: number = 360;
   @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
@@ -257,6 +260,7 @@ struct SchoolSceneryPage {
         fs.closeSync(src);
         fs.closeSync(dst);
       }
+      VisionEnhancementHelper.indexImageForTextSearch(target);
       return target;
     } catch (error) {
       const err = error as BusinessError;
@@ -267,6 +271,42 @@ struct SchoolSceneryPage {
 
   private toast(message: string): void {
     this.getUIContext().getPromptAction().showToast({ message: message, duration: 2000 });
+  }
+
+  private displayedPhotos(): SchoolSceneryItem[] {
+    const kw: string = VisionEnhancementHelper.sanitizeSearchQuery(this.searchKeyword);
+    if (kw === '') {
+      return this.photos;
+    }
+    const candidates: VisionCaptionCandidate[] =
+      this.photos.map((p: SchoolSceneryItem): VisionCaptionCandidate => {
+        const item: VisionCaptionCandidate = {
+          id: p.PICID,
+          title: this.titleText(p),
+          imagePath: p.PIC_URL
+        };
+        return item;
+      });
+    const matchedIds: string[] = VisionEnhancementHelper.matchCaptionsFallback(kw, candidates);
+    const idSet: Set<string> = new Set<string>(matchedIds);
+    const pathSet: Set<string> = new Set<string>(this.aiMatchedPaths);
+    return this.photos.filter((p: SchoolSceneryItem): boolean => {
+      return idSet.has(p.PICID) || pathSet.has(p.PIC_URL);
+    });
+  }
+
+  private async triggerVisionSearch(): Promise<void> {
+    const kw: string = VisionEnhancementHelper.sanitizeSearchQuery(this.searchKeyword);
+    if (kw === '') {
+      this.aiMatchedPaths = [];
+      return;
+    }
+    const res = await VisionEnhancementHelper.searchImagesByText(kw);
+    if (res.supported && res.items.length > 0) {
+      this.aiMatchedPaths = res.items.map((it) => it.imagePath);
+    } else {
+      this.aiMatchedPaths = [];
+    }
   }
 
   @Builder
@@ -346,6 +386,32 @@ struct SchoolSceneryPage {
       .height(36)
       .justifyContent(FlexAlign.Center)
       .backgroundColor($r('app.color.white'))
+
+      Row() {
+        Row({ space: 8 }) {
+          Search({ value: this.searchKeyword, placeholder: 'AI文搜图 / 作者关键词筛选' })
+            .layoutWeight(1)
+            .height(32)
+            .textFont({ size: 13 })
+            .placeholderFont({ size: 13 })
+            .onChange((val: string) => {
+              this.searchKeyword = val;
+              if (val.trim() === '') {
+                this.aiMatchedPaths = [];
+              }
+            })
+            .onSubmit(() => {
+              this.triggerVisionSearch();
+            })
+        }
+        .width('100%')
+        .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+        .constraintSize({ maxWidth: BreakpointSystem.getContentMaxWidth(this.currentBreakpoint) })
+      }
+      .width('100%')
+      .justifyContent(FlexAlign.Center)
+      .backgroundColor($r('app.color.white'))
+
       if (this.isLoading) {
         LoadingView()
       } else if (this.loadError !== '') {
@@ -365,10 +431,10 @@ struct SchoolSceneryPage {
         }
         .width('100%')
         .layoutWeight(1)
-      } else if (this.photos.length === 0) {
+      } else if (this.displayedPhotos().length === 0) {
         Scroll() {
           Column() {
-            EmptyView({ tipText: this.activeTab === 'my' ? '你还没上传过照片哦' : '暂无校园风光' })
+            EmptyView({ tipText: this.searchKeyword.trim() !== '' ? '未找到匹配的校园风光' : (this.activeTab === 'my' ? '你还没上传过照片哦' : '暂无校园风光') })
           }
           .width('100%')
           .constraintSize({ minHeight: 320 })
@@ -379,7 +445,7 @@ struct SchoolSceneryPage {
       } else {
         Row() {
           WaterFlow() {
-            ForEach(this.photos, (item: SchoolSceneryItem, index: number) => {
+            ForEach(this.displayedPhotos(), (item: SchoolSceneryItem, index: number) => {
               FlowItem() {
                 this.sceneryItem(item, index)
               }
