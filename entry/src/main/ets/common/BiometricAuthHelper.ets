@@ -67,6 +67,38 @@ export class BiometricAuthHelper {
     return types;
   }
 
+  /** 纯函数：提取纯生物识别类型（仅人脸/指纹，排除 PIN） */
+  public static getBiometricOnlyTypes(cap: BiometricCapability): userAuth.UserAuthType[] {
+    const types: userAuth.UserAuthType[] = [];
+    if (!cap) {
+      return types;
+    }
+    if (cap.faceAvailable) {
+      types.push(userAuth.UserAuthType.FACE);
+    }
+    if (cap.fingerprintAvailable) {
+      types.push(userAuth.UserAuthType.FINGERPRINT);
+    }
+    return types;
+  }
+
+  /** 纯函数：安全构建 WidgetParam（含 PIN 时禁止传 navigationButtonText；不传 2in1 专用 uiContext） */
+  public static buildWidgetParam(
+    title: string,
+    authTypes: userAuth.UserAuthType[],
+    navigationButtonText?: string
+  ): userAuth.WidgetParam {
+    const widgetParam: userAuth.WidgetParam = {
+      title: (title || '').trim() !== '' ? title.trim() : '身份验证'
+    };
+    const navText: string = (navigationButtonText || '').trim();
+    const hasPin: boolean = authTypes.indexOf(userAuth.UserAuthType.PIN) >= 0;
+    if (navText !== '' && !hasPin) {
+      widgetParam.navigationButtonText = navText;
+    }
+    return widgetParam;
+  }
+
   /** 纯函数：生成合法长度（1..32 字节）的随机挑战值 */
   public static generateChallenge(length: number = 16): Uint8Array {
     const safeLen: number = Number.isFinite(length)
@@ -278,16 +310,43 @@ export class BiometricAuthHelper {
     return defaultValue;
   }
 
+  private static buildTrustLevelOrder(preferredTrustLevel: userAuth.AuthTrustLevel): userAuth.AuthTrustLevel[] {
+    const candidates: userAuth.AuthTrustLevel[] = [
+      preferredTrustLevel,
+      userAuth.AuthTrustLevel.ATL2,
+      userAuth.AuthTrustLevel.ATL3,
+      userAuth.AuthTrustLevel.ATL1
+    ];
+    const unique: userAuth.AuthTrustLevel[] = [];
+    for (const level of candidates) {
+      if (unique.indexOf(level) < 0) {
+        unique.push(level);
+      }
+    }
+    return unique;
+  }
+
+  private static resolveWorkingTrustLevel(
+    authType: userAuth.UserAuthType,
+    preferredTrustLevel: userAuth.AuthTrustLevel
+  ): userAuth.AuthTrustLevel | null {
+    const levels: userAuth.AuthTrustLevel[] = BiometricAuthHelper.buildTrustLevelOrder(preferredTrustLevel);
+    for (const level of levels) {
+      try {
+        userAuth.getAvailableStatus(authType, level);
+        return level;
+      } catch {
+        // 尝试下一个安全等级
+      }
+    }
+    return null;
+  }
+
   private static isTypeAvailable(
     authType: userAuth.UserAuthType,
     trustLevel: userAuth.AuthTrustLevel
   ): boolean {
-    try {
-      userAuth.getAvailableStatus(authType, trustLevel);
-      return true;
-    } catch {
-      return false;
-    }
+    return BiometricAuthHelper.resolveWorkingTrustLevel(authType, trustLevel) !== null;
   }
 
   /** 同步探测当前设备可用生物识别/锁屏能力 */
@@ -313,7 +372,7 @@ export class BiometricAuthHelper {
       labels.push('锁屏密码');
     }
     const description: string = labels.length > 0
-      ? `已启用：${labels.join(' / ')}`
+      ? `支持：${labels.join(' / ')}`
       : '当前设备未录入或不支持生物识别';
     return {
       faceAvailable: faceOk,
@@ -329,22 +388,33 @@ export class BiometricAuthHelper {
   /** 发起单次用户身份认证（内部先做 getAvailableStatus 探测并管理监听清理） */
   public static authenticate(options: BiometricAuthOptions): Promise<BiometricAuthOutcome> {
     BiometricAuthHelper.cancelActiveAuth();
-    const trustLevel: userAuth.AuthTrustLevel = options.trustLevel ?? userAuth.AuthTrustLevel.ATL1;
+    const preferredLevel: userAuth.AuthTrustLevel = options.trustLevel ?? userAuth.AuthTrustLevel.ATL1;
     const requestedTypes: userAuth.UserAuthType[] = options.authTypes && options.authTypes.length > 0
       ? options.authTypes
-      : BiometricAuthHelper.checkCapability(trustLevel).authTypes;
+      : BiometricAuthHelper.checkCapability(preferredLevel).authTypes;
 
-    const availableTypes: userAuth.UserAuthType[] = [];
+    const trustCandidates: userAuth.AuthTrustLevel[] = BiometricAuthHelper.buildTrustLevelOrder(preferredLevel);
+    let selectedLevel: userAuth.AuthTrustLevel = preferredLevel;
+    let availableTypes: userAuth.UserAuthType[] = [];
     let firstErrorCode: number = userAuth.UserAuthResultCode.TYPE_NOT_SUPPORT;
-    for (const t of requestedTypes) {
-      try {
-        userAuth.getAvailableStatus(t, trustLevel);
-        availableTypes.push(t);
-      } catch (err) {
-        const be = err as BusinessError;
-        if (typeof be.code === 'number') {
-          firstErrorCode = be.code;
+
+    for (const level of trustCandidates) {
+      const matched: userAuth.UserAuthType[] = [];
+      for (const t of requestedTypes) {
+        try {
+          userAuth.getAvailableStatus(t, level);
+          matched.push(t);
+        } catch (err) {
+          const be = err as BusinessError;
+          if (typeof be.code === 'number') {
+            firstErrorCode = be.code;
+          }
         }
+      }
+      if (matched.length > 0) {
+        availableTypes = matched;
+        selectedLevel = level;
+        break;
       }
     }
 
@@ -357,19 +427,37 @@ export class BiometricAuthHelper {
         const authParam: userAuth.AuthParam = {
           challenge: BiometricAuthHelper.generateChallenge(16),
           authType: availableTypes,
-          authTrustLevel: trustLevel
+          authTrustLevel: selectedLevel
         };
-        const widgetParam: userAuth.WidgetParam = {
-          title: (options.title || '').trim() !== '' ? options.title.trim() : '身份验证'
-        };
-        if (options.navigationButtonText && options.navigationButtonText.trim() !== '') {
-          widgetParam.navigationButtonText = options.navigationButtonText.trim();
-        }
-        if (options.uiContext) {
-          widgetParam.uiContext = options.uiContext;
+        const widgetParam: userAuth.WidgetParam = BiometricAuthHelper.buildWidgetParam(
+          options.title,
+          availableTypes,
+          options.navigationButtonText
+        );
+
+        let instance: userAuth.UserAuthInstance | null = null;
+        try {
+          instance = userAuth.getUserAuthInstance(authParam, widgetParam);
+        } catch (instErr) {
+          const beInst = instErr as BusinessError;
+          if (widgetParam.navigationButtonText && (beInst.code === 401 || beInst.code === 12500007)) {
+            const fallbackWidgetParam: userAuth.WidgetParam = { title: widgetParam.title };
+            instance = userAuth.getUserAuthInstance(authParam, fallbackWidgetParam);
+          } else {
+            const failCode: number = typeof beInst.code === 'number'
+              ? beInst.code
+              : userAuth.UserAuthResultCode.GENERAL_ERROR;
+            resolve(BiometricAuthHelper.mapAuthResultCode(failCode));
+            return;
+          }
         }
 
-        const instance: userAuth.UserAuthInstance = userAuth.getUserAuthInstance(authParam, widgetParam);
+        if (instance === null) {
+          resolve(BiometricAuthHelper.mapAuthResultCode(userAuth.UserAuthResultCode.GENERAL_ERROR));
+          return;
+        }
+        const authInstance: userAuth.UserAuthInstance = instance;
+
         let settled: boolean = false;
         const callback: userAuth.IAuthCallback = {
           onResult: (result: userAuth.UserAuthResult): void => {
@@ -378,21 +466,21 @@ export class BiometricAuthHelper {
             }
             settled = true;
             try {
-              instance.off('result', callback);
+              authInstance.off('result', callback);
             } catch {
               // 忽略解绑异常
             }
-            if (BiometricAuthHelper.activeInstance === instance) {
+            if (BiometricAuthHelper.activeInstance === authInstance) {
               BiometricAuthHelper.activeInstance = null;
               BiometricAuthHelper.activeCallback = null;
             }
             resolve(BiometricAuthHelper.mapAuthResultCode(result.result));
           }
         };
-        BiometricAuthHelper.activeInstance = instance;
+        BiometricAuthHelper.activeInstance = authInstance;
         BiometricAuthHelper.activeCallback = callback;
-        instance.on('result', callback);
-        instance.start();
+        authInstance.on('result', callback);
+        authInstance.start();
       } catch (err) {
         BiometricAuthHelper.activeInstance = null;
         BiometricAuthHelper.activeCallback = null;

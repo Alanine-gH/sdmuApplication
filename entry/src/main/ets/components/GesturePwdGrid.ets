@@ -29,6 +29,8 @@ export struct GesturePwdGrid {
   onSwipeFinish: (seq: number[]) => void = (seq: number[]) => {};
   /** 达到最小长度后的模式回调（reset/check 判定交页面） */
   onFinish: (seq: number[]) => void = (seq: number[]) => {};
+  /** 手势触摸态变更通知（用于父容器 Scroll 临时锁定滚动，防止垂直滑动冲突） */
+  onInteractChange: (interacting: boolean) => void = (_interacting: boolean) => {};
   @State private seq: number[] = [];
   @State private renderError: boolean = false;
   @State private dragging: boolean = false;
@@ -110,15 +112,13 @@ export struct GesturePwdGrid {
     return this.renderSeq().indexOf(idx) !== -1;
   }
 
-  /** 源码 ifClickOnView：圆点矩形四周收缩 20% 后 contains 点 */
+  /** 圆形距离命中判定（支持对角线自然连线） */
   private hitIndex(x: number, y: number): number {
-    const shrink: number = this.cellSize() * 0.2;
+    const hitRadius: number = Math.max(this.dotRadius() * 1.35, this.cellSize() * 0.38);
     for (let i = 0; i < this.count * this.count; i++) {
-      const left: number = this.centerX(i) - this.cellSize() / 2 + shrink;
-      const top: number = this.centerY(i) - this.cellSize() / 2 + shrink;
-      const right: number = this.centerX(i) + this.cellSize() / 2 - shrink;
-      const bottom: number = this.centerY(i) + this.cellSize() / 2 - shrink;
-      if (x >= left && x <= right && y >= top && y <= bottom) {
+      const dx: number = x - this.centerX(i);
+      const dy: number = y - this.centerY(i);
+      if (Math.sqrt(dx * dx + dy * dy) <= hitRadius) {
         return i;
       }
     }
@@ -136,8 +136,23 @@ export struct GesturePwdGrid {
 
   private handleMove(x: number, y: number): void {
     const idx: number = this.hitIndex(x, y);
-    if (idx >= 0 && this.seq.length > 0 && this.seq[this.seq.length - 1] !== idx) {
-      this.addPwd(idx);
+    if (idx >= 0) {
+      if (this.seq.length > 0) {
+        const prev: number = this.seq[this.seq.length - 1];
+        if (prev !== idx) {
+          const r1: number = Math.floor(prev / this.count);
+          const c1: number = prev % this.count;
+          const r2: number = Math.floor(idx / this.count);
+          const c2: number = idx % this.count;
+          if ((r1 + r2) % 2 === 0 && (c1 + c2) % 2 === 0) {
+            const midIdx: number = ((r1 + r2) / 2) * this.count + ((c1 + c2) / 2);
+            this.addPwd(midIdx);
+          }
+          this.addPwd(idx);
+        }
+      } else {
+        this.addPwd(idx);
+      }
     }
     this.dragX = x;
     this.dragY = y;
@@ -183,41 +198,35 @@ export struct GesturePwdGrid {
         .backgroundColor(this.isDotSelected(i) ?
           (this.renderError ? '#EB5757' : '#1B68B7') : '#F3F6FD')
         .position({ x: this.centerX(i) - this.dotRadius(), y: this.centerY(i) - this.dotRadius() })
-      }, (i: number) => `dot_${i}`)
+      }, (i: number) => `dot_${i}_${this.isDotSelected(i) ? 1 : 0}_${this.renderError ? 1 : 0}`)
     }
     .width(this.gridWidth)
     .height(this.gridWidth)
-    .gesture(PanGesture({ fingers: 1 })
-      .onActionStart((event: GestureEvent) => {
-        if (!this.allowInteract) {
-          return;
-        }
-        // 源码 ACTION_DOWN：lockPath.reset + resetPwd（新一笔从零开始）+ ifCheckOnErr 复位
-        const finger: FingerInfo = event.fingerList[0];
+    .onTouch((event: TouchEvent) => {
+      if (!this.allowInteract || !event.touches || event.touches.length === 0) {
+        return;
+      }
+      event.stopPropagation();
+      const t: TouchObject = event.touches[0];
+      if (event.type === TouchType.Down) {
+        this.onInteractChange(true);
         this.seq = [];
         this.renderError = false;
         this.dragging = true;
-        this.dragX = finger.localX;
-        this.dragY = finger.localY;
-        this.addPwd(this.hitIndex(finger.localX, finger.localY));
-      })
-      .onActionUpdate((event: GestureEvent) => {
-        if (!this.allowInteract) {
-          return;
-        }
-        const finger: FingerInfo = event.fingerList[0];
-        this.handleMove(finger.localX, finger.localY);
-      })
-      .onActionEnd(() => {
-        if (!this.allowInteract) {
-          return;
-        }
-        // 源码 ACTION_UP：resetAllCircleBtn + onSwipeFinish（e 回调）→ 长度校验 → 模式回调
+        this.dragX = t.x;
+        this.dragY = t.y;
+        this.addPwd(this.hitIndex(t.x, t.y));
+      } else if (event.type === TouchType.Move) {
+        this.handleMove(t.x, t.y);
+      } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+        this.onInteractChange(false);
         this.dragging = false;
-        this.onSwipeFinish(this.seq.slice());
-        if (this.seq.length >= 4) {
-          this.onFinish(this.seq.slice());
+        if (this.seq.length > 0) {
+          const finalSeq: number[] = this.seq.slice();
+          this.onSwipeFinish(finalSeq);
+          this.onFinish(finalSeq);
         }
-      }))
+      }
+    })
   }
 }

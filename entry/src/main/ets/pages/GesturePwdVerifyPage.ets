@@ -2,8 +2,9 @@ import { router } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { TitleBar } from '../components/TitleBar';
 import { GesturePwdGrid } from '../components/GesturePwdGrid';
-import { GesturePwdBean } from '../model/GestureManager';
+import { GestureManager, GesturePwdBean } from '../model/GestureManager';
 import { LoginSession } from '../network/LoginSession';
+import { PreferencesUtil } from '../data/PreferencesUtil';
 import { PrivacyWindowHelper } from '../common/PrivacyWindowHelper';
 import { BreakpointSystem } from '../common/BreakpointSystem';
 import { BiometricAuthHelper, BiometricCapability } from '../common/BiometricAuthHelper';
@@ -31,7 +32,11 @@ import { BiometricAuthHelper, BiometricCapability } from '../common/BiometricAut
 @Component
 struct GesturePwdVerifyPage {
   /** 源码 l：GesturePwdBean */
-  private bean: GesturePwdBean | null = null;
+  @State private bean: GesturePwdBean | null = null;
+  /** 验证模式：'reset' 重设手势 | 'disable' 关闭手势 | 'unlock' 启动解锁 */
+  @State private mode: string = 'reset';
+  @State private gridInteracting: boolean = false;
+  private autoTriggeredBiometric: boolean = false;
   /** 源码 n(tvErrorTip) */
   @State errorTip: string = '';
   /** 源码 o/tvAvatar / q/tvPhone */
@@ -63,8 +68,12 @@ struct GesturePwdVerifyPage {
     const params: object | undefined = router.getParams() as object | undefined;
     if (params !== undefined && params !== null) {
       const rec = params as Record<string, Object>;
+      const modeVal: Object = rec['mode'];
+      if (typeof modeVal === 'string' && modeVal !== '') {
+        this.mode = modeVal as string;
+      }
       const json: Object = rec['jsonStr'];
-      if (typeof json === 'string') {
+      if (typeof json === 'string' && json !== '') {
         try {
           const parsed = JSON.parse(json as string) as Record<string, Object>;
           const b = new GesturePwdBean();
@@ -77,11 +86,20 @@ struct GesturePwdVerifyPage {
               }
             }
           }
-          this.bean = b;
+          if (b.gesturePwds.length > 0) {
+            this.bean = b;
+          }
         } catch (error) {
           this.bean = null;
         }
       }
+    }
+    if (this.bean === null && this.mode !== 'unlock') {
+      GestureManager.find(GestureManager.resolveUserId()).then((saved: GesturePwdBean | null) => {
+        if (saved !== null && saved.gesturePwds.length > 0) {
+          this.bean = saved;
+        }
+      });
     }
     if (LoginSession.schoolId === 'CDJS') {
       this.gridCount = 4;
@@ -94,6 +112,12 @@ struct GesturePwdVerifyPage {
       const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
       BiometricAuthHelper.isBiometricUnlockEnabled(ctx).then((enabled: boolean) => {
         this.biometricEnabled = enabled;
+        if (this.mode === 'unlock' && !this.autoTriggeredBiometric && this.hasBiometricVerifyAvailable()) {
+          this.autoTriggeredBiometric = true;
+          setTimeout(() => {
+            this.startBiometricVerify();
+          }, 250);
+        }
       });
     } catch {
       this.biometricEnabled = false;
@@ -158,22 +182,24 @@ struct GesturePwdVerifyPage {
     if (this.frozen || this.biometricBusy || this.biometricCap === null) {
       return;
     }
-    if (!BiometricAuthHelper.shouldShowBiometricVerify(this.biometricEnabled, this.biometricCap, this.frozen)) {
+    const canVerify: boolean = this.biometricEnabled || this.bean === null;
+    if (!BiometricAuthHelper.shouldShowBiometricVerify(canVerify, this.biometricCap, this.frozen)) {
       this.toast(this.biometricCap.description);
       return;
     }
     this.biometricBusy = true;
     try {
-      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      const bioTypes = this.biometricCap.anyBiometric
+        ? BiometricAuthHelper.getBiometricOnlyTypes(this.biometricCap)
+        : this.biometricCap.authTypes;
       const outcome = await BiometricAuthHelper.authenticate({
         title: '生物识别快捷验证',
-        navigationButtonText: '使用手势密码',
-        authTypes: this.biometricCap.authTypes,
-        uiContext: ctx
+        navigationButtonText: this.bean !== null && this.bean.gesturePwds.length > 0 ? '使用手势密码' : undefined,
+        authTypes: bioTypes
       });
       if (outcome.success) {
         this.currentAttemptTime = 1;
-        this.M2();
+        await this.M2();
         return;
       }
       if (!outcome.canceled && outcome.message !== '') {
@@ -196,11 +222,15 @@ struct GesturePwdVerifyPage {
     return true;
   }
 
-  /** 源码 onCheck 逐行还原（组件 onFinish = seq>=4 的 check 入口） */
+  /** 源码 onCheck 逐行还原（组件 onFinish 入口） */
   private onCheck(seq: number[]): void {
+    if (seq.length < 4) {
+      this.errorTip = '请最少连接4个点';
+      this.errorToken = this.errorToken + 1;
+      return;
+    }
     const pwd: number[] | null = this.bean !== null ? this.bean.gesturePwds : null;
     if (pwd === null || pwd.length === 0) {
-      // 源码 switchToCheckMode 参数错误（pwd 空）仅 Log，不回调
       return;
     }
     const match: boolean = this.sameSeq(pwd, seq);
@@ -232,9 +262,19 @@ struct GesturePwdVerifyPage {
     this.currentAttemptTime++;
   }
 
-  /** 源码 M2()：tvErrorTip"校验成功" → g2(e.a.j) + finish */
-  private M2(): void {
+  /** 源码 M2()：校验通过后按模式分发（disable / unlock / reset） */
+  private async M2(): Promise<void> {
     this.errorTip = '校验成功';
+    if (this.mode === 'disable') {
+      await GestureManager.remove(GestureManager.resolveUserId());
+      this.toast('已关闭手势密码');
+      router.back();
+      return;
+    }
+    if (this.mode === 'unlock') {
+      router.replaceUrl({ url: 'pages/Index', params: { 'jpushExtra': '' } });
+      return;
+    }
     router.replaceUrl({ url: 'pages/GesturePwdSettingPage' });
   }
 
@@ -261,14 +301,19 @@ struct GesturePwdVerifyPage {
     }, 1000);
   }
 
-  /** 源码 finish() 覆盖：冻结中抑制返回（系统返回键同走 finish） */
+  /** 源码 finish() 覆盖：冻结中或启动解锁态抑制返回 */
   onBackPress(): boolean {
-    return this.frozen;
+    return this.frozen || this.mode === 'unlock';
+  }
+
+  private async switchOtherAccount(): Promise<void> {
+    await PreferencesUtil.clear();
+    router.replaceUrl({ url: 'pages/LoginPage' });
   }
 
   build() {
     Column() {
-      TitleBar({ title: '身份验证', showBack: true })
+      TitleBar({ title: '身份验证', showBack: this.mode !== 'unlock' })
 
       Scroll() {
         Column() {
@@ -299,7 +344,9 @@ struct GesturePwdVerifyPage {
             .width('100%')
             .margin({ top: 8 })
 
-          Text('请输入手势密码')
+          Text(this.bean !== null && this.bean.gesturePwds.length > 0
+            ? '请输入手势密码'
+            : '请使用人脸或指纹完成身份验证')
             .fontSize(14)
             .fontColor('#999999')
             .textAlign(TextAlign.Center)
@@ -313,34 +360,53 @@ struct GesturePwdVerifyPage {
             .width('100%')
             .margin({ top: 4 })
 
-          GesturePwdGrid({
-            gridWidth: BreakpointSystem.computeGestureGridSize(this.windowWidthVp, this.windowHeightVp),
-            allowInteract: !this.frozen,
-            count: this.gridCount,
-            errorToken: this.errorToken,
-            onSwipeFinish: (seq: number[]): void => {
-              // 源码 e()：onSwipeFinish 校验页无动作
-            },
-            onFinish: (seq: number[]): void => {
-              this.onCheck(seq);
-            }
-          })
-            .margin({ top: 12.5 })
-            .padding({ left: 6, right: 6 })
+          if (this.bean !== null && this.bean.gesturePwds.length > 0) {
+            GesturePwdGrid({
+              gridWidth: BreakpointSystem.computeGestureGridSize(this.windowWidthVp, this.windowHeightVp),
+              allowInteract: !this.frozen,
+              count: this.gridCount,
+              errorToken: this.errorToken,
+              onInteractChange: (interacting: boolean): void => {
+                this.gridInteracting = interacting;
+              },
+              onSwipeFinish: (seq: number[]): void => {
+                // 源码 e()：onSwipeFinish 校验页无动作
+              },
+              onFinish: (seq: number[]): void => {
+                this.onCheck(seq);
+              }
+            })
+              .margin({ top: 12.5 })
+              .padding({ left: 6, right: 6 })
+          }
 
-          if (this.hasBiometricVerifyAvailable()) {
-            Button(this.biometricBusy ? '正在验证...' : '指纹/人脸快捷验证')
-              .fontSize(14)
-              .fontColor('#1B68B7')
-              .backgroundColor('#EBF4FF')
+          if (this.hasBiometricVerifyAvailable() || (this.bean === null && this.biometricCap !== null &&
+            BiometricAuthHelper.shouldOfferBiometricToggle(this.biometricCap))) {
+            Button(this.biometricBusy ? '正在验证...' : (this.bean !== null && this.bean.gesturePwds.length > 0
+              ? '指纹/人脸快捷验证'
+              : '使用指纹/人脸验证'))
+              .fontSize(15)
+              .fontColor(this.bean !== null && this.bean.gesturePwds.length > 0 ? '#1B68B7' : $r('app.color.white'))
+              .backgroundColor(this.bean !== null && this.bean.gesturePwds.length > 0 ? '#EBF4FF' : '#1B68B7')
               .borderRadius(20)
-              .padding({ left: 20, right: 20, top: 8, bottom: 8 })
-              .margin({ top: 16 })
+              .padding({ left: 24, right: 24, top: 10, bottom: 10 })
+              .margin({ top: 20 })
               .enabled(!this.frozen && !this.biometricBusy)
               .opacity(this.frozen ? 0.45 : 1)
               .hoverEffect(HoverEffect.Highlight)
               .onClick(() => {
                 this.startBiometricVerify();
+              })
+          }
+
+          if (this.mode === 'unlock') {
+            Text('切换其他账号登录')
+              .fontSize(14)
+              .fontColor('#1B68B7')
+              .padding({ top: 18, bottom: 8, left: 16, right: 16 })
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick(() => {
+                this.switchOtherAccount();
               })
           }
         }
@@ -352,6 +418,7 @@ struct GesturePwdVerifyPage {
       .width('100%')
       .layoutWeight(1)
       .scrollBar(BarState.Off)
+      .enableScrollInteraction(!this.gridInteracting)
       .align(Alignment.Top)
     }
     .width('100%')

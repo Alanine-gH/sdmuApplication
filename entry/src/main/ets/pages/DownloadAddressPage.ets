@@ -1,4 +1,4 @@
-import { common } from '@kit.AbilityKit';
+import { bundleManager, common } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { BreakpointSystem } from '../common/BreakpointSystem';
 import { TitleBar } from '../components/TitleBar';
@@ -11,8 +11,19 @@ import { TitleBar } from '../components/TitleBar';
 @Entry
 @Component
 struct DownloadAddressPage {
+  @State versionName: string = 'V3.3.0';
   @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm';
   @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
+
+  aboutToAppear(): void {
+    try {
+      const info: bundleManager.BundleInfo =
+        bundleManager.getBundleInfoForSelfSync(bundleManager.BundleFlag.GET_BUNDLE_INFO_DEFAULT);
+      this.versionName = 'V' + info.versionName;
+    } catch {
+      this.versionName = 'V3.3.0';
+    }
+  }
 
   private openAppGallery(): void {
     // 拉起华为应用市场（AppGallery）搜索本应用
@@ -46,7 +57,7 @@ struct DownloadAddressPage {
               .fontColor($r('app.color.black'))
               .margin({ top: 16 })
 
-            Text('V1.0.0')
+            Text(this.versionName)
               .fontSize(14)
               .fontColor($r('app.color.explain_color'))
               .margin({ top: 4 })

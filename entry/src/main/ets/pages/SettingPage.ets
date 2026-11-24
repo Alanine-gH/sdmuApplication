@@ -1,5 +1,5 @@
 import { router } from '@kit.ArkUI';
-import { common } from '@kit.AbilityKit';
+import { bundleManager, common } from '@kit.AbilityKit';
 import fs from '@ohos.file.fs';
 import { BreakpointSystem } from '../common/BreakpointSystem';
 import { AdaptiveLayoutHelper } from '../common/AdaptiveLayoutHelper';
@@ -29,11 +29,27 @@ struct SettingPage {
   @State versionName: string = 'V3.3.0';
 
   aboutToAppear(): void {
+    try {
+      const info: bundleManager.BundleInfo =
+        bundleManager.getBundleInfoForSelfSync(bundleManager.BundleFlag.GET_BUNDLE_INFO_DEFAULT);
+      this.versionName = 'V' + info.versionName;
+    } catch {
+      this.versionName = 'V3.3.0';
+    }
     this.calcCacheSize();
     const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
     PrivacyWindowHelper.isEnabled(ctx).then((enabled: boolean) => {
       this.privacyWindowEnabled = enabled;
     });
+    this.refreshSecurityState();
+  }
+
+  onPageShow(): void {
+    this.refreshSecurityState();
+  }
+
+  private refreshSecurityState(): void {
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
     const cap: BiometricCapability = BiometricAuthHelper.checkCapability();
     this.biometricSupported = BiometricAuthHelper.shouldOfferBiometricToggle(cap);
     this.biometricHint = this.biometricSupported
@@ -41,6 +57,9 @@ struct SettingPage {
       : '当前设备未录入指纹/人脸或锁屏密码，暂不可开启';
     BiometricAuthHelper.isBiometricUnlockEnabled(ctx).then((enabled: boolean) => {
       this.biometricEnabled = enabled && this.biometricSupported;
+    });
+    GestureManager.find(GestureManager.resolveUserId()).then((bean: GesturePwdBean | null) => {
+      this.hasGesturePwd = bean !== null && bean.gesturePwds.length > 0;
     });
   }
 
@@ -83,6 +102,8 @@ struct SettingPage {
     BiometricAuthHelper.DEFAULT_BIOMETRIC_ENABLED;
   @State biometricSupported: boolean = false;
   @State biometricHint: string = '当前设备未录入或不支持生物识别';
+  @State biometricBusy: boolean = false;
+  @State hasGesturePwd: boolean = false;
   @State showUpdateDialog: boolean = false;
   /** [W22 launch-chain] SettingActivity h() 手势密码链：校验密码弹窗态 + 输入值 */
   @State showGesturePwdDialog: boolean = false;
@@ -93,38 +114,83 @@ struct SettingPage {
   @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
 
   /** 源码 h.onClick（llGesturePwdLayout）：GestureManager.b(userId) 有已存手势 →
-   *  g2(e.a.k=/my/GesturePwdVerifyActivity){jsonStr}；无 → "校验密码"弹窗。 */
+   *  弹管理菜单（修改/关闭手势密码）；无 → "校验密码"弹窗（支持登录密码或本机指纹/人脸/锁屏验证）。 */
   private async onGestureRow(): Promise<void> {
-    const bean: GesturePwdBean | null = await GestureManager.find(LoginSession.userId);
-    if (bean === null) {
+    const bean: GesturePwdBean | null = await GestureManager.find(GestureManager.resolveUserId());
+    if (bean === null || bean.gesturePwds.length === 0) {
       this.showGesturePwdDialog = true;
       return;
     }
-    // 源码：bundle jsonStr = Gson(bean)
-    router.pushUrl({ url: 'pages/GesturePwdVerifyPage',
-      params: { 'jsonStr': JSON.stringify(bean) } as Record<string, string> });
+    AlertDialog.show({
+      title: '手势密码管理',
+      message: '您已开启手势密码，请选择操作：',
+      autoCancel: true,
+      alignment: DialogAlignment.Center,
+      primaryButton: {
+        value: '关闭手势密码',
+        fontColor: $r('app.color.sdmu_primary'),
+        action: (): void => {
+          router.pushUrl({
+            url: 'pages/GesturePwdVerifyPage',
+            params: { 'jsonStr': JSON.stringify(bean), 'mode': 'disable' } as Record<string, string>
+          });
+        }
+      },
+      secondaryButton: {
+        value: '修改手势密码',
+        fontColor: '#1B68B7',
+        action: (): void => {
+          router.pushUrl({
+            url: 'pages/GesturePwdVerifyPage',
+            params: { 'jsonStr': JSON.stringify(bean), 'mode': 'reset' } as Record<string, string>
+          });
+        }
+      }
+    });
   }
 
   /** 源码 h$a.a(bVar, str)：密码非空 → VerificationModel.U0 POST checkPass；
    *  g → dismiss + g2(e.a.j=/my/GesturePwdSettingActivity)；f → toast(message)。 */
   private async submitCheckPassword(): Promise<void> {
-    // 源码 a$a.a：TextUtils.isEmpty(str) → return（弹窗停留）
-    if (this.checkPassword === '') {
+    if (this.checkPassword.trim() === '') {
+      this.getUIContext().getPromptAction().showToast({ message: '请输入登录密码' });
       return;
     }
     try {
       const resp: ApiResponse<Object> = await ApiService.checkGesturePassword(this.checkPassword);
       if (resp.code !== 0) {
-        // 源码 C0406a.f：m(str2)
-        this.getUIContext().getPromptAction().showToast({ message: resp.message });
+        const msg: string = resp.message !== '' ? resp.message : '密码校验失败，请重试';
+        this.getUIContext().getPromptAction().showToast({ message: msg });
         return;
       }
-      // 源码 C0406a.g：dismiss + g2(e.a.j)
       this.showGesturePwdDialog = false;
       this.checkPassword = '';
       router.pushUrl({ url: 'pages/GesturePwdSettingPage' });
     } catch (error) {
       ApiService.logError('checkPass fail: ' + error.message);
+      this.getUIContext().getPromptAction().showToast({ message: '网络校验失败，可使用下方本机身份验证' });
+    }
+  }
+
+  /** 本机指纹/人脸/锁屏验证后设置手势密码（兼容短信验证码登录或校外网络受限场景） */
+  private async verifyLocalIdentityForGesture(): Promise<void> {
+    const cap: BiometricCapability = BiometricAuthHelper.checkCapability();
+    if (!BiometricAuthHelper.shouldOfferBiometricToggle(cap)) {
+      this.getUIContext().getPromptAction().showToast({ message: '当前设备未录入指纹、人脸或锁屏密码' });
+      return;
+    }
+    const outcome = await BiometricAuthHelper.authenticate({
+      title: '验证身份以设置手势密码',
+      authTypes: cap.authTypes
+    });
+    if (outcome.success) {
+      this.showGesturePwdDialog = false;
+      this.checkPassword = '';
+      router.pushUrl({ url: 'pages/GesturePwdSettingPage' });
+      return;
+    }
+    if (!outcome.canceled && outcome.message !== '') {
+      this.getUIContext().getPromptAction().showToast({ message: outcome.message });
     }
   }
 
@@ -171,6 +237,18 @@ struct SettingPage {
                 .onChange((value: string) => {
                   this.checkPassword = value;
                 })
+              if (this.biometricSupported) {
+                Text('使用指纹/人脸/锁屏验证')
+                  .fontSize(14)
+                  .fontColor('#1B68B7')
+                  .textAlign(TextAlign.Center)
+                  .width('100%')
+                  .padding({ top: 10, bottom: 2 })
+                  .hoverEffect(HoverEffect.Highlight)
+                  .onClick(() => {
+                    this.verifyLocalIdentityForGesture();
+                  })
+              }
               Divider()
                 .color($r('app.color.common_color_6'))
                 .strokeWidth(0.5)
@@ -224,6 +302,49 @@ struct SettingPage {
       .justifyContent(FlexAlign.Center)
       .alignItems(HorizontalAlign.Center)
       .backgroundColor('#66000000')
+    }
+  }
+
+  private async onBiometricToggleChange(isOn: boolean): Promise<void> {
+    if (this.biometricEnabled === isOn || this.biometricBusy) {
+      return;
+    }
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    if (!isOn) {
+      this.biometricEnabled = false;
+      await BiometricAuthHelper.setBiometricUnlockEnabled(false, ctx);
+      this.getUIContext().getPromptAction().showToast({ message: '已关闭生物识别快捷验证' });
+      return;
+    }
+    const cap: BiometricCapability = BiometricAuthHelper.checkCapability();
+    this.biometricSupported = BiometricAuthHelper.shouldOfferBiometricToggle(cap);
+    if (!this.biometricSupported) {
+      this.biometricEnabled = false;
+      this.getUIContext().getPromptAction().showToast({
+        message: '当前设备未录入指纹、人脸或锁屏密码，无法开启'
+      });
+      return;
+    }
+    this.biometricBusy = true;
+    try {
+      const authTypes = cap.anyBiometric
+        ? BiometricAuthHelper.getBiometricOnlyTypes(cap)
+        : cap.authTypes;
+      const outcome = await BiometricAuthHelper.authenticate({
+        title: '开启生物识别快捷验证',
+        authTypes: authTypes
+      });
+      if (outcome.success) {
+        this.biometricEnabled = true;
+        await BiometricAuthHelper.setBiometricUnlockEnabled(true, ctx);
+        this.getUIContext().getPromptAction().showToast({ message: '已开启生物识别快捷验证' });
+      } else {
+        this.biometricEnabled = false;
+        const msg: string = outcome.message !== '' ? outcome.message : '验证未通过，未开启';
+        this.getUIContext().getPromptAction().showToast({ message: msg });
+      }
+    } finally {
+      this.biometricBusy = false;
     }
   }
 
@@ -366,6 +487,10 @@ struct SettingPage {
               .fontSize(16)
               .fontColor($r('app.color.common_color_1'))
               .layoutWeight(1)
+            Text(this.hasGesturePwd ? '已开启' : '未设置')
+              .fontSize(14)
+              .fontColor(this.hasGesturePwd ? $r('app.color.blue_default') : $r('app.color.common_color_3'))
+              .margin({ right: 8 })
             this.arrowIcon()
           }
           .width('100%')
@@ -397,22 +522,10 @@ struct SettingPage {
             Toggle({ type: ToggleType.Switch, isOn: this.biometricEnabled })
               .selectedColor($r('app.color.blue_default'))
               .switchPointColor($r('app.color.white'))
-              .enabled(this.biometricSupported || this.biometricEnabled)
+              .enabled((this.biometricSupported || this.biometricEnabled) && !this.biometricBusy)
               .hoverEffect(HoverEffect.Highlight)
               .onChange((isOn: boolean) => {
-                if (this.biometricEnabled === isOn) {
-                  return;
-                }
-                if (isOn && !this.biometricSupported) {
-                  this.biometricEnabled = false;
-                  this.getUIContext().getPromptAction().showToast({
-                    message: '当前设备未录入指纹、人脸或锁屏密码，无法开启'
-                  });
-                  return;
-                }
-                this.biometricEnabled = isOn;
-                const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
-                BiometricAuthHelper.setBiometricUnlockEnabled(isOn, ctx);
+                this.onBiometricToggleChange(isOn);
               })
           }
           .width('100%')
@@ -532,7 +645,7 @@ struct SettingPage {
               .fontSize(16)
               .fontColor($r('app.color.common_color_1'))
               .layoutWeight(1)
-            Text('V1.0.0')
+            Text(this.versionName)
               .fontSize(16)
               .fontColor($r('app.color.blue_default'))
               .margin({ right: 15 })

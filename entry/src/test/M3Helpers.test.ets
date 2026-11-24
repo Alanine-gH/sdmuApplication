@@ -247,6 +247,25 @@ export default function m3HelpersTest() {
       expect(BiometricAuthHelper.shouldShowBiometricVerify(false, capBio, false)).assertFalse();
       expect(BiometricAuthHelper.shouldShowBiometricVerify(true, capNone, false)).assertFalse();
 
+      const bioOnly = BiometricAuthHelper.getBiometricOnlyTypes(capBio);
+      expect(bioOnly.length).assertEqual(1);
+      expect(bioOnly[0]).assertEqual(userAuth.UserAuthType.FINGERPRINT);
+
+      const widgetWithPin = BiometricAuthHelper.buildWidgetParam(
+        '生物识别',
+        [userAuth.UserAuthType.FINGERPRINT, userAuth.UserAuthType.PIN],
+        '使用手势密码'
+      );
+      expect(widgetWithPin.title).assertEqual('生物识别');
+      expect(widgetWithPin.navigationButtonText === undefined).assertTrue();
+
+      const widgetBioOnly = BiometricAuthHelper.buildWidgetParam(
+        '生物识别',
+        [userAuth.UserAuthType.FACE, userAuth.UserAuthType.FINGERPRINT],
+        '使用手势密码'
+      );
+      expect(widgetBioOnly.navigationButtonText).assertEqual('使用手势密码');
+
       expect(BiometricAuthHelper.normalizeBiometricFlag(true, false)).assertTrue();
       expect(BiometricAuthHelper.normalizeBiometricFlag('true', false)).assertTrue();
       expect(BiometricAuthHelper.normalizeBiometricFlag('1', false)).assertTrue();

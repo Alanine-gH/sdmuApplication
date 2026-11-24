@@ -463,8 +463,8 @@ struct PhoneLoginPage {
               .hoverEffect(HoverEffect.Highlight)
               .onClick(() => {
                 router.pushUrl({
-                  url: 'pages/WebViewPage',
-                  params: { url: 'https://www.sdmu.edu.cn/', title: '隐私政策' }
+                  url: 'pages/PrivacyTextPage',
+                  params: { type: 'privacy' }
                 });
               })
 
@@ -478,8 +478,8 @@ struct PhoneLoginPage {
               .hoverEffect(HoverEffect.Highlight)
               .onClick(() => {
                 router.pushUrl({
-                  url: 'pages/WebViewPage',
-                  params: { url: 'https://www.sdmu.edu.cn/', title: '服务协议' }
+                  url: 'pages/PrivacyTextPage',
+                  params: { type: 'service' }
                 });
               })
           }

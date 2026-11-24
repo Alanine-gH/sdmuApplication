@@ -27,10 +27,9 @@ struct AboutPage {
     try {
       const info: bundleManager.BundleInfo =
         bundleManager.getBundleInfoForSelfSync(bundleManager.BundleFlag.GET_BUNDLE_INFO_DEFAULT);
-      this.appVersion = '当前版本号：V' + this.versionNameSuffix(info.versionName) + '_' + info.versionCode;
+      this.appVersion = '当前版本号：V' + this.versionNameSuffix(info.versionName);
     } catch {
-      // 取版本失败保持空文本（与 s.d() 异常返回 "" 一致）
-      this.appVersion = '当前版本号：V_' + 0;
+      this.appVersion = '当前版本号：V3.3.0';
     }
   }
 

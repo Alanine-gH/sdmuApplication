@@ -1,10 +1,13 @@
 import { router } from '@kit.ArkUI';
+import { common } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { BreakpointSystem } from '../common/BreakpointSystem';
 import { LoginSession } from '../network/LoginSession';
 import { ApiService, RemoteHomeTabEntry } from '../network/ApiService';
 import { LunarCalendar } from '../model/LunarCalendar';
 import { PreferencesUtil } from '../data/PreferencesUtil';
+import { GestureManager, GesturePwdBean } from '../model/GestureManager';
+import { BiometricAuthHelper, BiometricCapability } from '../common/BiometricAuthHelper';
 
 /**
  * 已登录启动页 — 1:1 复刻 LoginedLaunchActivity（284 行）+ mobile_campus_logined_launch.xml
@@ -154,8 +157,29 @@ struct LoginedLaunchPage {
     }
   }
 
-  /** 源码 K2()：bundle{jpush_extra} → g2(e.a.f10993a=/launch/main) */
-  private goK2(): void {
+  /** 源码 K2()：bundle{jpush_extra} → 若已开启手势密码或生物识别锁，先进入身份验证页解锁 */
+  private async goK2(): Promise<void> {
+    if (LoginSession.sessionKey !== '') {
+      try {
+        const bean: GesturePwdBean | null = await GestureManager.find(GestureManager.resolveUserId());
+        const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+        const bioEnabled: boolean = await BiometricAuthHelper.isBiometricUnlockEnabled(ctx);
+        const cap: BiometricCapability = BiometricAuthHelper.checkCapability();
+        const needBioLock: boolean = bioEnabled && BiometricAuthHelper.shouldOfferBiometricToggle(cap);
+        if ((bean !== null && bean.gesturePwds.length > 0) || needBioLock) {
+          router.replaceUrl({
+            url: 'pages/GesturePwdVerifyPage',
+            params: {
+              'jsonStr': bean !== null ? JSON.stringify(bean) : '',
+              'mode': 'unlock'
+            } as Record<string, string>
+          });
+          return;
+        }
+      } catch {
+        // 忽略本地锁探测异常，回落直接进入主页
+      }
+    }
     router.replaceUrl({ url: 'pages/Index', params: { 'jpushExtra': '' } });
   }
 

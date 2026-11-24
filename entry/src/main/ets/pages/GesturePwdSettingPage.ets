@@ -33,6 +33,8 @@ struct GesturePwdSettingPage {
   @State errorTip: string = '';
   /** 小九宫格回显笔画（源码 l.refreshPwdKeyboard(list)） */
   @State smallSeq: number[] = [];
+  @State resetToken: number = 0;
+  @State gridInteracting: boolean = false;
   /** 源码 onReset：resetCurrentTime（0=首笔，1=确认笔） */
   private resetCurrentTime: number = 0;
   /** 源码 tempPwd：首笔序列 */
@@ -95,15 +97,21 @@ struct GesturePwdSettingPage {
   private onBigFinish(seq: number[]): void {
     // 源码 onToast 回调 a(str,i,i2) 文案路由
     if (seq.length < 4) {
-      // i2==3（组件未达 minLength 不回 onFinish；此分支保留等价防御）
       this.errorTip = '请最少连接4个点';
+      setTimeout(() => {
+        this.resetToken = this.resetToken + 1;
+      }, 350);
       return;
     }
+    this.errorTip = '';
     if (this.resetCurrentTime === 0) {
       // 源码 onReset 首笔：tempPwd = copy；onToast("再次绘制解锁图案", grey, 2) → tvTip
       this.tempPwd = seq;
       this.resetCurrentTime++;
       this.tipText = '再次绘制解锁图案';
+      setTimeout(() => {
+        this.resetToken = this.resetToken + 1;
+      }, 350);
       return;
     }
     if (this.sameSeq(this.tempPwd, seq)) {
@@ -113,14 +121,16 @@ struct GesturePwdSettingPage {
     } else {
       // 源码 onToast("与上次绘制不一致，请重新绘制", red, 4) → tvErrorTip（tempPwd 不清空）
       this.errorTip = '与上次绘制不一致，请重新绘制';
+      setTimeout(() => {
+        this.resetToken = this.resetToken + 1;
+      }, 350);
     }
   }
 
   /** 源码 b()（onResetFinish）：toast"设置成功" + GestureManager.c + finish */
   private async onResetFinish(list: number[]): Promise<void> {
+    await GestureManager.save(GestureManager.resolveUserId(), list);
     this.toast('设置成功');
-    // 源码 b.c(d.a.c().getUserId(), list)：Hawk allGesturePwdDatas upsert
-    await GestureManager.save(LoginSession.userId, list);
     router.back();
   }
 
@@ -171,6 +181,10 @@ struct GesturePwdSettingPage {
             gridWidth: BreakpointSystem.computeGestureGridSize(this.windowWidthVp, this.windowHeightVp),
             allowInteract: true,
             count: this.gridCount,
+            resetToken: this.resetToken,
+            onInteractChange: (interacting: boolean): void => {
+              this.gridInteracting = interacting;
+            },
             onSwipeFinish: (seq: number[]): void => {
               this.onSmallMirror(seq);
             },
@@ -189,6 +203,7 @@ struct GesturePwdSettingPage {
       .width('100%')
       .layoutWeight(1)
       .scrollBar(BarState.Off)
+      .enableScrollInteraction(!this.gridInteracting)
       .align(Alignment.Top)
     }
     .width('100%')
