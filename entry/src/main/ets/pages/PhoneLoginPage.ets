@@ -305,22 +305,28 @@ struct PhoneLoginPage {
               .width('100%')
               .padding({ left: 24 })
 
-              // 获取验证码：深红胶囊（同 LoginPage 登录按钮样式）
+              // 获取验证码：深红胶囊（同 LoginPage 登录按钮样式，双层衬底防 SMOOTH 档位白底白字）
               Row() {
-                Text(this.sending ? '发送中...' : '获取验证码')
-                  .fontSize(18)
-                  .fontColor($r('app.color.white'))
-                  .width('100%')
-                  .height(46)
-                  .textAlign(TextAlign.Center)
-                  .backgroundColor(ImmersiveLightHelper.fallbackBg($r('app.color.mobile_campus_primary_color')))
-                  .borderRadius(23)
-                  .systemMaterial(ImmersiveLightHelper.primaryButtonMaterial())
-                  .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-                  .hoverEffect(HoverEffect.Highlight)
-                  .onClick(() => {
-                    this.getSmsCode();
-                  })
+                Stack({ alignContent: Alignment.Center }) {
+                  Text(this.sending ? '发送中...' : '获取验证码')
+                    .fontSize(18)
+                    .fontColor($r('app.color.white'))
+                    .width('100%')
+                    .height(46)
+                    .textAlign(TextAlign.Center)
+                    .backgroundColor($r('app.color.mobile_campus_primary_color'))
+                    .borderRadius(23)
+                    .systemMaterial(ImmersiveLightHelper.primaryButtonMaterial())
+                }
+                .width('100%')
+                .height(46)
+                .backgroundColor($r('app.color.mobile_campus_primary_color'))
+                .borderRadius(23)
+                .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
+                .hoverEffect(HoverEffect.Highlight)
+                .onClick(() => {
+                  this.getSmsCode();
+                })
               }
               .width('100%')
               .constraintSize({ maxWidth: 480 })

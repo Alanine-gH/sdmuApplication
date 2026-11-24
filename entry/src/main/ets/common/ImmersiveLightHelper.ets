@@ -6,18 +6,27 @@ import { uiMaterial } from '@kit.ArkUI';
  * 挂载 systemMaterial 的组件需避免同时设置不透明 backgroundColor，使用 fallbackBg() 透出液态玻璃折射与光感。
  */
 export class ImmersiveLightHelper {
-  /** 检测当前设备是否支持沉浸光感材质 */
+  /**
+   * 检测当前设备是否支持完整着色与折射的沉浸光感材质（EXQUISITE / GENTLE 算力档位）。
+   * 注：依据 @ohos.arkui.uiMaterial.d.ts 规范，MaterialLevel.SMOOTH（如模拟器或低算力设备）
+   * 不生效 materialColor 与 style，且会强制覆盖组件的 backgroundColor 与 border 为白底，
+   * 会导致白字主按钮（如"登录"、"获取验证码"）在白底页面上变成白底白字不可见。
+   */
   public static isSupported(): boolean {
     try {
-      return uiMaterial.isImmersiveMaterialSupported();
+      if (!uiMaterial.isImmersiveMaterialSupported()) {
+        return false;
+      }
+      const level: uiMaterial.MaterialLevel = uiMaterial.getGlobalMaterialLevel();
+      return level === uiMaterial.MaterialLevel.EXQUISITE || level === uiMaterial.MaterialLevel.GENTLE;
     } catch {
       return false;
     }
   }
 
-  /** 支持沉浸光感时返回透明背景以防遮挡材质层；否则回退为原始纯色背景 */
+  /** 返回组件底色：保留原始语义背景色作为衬底，防止白底页面上出现透明/白底白字 */
   public static fallbackBg(color: ResourceColor): ResourceColor {
-    return ImmersiveLightHelper.isSupported() ? Color.Transparent : color;
+    return color;
   }
 
   /** 主按钮沉浸光感材质（山管主题红半透玻璃 + 白色按压光感） */

@@ -257,20 +257,26 @@ struct LoginPage {
 
           // ===== 5. 登录胶囊按钮（外层 padding 控制左右 33dp，APK 同款） =====
           Row() {
-            Text(this.isLogging ? '登录中...' : '登录')
-              .fontSize(18)
-              .fontColor($r('app.color.white'))
-              .width('100%')
-              .height(46)
-              .textAlign(TextAlign.Center)
-              .backgroundColor(ImmersiveLightHelper.fallbackBg($r('app.color.mobile_campus_primary_color')))
-              .borderRadius(23)
-              .systemMaterial(ImmersiveLightHelper.primaryButtonMaterial())
-              .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-              .hoverEffect(HoverEffect.Highlight)
-              .onClick(() => {
-                this.doLogin();
-              })
+            Stack({ alignContent: Alignment.Center }) {
+              Text(this.isLogging ? '登录中...' : '登录')
+                .fontSize(18)
+                .fontColor($r('app.color.white'))
+                .width('100%')
+                .height(46)
+                .textAlign(TextAlign.Center)
+                .backgroundColor($r('app.color.mobile_campus_primary_color'))
+                .borderRadius(23)
+                .systemMaterial(ImmersiveLightHelper.primaryButtonMaterial())
+            }
+            .width('100%')
+            .height(46)
+            .backgroundColor($r('app.color.mobile_campus_primary_color'))
+            .borderRadius(23)
+            .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
+            .hoverEffect(HoverEffect.Highlight)
+            .onClick(() => {
+              this.doLogin();
+            })
           }
           .width('100%')
           .constraintSize({ maxWidth: BreakpointSystem.isCompactWidth(this.currentBreakpoint) ? '100%' : 480 })
@@ -279,25 +285,35 @@ struct LoginPage {
 
           // ===== 6. 手机号登录描边胶囊 =====
           Row() {
-            Text('手机号登录')
-              .fontSize(18)
-              .fontColor($r('app.color.mobile_campus_primary_color'))
-              .width('100%')
-              .height(46)
-              .textAlign(TextAlign.Center)
-              .backgroundColor(ImmersiveLightHelper.fallbackBg($r('app.color.white')))
-              .borderRadius(23)
-              .border(ImmersiveLightHelper.isSupported() ? undefined : {
-                width: 1,
-                color: $r('app.color.mobile_campus_primary_color')
-              })
-              .systemMaterial(ImmersiveLightHelper.secondaryButtonMaterial())
-              .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
-              .hoverEffect(HoverEffect.Highlight)
-              .onClick(() => {
-                // [W4 sms-login] 跳转手机号登录页（InputIdentifyCodeActivity 链路复刻）
-                router.pushUrl({ url: 'pages/PhoneLoginPage' });
-              })
+            Stack({ alignContent: Alignment.Center }) {
+              Text('手机号登录')
+                .fontSize(18)
+                .fontColor($r('app.color.mobile_campus_primary_color'))
+                .width('100%')
+                .height(46)
+                .textAlign(TextAlign.Center)
+                .backgroundColor($r('app.color.white'))
+                .borderRadius(23)
+                .border({
+                  width: 1,
+                  color: $r('app.color.mobile_campus_primary_color')
+                })
+                .systemMaterial(ImmersiveLightHelper.secondaryButtonMaterial())
+            }
+            .width('100%')
+            .height(46)
+            .backgroundColor($r('app.color.white'))
+            .borderRadius(23)
+            .border({
+              width: 1,
+              color: $r('app.color.mobile_campus_primary_color')
+            })
+            .clickEffect({ level: ClickEffectLevel.LIGHT, scale: 0.97 })
+            .hoverEffect(HoverEffect.Highlight)
+            .onClick(() => {
+              // [W4 sms-login] 跳转手机号登录页（InputIdentifyCodeActivity 链路复刻）
+              router.pushUrl({ url: 'pages/PhoneLoginPage' });
+            })
           }
           .width('100%')
           .constraintSize({ maxWidth: BreakpointSystem.isCompactWidth(this.currentBreakpoint) ? '100%' : 480 })

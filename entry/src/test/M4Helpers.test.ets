@@ -24,6 +24,7 @@ import {
   HOLDING_HAND_UNKNOWN
 } from '../main/ets/common/HoldingHandHelper';
 import { WidgetDataHelper } from '../main/ets/common/WidgetDataHelper';
+import { ImmersiveLightHelper } from '../main/ets/common/ImmersiveLightHelper';
 
 export default function m4HelpersTest() {
   describe('m4HelpersTest', () => {
@@ -171,6 +172,9 @@ export default function m4HelpersTest() {
       const quick24Want = WidgetDataHelper.buildQuickEntryWideWidgetWant();
       expect(quick24Want.parameters?.['ohos.extra.param.key.form_name']).assertEqual('quick_entry_widget');
       expect(quick24Want.parameters?.['ohos.extra.param.key.form_dimension']).assertEqual(3);
+
+      // ImmersiveLightHelper fallbackBg must never return transparent and hide primary buttons
+      expect(ImmersiveLightHelper.fallbackBg('#97000C')).assertEqual('#97000C');
     });
   });
 }
