@@ -71,6 +71,13 @@ struct LightAppPage {
   private loadOnly: string = '';
 
   /** [W6 light-diag] 诊断日志：hilog tag 'SDMU'，前缀 'LightDiag'（onLoadIntercept/页面生命周期/console 全链路） */
+  private getWebMaxWidth(): number | string {
+    if (this.currentBreakpoint === 'xs' || this.currentBreakpoint === 'sm') {
+      return '100%';
+    }
+    return 680;
+  }
+
   private diag(msg: string): void {
     hilog.info(0x0000, 'SDMU', 'LightDiag %{public}s', msg);
   }
@@ -336,6 +343,15 @@ struct LightAppPage {
               })
               .onPageEnd((event: OnPageEndEvent) => {
                 this.diag('pageEnd url=' + event.url);
+                if (this.yyid === 'bodaNews' || this.pageTitle === '学校要闻') {
+                  try {
+                    this.webController.runJavaScript(
+                      "(function(){var s=document.getElementById('sdmu_adapt_css');if(!s){s=document.createElement('style');s.id='sdmu_adapt_css';s.textContent='img{object-fit:cover!important;}';document.head&&document.head.appendChild(s);}})();"
+                    );
+                  } catch {
+                    // 忽略样式注入异常
+                  }
+                }
                 // 源码 funFromjs JS 桥的宿主标题同步（简化：读取 document.title）
               })
               .onErrorReceive((event: OnErrorReceiveEvent) => {
@@ -390,6 +406,7 @@ struct LightAppPage {
       }
       .width('100%')
       .layoutWeight(1)
+      .constraintSize({ maxWidth: this.getWebMaxWidth() })
       .padding({
         left: this.avoidAreaLeftVp,
         right: this.avoidAreaRightVp,
@@ -399,6 +416,7 @@ struct LightAppPage {
     }
     .width('100%')
     .height('100%')
-    .backgroundColor($r('app.color.main_bg'))
+    .alignItems(HorizontalAlign.Center)
+    .backgroundColor($r('app.color.mobile_campus_bg_color'))
   }
 }

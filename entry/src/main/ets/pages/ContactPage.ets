@@ -58,6 +58,7 @@ struct ContactPage {
   /** 组展开状态（组名→已展开），持久化 contact_group_expand（源码 ContactCachePImpl b.e/b.f） */
   @State expandedKeys: string[] = [];
   @State selectedPersonGh: string = '';
+  @State selectedPersonPhone: string = '';
   @State selectedPersonDetail: ContactAddressBookUserInfo | null = null;
   @State detailLoading: boolean = false;
   @State detailError: string = '';
@@ -236,7 +237,7 @@ struct ContactPage {
       return;
     }
     if (group.type === 'topContactList') {
-      this.gotoPersonalDetail(group.topContactList[childIdx].SCYHID);
+      this.gotoPersonalDetail(group.topContactList[childIdx].SCYHID, this.phoneOf(group, childIdx));
       return;
     }
     if (group.type === 'classAddressBook') {
@@ -246,32 +247,33 @@ struct ContactPage {
       return;
     }
     if (group.type === 'myTeacher') {
-      this.gotoPersonalDetail(group.myTeacher[childIdx].GH);
+      this.gotoPersonalDetail(group.myTeacher[childIdx].GH, this.phoneOf(group, childIdx));
       return;
     }
     if (group.type === 'myCourseTeachers') {
-      this.gotoPersonalDetail(group.myCourseTeachers[childIdx].userId);
+      this.gotoPersonalDetail(group.myCourseTeachers[childIdx].userId, this.phoneOf(group, childIdx));
     }
   }
 
   /** 源码 a1(m0, bundle{gh}) 个人详情页 */
-  private gotoPersonalDetail(gh: string): void {
+  private gotoPersonalDetail(gh: string, fallbackPhone: string = ''): void {
     const splitCfg: SplitPaneConfig =
       AdaptiveLayoutHelper.getSplitPaneConfig(this.currentBreakpoint, this.windowWidthVp);
     if (!splitCfg.useTwoPane) {
-      this.openPersonalDetailFullPage(gh);
+      this.openPersonalDetailFullPage(gh, fallbackPhone);
       return;
     }
-    this.selectPersonForPreview(gh);
+    this.selectPersonForPreview(gh, fallbackPhone);
   }
 
-  private openPersonalDetailFullPage(gh: string): void {
+  private openPersonalDetailFullPage(gh: string, fallbackPhone: string = ''): void {
     router.pushUrl({ url: 'pages/ContactPersonalDetailPage',
-      params: { 'gh': gh } as Record<string, string> });
+      params: { 'gh': gh, 'phone': fallbackPhone } as Record<string, string> });
   }
 
-  private selectPersonForPreview(gh: string): void {
+  private selectPersonForPreview(gh: string, fallbackPhone: string = ''): void {
     this.selectedPersonGh = gh;
+    this.selectedPersonPhone = fallbackPhone;
     this.selectedPersonDetail = null;
     this.detailError = '';
     this.detailLoading = true;
@@ -288,6 +290,9 @@ struct ContactPage {
         if (response.code === 0) {
           const bean: ContactAddressBookUserInfo = response.data;
           bean.userInfo.SJHM = bean.userInfo.BDSJH === '' ? bean.userInfo.SJHM : bean.userInfo.BDSJH;
+          if (bean.userInfo.SJHM === '' && fallbackPhone !== '') {
+            bean.userInfo.SJHM = fallbackPhone;
+          }
           this.selectedPersonDetail = bean;
         } else {
           this.detailError = response.message === '' ? '获取联系人详情失败' : response.message;
@@ -940,6 +945,8 @@ struct ContactPage {
     }
     if (u.SJHM !== '') {
       list.push(u.SJHM.replace('/', ',').split(',')[0].trim());
+    } else if (this.selectedPersonPhone !== '') {
+      list.push(this.selectedPersonPhone.replace('/', ',').split(',')[0].trim());
     }
     const displayName: string = this.selectedPersonDetail.name !== '' ? this.selectedPersonDetail.name : u.XM;
     if (list.length === 0 && displayName === '' && u.DZYJ === '') {
@@ -1021,7 +1028,7 @@ struct ContactPage {
             .backgroundColor('#3A92ED')
             .hoverEffect(HoverEffect.Highlight)
             .onClick(() => {
-              this.openPersonalDetailFullPage(this.selectedPersonGh);
+              this.openPersonalDetailFullPage(this.selectedPersonGh, this.selectedPersonPhone);
             })
         }
         .width('100%')
@@ -1097,7 +1104,7 @@ struct ContactPage {
                 .backgroundColor('#3A92ED')
                 .hoverEffect(HoverEffect.Highlight)
                 .onClick(() => {
-                  this.openPersonalDetailFullPage(this.selectedPersonGh);
+                  this.openPersonalDetailFullPage(this.selectedPersonGh, this.selectedPersonPhone);
                 })
             }
             .width('100%')

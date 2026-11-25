@@ -212,8 +212,9 @@ struct ContactSearchPage {
     }
     const bean: ContactSearchAddressBookItem = group.addressBookList[childIdx];
     this.saveCache(bean);
+    const fallbackPhone: string = bean.BDSJH !== '' ? bean.BDSJH : bean.SJHM;
     router.pushUrl({ url: 'pages/ContactPersonalDetailPage',
-      params: { 'gh': bean.XLH } as Record<string, string> });
+      params: { 'gh': bean.XLH, 'phone': fallbackPhone } as Record<string, string> });
   }
 
   /** 源码 b.onItemClick（q 缓存 ListView）：仅填入关键词 + y=1 + 按 userType 搜索；

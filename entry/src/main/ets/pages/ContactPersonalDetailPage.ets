@@ -72,6 +72,7 @@ struct ContactPersonalDetailPage {
   @StorageProp('avoidAreaBottomVp') avoidAreaBottomVp: number = 0;
   @StorageProp('isCompactHeight') isCompactHeight: boolean = false;
   private gh: string = '';
+  private fallbackPhone: string = '';
   private contactSearchType: string = '';
   /** 源码 l 类 setResult(-1) 等价：拨号/常用变化刷新标记，上游 onPageShow 消费 */
   private refreshFlag: boolean = false;
@@ -158,11 +159,13 @@ struct ContactPersonalDetailPage {
     const params = router.getParams() as Record<string, string>;
     if (params !== null && params !== undefined) {
       const ghParam: string = params['gh'] !== undefined && params['gh'] !== null ? params['gh'] : '';
+      const phoneParam: string = params['phone'] !== undefined && params['phone'] !== null ? params['phone'] : '';
       const typeParam: string = params['contactSearchType'] !== undefined &&
         params['contactSearchType'] !== null ? params['contactSearchType'] : '';
       // 源码仅 onCreate 读 intent；HAP onPageShow 只在首次带参时装载
       if (this.gh === '' && ghParam !== '') {
         this.gh = ghParam;
+        this.fallbackPhone = phoneParam;
         this.contactSearchType = typeParam;
         this.loadData();
       }
@@ -203,6 +206,9 @@ struct ContactPersonalDetailPage {
         // 源码 r3 613-614：手机行值 = BDSJH 空 → SJHM，并回写 userInfo.SJHM（后续 q3/tvAddToLocal 收集覆写后值）
         const bean: ContactAddressBookUserInfo = response.data;
         bean.userInfo.SJHM = bean.userInfo.BDSJH === '' ? bean.userInfo.SJHM : bean.userInfo.BDSJH;
+        if (bean.userInfo.SJHM === '' && this.fallbackPhone !== '') {
+          bean.userInfo.SJHM = this.fallbackPhone;
+        }
         this.info = bean;
         this.moreAddType = response.data.type === '' ? '0' : response.data.type;
         this.moreRoleType = response.data.roleType === '' ? '0' : response.data.roleType;

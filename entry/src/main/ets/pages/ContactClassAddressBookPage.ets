@@ -210,7 +210,7 @@ struct ContactClassAddressBookPage {
   /** 源码 b 类：行点击 → {gh:XH} → ContactPersonalDetailActivity */
   private openDetail(bean: ContactClassStudentBean): void {
     router.pushUrl({ url: 'pages/ContactPersonalDetailPage',
-      params: { 'gh': bean.XH } as Record<string, string> });
+      params: { 'gh': bean.XH, 'phone': contactClassPhoneOf(bean) } as Record<string, string> });
   }
 
   /** 源码 v(XB)：性别底色 gender_man#3A7BFF/gender_woman#FF5F5F/gender_unknown#F9C043（W9 drawable 实证） */
