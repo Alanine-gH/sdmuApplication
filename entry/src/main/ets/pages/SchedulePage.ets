@@ -1305,29 +1305,41 @@ struct SchedulePage {
             .justifyContent(FlexAlign.End)
 
             Column({ space: 8 }) {
-              this.courseMetaRow('周次', this.selectedCourseDetail !== null && this.selectedCourseDetail.qsjsz !== ''
-                ? this.selectedCourseDetail.qsjsz : this.selectedCourse.week)
-              this.courseMetaRow('节次', '周' + this.selectedCourse.dayOfWeek + ' 第' +
-                this.selectedCourse.sectionStart + '-' + this.selectedCourse.sectionEnd + '节')
-              this.courseMetaRow('地点', this.selectedCourseDetail !== null && this.selectedCourseDetail.skdd !== ''
-                ? this.selectedCourseDetail.skdd : this.selectedCourse.location)
-              this.courseMetaRow('授课教师', this.selectedCourseDetail !== null && this.selectedCourseDetail.skls !== ''
-                ? this.selectedCourseDetail.skls : this.selectedCourse.teacher)
+              CourseMetaRow({
+                label: '周次',
+                value: this.selectedCourseDetail !== null && this.selectedCourseDetail.qsjsz !== ''
+                  ? this.selectedCourseDetail.qsjsz : this.selectedCourse.week
+              })
+              CourseMetaRow({
+                label: '节次',
+                value: '周' + this.selectedCourse.dayOfWeek + ' 第' +
+                  this.selectedCourse.sectionStart + '-' + this.selectedCourse.sectionEnd + '节'
+              })
+              CourseMetaRow({
+                label: '地点',
+                value: this.selectedCourseDetail !== null && this.selectedCourseDetail.skdd !== ''
+                  ? this.selectedCourseDetail.skdd : this.selectedCourse.location
+              })
+              CourseMetaRow({
+                label: '授课教师',
+                value: this.selectedCourseDetail !== null && this.selectedCourseDetail.skls !== ''
+                  ? this.selectedCourseDetail.skls : this.selectedCourse.teacher
+              })
               if (this.selectedCourseDetail !== null) {
                 if (this.selectedCourseDetail.sksj !== '') {
-                  this.courseMetaRow('上课时间', this.selectedCourseDetail.sksj)
+                  CourseMetaRow({ label: '上课时间', value: this.selectedCourseDetail.sksj })
                 }
                 if (this.selectedCourseDetail.skbj !== '' && this.selectedCourseDetail.skbj !== 'null') {
-                  this.courseMetaRow('上课班级', this.selectedCourseDetail.skbj)
+                  CourseMetaRow({ label: '上课班级', value: this.selectedCourseDetail.skbj })
                 }
                 if (this.selectedCourseDetail.skrs !== '') {
-                  this.courseMetaRow('上课人数', this.selectedCourseDetail.skrs + '人')
+                  CourseMetaRow({ label: '上课人数', value: this.selectedCourseDetail.skrs + '人' })
                 }
                 if (this.selectedCourseDetail.pjf !== '') {
-                  this.courseMetaRow('平均分', this.selectedCourseDetail.pjf)
+                  CourseMetaRow({ label: '平均分', value: this.selectedCourseDetail.pjf })
                 }
                 if (this.selectedCourseDetail.lszgf !== '') {
-                  this.courseMetaRow('历史最高分', this.selectedCourseDetail.lszgf)
+                  CourseMetaRow({ label: '历史最高分', value: this.selectedCourseDetail.lszgf })
                 }
               }
             }
@@ -1350,16 +1362,21 @@ struct SchedulePage {
     .height('100%')
     .backgroundColor($r('app.color.common_color_6'))
   }
+}
 
-  @Builder
-  courseMetaRow(label: string, value: string) {
+@Component
+struct CourseMetaRow {
+  @Prop label: string = '';
+  @Prop value: string = '';
+
+  build() {
     Row() {
-      Text(label)
+      Text(this.label)
         .fontSize(13)
         .fontColor($r('app.color.common_color_3'))
         .width(84)
         .flexShrink(0)
-      Text(value === '' ? '--' : value)
+      Text(this.value === '' ? '--' : this.value)
         .fontSize(13)
         .fontColor($r('app.color.common_color_1'))
         .layoutWeight(1)

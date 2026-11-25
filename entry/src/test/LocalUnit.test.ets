@@ -78,13 +78,16 @@ export default function localUnitTest() {
       const w4 = WidgetDataHelper.buildWeeklyFormPayload(4, 20, courses, 'week', 1, 1);
       expect(w4['weekCourseCount']).assertEqual(0);
 
-      // 含周六课程 → 自动扩展为 7 列（35 格）
+      // 含周六 4 节连上课程 → 自动扩展为 7 列（35 格），并同时填充 1-2 与 3-4 两行
       const withWeekend: CompactWidgetCourse[] = [
-        { n: '创新实践', p: '实训楼', d: 6, s: 1, e: 2, w: 5, wk: '' }
+        { n: '企业级仿真项目开发实践A', p: '明远楼A411', d: 6, s: 1, e: 4, w: 5, wk: '' }
       ];
       const w5 = WidgetDataHelper.buildWeeklyFormPayload(5, 20, withWeekend, 'week', 6, 6);
       expect(w5['gridCols']).assertEqual(7);
-      expect((w5['gridCells'] as WidgetGridCell[]).length).assertEqual(35);
+      const cells5 = w5['gridCells'] as WidgetGridCell[];
+      expect(cells5.length).assertEqual(35);
+      expect(cells5[0 * 7 + 5].name).assertEqual('企业级仿真项目开发实践A');
+      expect(cells5[1 * 7 + 5].name).assertEqual('企业级仿真项目开发实践A');
       expect(WidgetDataHelper.clampWeek(0, 20)).assertEqual(1);
       expect(WidgetDataHelper.clampWeek(25, 20)).assertEqual(20);
     });

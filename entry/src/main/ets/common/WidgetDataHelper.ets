@@ -118,9 +118,18 @@ export class WidgetDataHelper {
     }
   }
 
+  private static getFreshStore(context: Context): preferences.Preferences {
+    try {
+      preferences.removePreferencesFromCacheSync(context, WIDGET_PREF_NAME);
+    } catch {
+      // 忽略缓存清理异常
+    }
+    return preferences.getPreferencesSync(context, { name: WIDGET_PREF_NAME });
+  }
+
   public static saveFormId(context: Context, formId: string): void {
     try {
-      const store = preferences.getPreferencesSync(context, { name: WIDGET_PREF_NAME });
+      const store = WidgetDataHelper.getFreshStore(context);
       const raw = store.getSync(KEY_FORM_IDS, '[]') as string;
       const ids: string[] = JSON.parse(raw) as string[];
       if (ids.indexOf(formId) < 0) {
@@ -135,7 +144,7 @@ export class WidgetDataHelper {
 
   public static removeFormId(context: Context, formId: string): void {
     try {
-      const store = preferences.getPreferencesSync(context, { name: WIDGET_PREF_NAME });
+      const store = WidgetDataHelper.getFreshStore(context);
       const raw = store.getSync(KEY_FORM_IDS, '[]') as string;
       const ids: string[] = (JSON.parse(raw) as string[]).filter((id: string) => id !== formId);
       store.putSync(KEY_FORM_IDS, JSON.stringify(ids));
@@ -247,7 +256,7 @@ export class WidgetDataHelper {
     courses: CourseItem[]
   ): void {
     try {
-      const store = preferences.getPreferencesSync(context, { name: WIDGET_PREF_NAME });
+      const store = WidgetDataHelper.getFreshStore(context);
       const compact: CompactWidgetCourse[] = courses.map((c: CourseItem): CompactWidgetCourse => {
         return {
           n: c.name,
@@ -272,7 +281,7 @@ export class WidgetDataHelper {
   /** 兼容旧调用：保存今日课程摘要 */
   public static saveTodaySchedule(context: Context, weekLabel: string, courses: WidgetCourseSummary[]): void {
     try {
-      const store = preferences.getPreferencesSync(context, { name: WIDGET_PREF_NAME });
+      const store = WidgetDataHelper.getFreshStore(context);
       const sliced = courses.slice(0, 4);
       store.putSync(KEY_WEEK_LABEL, weekLabel);
       store.putSync(KEY_COURSES_JSON, JSON.stringify(sliced));
@@ -328,15 +337,20 @@ export class WidgetDataHelper {
 
     for (const c of weekList) {
       if (c.d >= 1 && c.d <= gridCols) {
-        const slot: number = WidgetDataHelper.sectionToSlot(c.s);
-        const idx: number = slot * gridCols + (c.d - 1);
-        if (idx >= 0 && idx < gridCells.length && gridCells[idx].name === '') {
-          gridCells[idx] = {
-            name: c.n,
-            place: c.p,
-            colorIdx: WidgetDataHelper.hashCourseColor(c.n),
-            isToday: c.d === safeToday
-          };
+        const startSlot: number = WidgetDataHelper.sectionToSlot(c.s);
+        const endSection: number = c.e >= c.s ? c.e : c.s;
+        const endSlot: number = WidgetDataHelper.sectionToSlot(endSection);
+        const colorIdx: number = WidgetDataHelper.hashCourseColor(c.n);
+        for (let slot = startSlot; slot <= endSlot; slot++) {
+          const idx: number = slot * gridCols + (c.d - 1);
+          if (idx >= 0 && idx < gridCells.length && gridCells[idx].name === '') {
+            gridCells[idx] = {
+              name: c.n,
+              place: c.p,
+              colorIdx: colorIdx,
+              isToday: c.d === safeToday
+            };
+          }
         }
       }
     }
@@ -371,6 +385,7 @@ export class WidgetDataHelper {
       'gridCols': gridCols,
       'gridCells': gridCells,
       'dayCourses': dayCourses,
+      'allCourses': allCourses,
       'weekCourseCount': weekList.length,
       'todayCourseCount': todayCount,
       'title': weekTitle,
@@ -399,7 +414,7 @@ export class WidgetDataHelper {
     let selectedDay: number = todayWeekday;
 
     try {
-      const store = preferences.getPreferencesSync(context, { name: WIDGET_PREF_NAME });
+      const store = WidgetDataHelper.getFreshStore(context);
       const rawAll = store.getSync(KEY_ALL_COURSES_JSON, '[]') as string;
       allCourses = JSON.parse(rawAll) as CompactWidgetCourse[];
       currentWeek = store.getSync(KEY_CURRENT_WEEK, 1) as number;
@@ -430,7 +445,7 @@ export class WidgetDataHelper {
     try {
       const payload = JSON.parse(message) as Record<string, Object>;
       const action: string = typeof payload['action'] === 'string' ? payload['action'] as string : '';
-      const store = preferences.getPreferencesSync(context, { name: WIDGET_PREF_NAME });
+      const store = WidgetDataHelper.getFreshStore(context);
       const defaultWeek: number = store.getSync(KEY_CURRENT_WEEK, 1) as number;
       const maxWeek: number = store.getSync(KEY_MAX_WEEK, 20) as number;
       let weekNum: number = store.getSync('week_' + formId, defaultWeek) as number;
@@ -444,6 +459,11 @@ export class WidgetDataHelper {
       } else if (action === 'setMode') {
         const mode: string = payload['mode'] === 'day' ? 'day' : 'week';
         store.putSync('mode_' + formId, mode);
+        if (mode === 'day') {
+          const jsDay: number = new Date().getDay();
+          const todayWeekday: number = jsDay === 0 ? 7 : jsDay;
+          store.putSync('day_' + formId, todayWeekday);
+        }
       } else if (action === 'selectDay') {
         const dayVal = payload['day'];
         if (typeof dayVal === 'number' && dayVal >= 1 && dayVal <= 7) {
@@ -486,7 +506,7 @@ export class WidgetDataHelper {
 
   private static notifyAllForms(context: Context): void {
     try {
-      const store = preferences.getPreferencesSync(context, { name: WIDGET_PREF_NAME });
+      const store = WidgetDataHelper.getFreshStore(context);
       const raw = store.getSync(KEY_FORM_IDS, '[]') as string;
       const ids: string[] = JSON.parse(raw) as string[];
       for (const id of ids) {
