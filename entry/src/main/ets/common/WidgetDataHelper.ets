@@ -142,6 +142,16 @@ export class WidgetDataHelper {
     }
   }
 
+  public static saveFormDimension(context: Context, formId: string, dimension: number): void {
+    try {
+      const store = WidgetDataHelper.getFreshStore(context);
+      store.putSync('dim_' + formId, dimension === 2 ? 2 : 4);
+      store.flushSync();
+    } catch {
+      // 忽略
+    }
+  }
+
   public static removeFormId(context: Context, formId: string): void {
     try {
       const store = WidgetDataHelper.getFreshStore(context);
@@ -151,6 +161,7 @@ export class WidgetDataHelper {
       store.deleteSync('mode_' + formId);
       store.deleteSync('week_' + formId);
       store.deleteSync('day_' + formId);
+      store.deleteSync('dim_' + formId);
       store.flushSync();
     } catch {
       // 忽略
@@ -412,6 +423,7 @@ export class WidgetDataHelper {
     let mode: string = 'week';
     let weekNum: number = 1;
     let selectedDay: number = todayWeekday;
+    let formDimension: number = 4;
 
     try {
       const store = WidgetDataHelper.getFreshStore(context);
@@ -423,6 +435,7 @@ export class WidgetDataHelper {
         mode = store.getSync('mode_' + formId, 'week') as string;
         weekNum = store.getSync('week_' + formId, currentWeek) as number;
         selectedDay = store.getSync('day_' + formId, todayWeekday) as number;
+        formDimension = store.getSync('dim_' + formId, 4) as number;
       } else {
         weekNum = currentWeek;
       }
@@ -430,7 +443,7 @@ export class WidgetDataHelper {
       allCourses = [];
     }
 
-    return WidgetDataHelper.buildWeeklyFormPayload(
+    const payload = WidgetDataHelper.buildWeeklyFormPayload(
       weekNum,
       maxWeek,
       allCourses,
@@ -438,6 +451,8 @@ export class WidgetDataHelper {
       selectedDay,
       todayWeekday
     );
+    payload['formDimension'] = formDimension === 2 ? 2 : 4;
+    return payload;
   }
 
   /** 处理桌面卡片按钮交互：切周 / 切本周与今日视图 / 选星期 */

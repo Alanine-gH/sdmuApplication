@@ -296,7 +296,7 @@ struct ContactPersonalDetailPage {
   /** 源码 o3：i2==0→d0.c 短信（HAP 等价 makeCall，同 W9 先例）；i2==1：≤1→s3 确认框；>1→直接拨+addTopContact */
   private handleDialChoice(count: number, tapType: number, phone: string, gh: string): void {
     if (tapType === 0) {
-      this.makeCall(phone);
+      this.sendSms(phone);
       return;
     }
     if (tapType !== 1) {
@@ -332,6 +332,23 @@ struct ContactPersonalDetailPage {
       });
     } catch {
       ApiService.logError('ContactPersonalDetailPage makeCall fail');
+    }
+  }
+
+  /** 拉起 HarmonyOS 系统短信应用 */
+  private sendSms(phone: string): void {
+    const num: string = phone.trim();
+    if (num === '') {
+      return;
+    }
+    try {
+      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      const want: Want = { action: 'ohos.want.action.sendToData', uri: 'sms:' + num };
+      ctx.startAbility(want).catch(() => {
+        this.getUIContext().getPromptAction().showToast({ message: '当前设备暂不支持短信功能' });
+      });
+    } catch {
+      this.getUIContext().getPromptAction().showToast({ message: '当前设备暂不支持短信功能' });
     }
   }
 

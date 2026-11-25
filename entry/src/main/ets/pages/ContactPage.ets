@@ -1,8 +1,8 @@
 import { router } from '@kit.ArkUI';
-import { common } from '@kit.AbilityKit';
+import { common, Want } from '@kit.AbilityKit';
 import { contact } from '@kit.ContactsKit';
 import { call } from '@kit.TelephonyKit';
-import { BusinessError } from '@kit.BasicServicesKit';
+import { pasteboard, BusinessError } from '@kit.BasicServicesKit';
 import { ApiService } from '../network/ApiService';
 import { ApiResponse } from '../model/ResponseModel';
 import { ContactInitData, ContactTopContactListBean,
@@ -366,7 +366,7 @@ struct ContactPage {
       return;
     }
     if (tapType === 0) {
-      this.makeCall(phone);
+      this.sendSms(phone);
       return;
     }
     this.showCallConfirm(phone, gh);
@@ -380,14 +380,22 @@ struct ContactPage {
       sheets.push({
         title: trimmed,
         action: (): void => {
-          this.makeCall(trimmed);
-          if (tapType === 1) {
-            ApiService.addTopContact(gh, '0');
+          if (tapType === 0) {
+            this.sendSms(trimmed);
+          } else {
+            this.makeCall(trimmed);
+            if (tapType === 1) {
+              ApiService.addTopContact(gh, '0');
+            }
           }
         }
       });
     }
-    this.getUIContext().showActionSheet({ title: '选择号码', message: '请选择要拨打的号码', sheets: sheets });
+    this.getUIContext().showActionSheet({
+      title: '选择号码',
+      message: tapType === 0 ? '请选择要发送短信的号码' : '请选择要拨打的号码',
+      sheets: sheets
+    });
   }
 
   /** 源码 u2()：确认框"拨打电话"→ 确认后拨号 + addTopContact(gh, "0")（e 类回调） */
@@ -419,6 +427,39 @@ struct ContactPage {
       });
     } catch (error) {
       ApiService.logError('ContactPage makeCall fail');
+    }
+  }
+
+  /** 拉起 HarmonyOS 系统短信应用 */
+  private sendSms(phone: string): void {
+    const num: string = phone.trim();
+    if (num === '') {
+      return;
+    }
+    try {
+      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      const want: Want = { action: 'ohos.want.action.sendToData', uri: 'sms:' + num };
+      ctx.startAbility(want).catch(() => {
+        this.getUIContext().getPromptAction().showToast({ message: '当前设备暂不支持短信功能' });
+      });
+    } catch {
+      this.getUIContext().getPromptAction().showToast({ message: '当前设备暂不支持短信功能' });
+    }
+  }
+
+  private copyFieldText(label: string, value: string): void {
+    if (value === '' || value === '--') {
+      return;
+    }
+    try {
+      const data: pasteboard.PasteData = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, value);
+      pasteboard.getSystemPasteboard().setData(data).then(() => {
+        this.getUIContext().getPromptAction().showToast({ message: '已复制' + label + '：' + value });
+      }).catch(() => {
+        // 忽略剪贴板异常
+      });
+    } catch {
+      // 忽略剪贴板异常
     }
   }
 
@@ -1164,5 +1205,8 @@ struct ContactPage {
     }
     .width('100%')
     .alignItems(VerticalAlign.Top)
+    .onClick(() => {
+      this.copyFieldText(label, value);
+    })
   }
 }

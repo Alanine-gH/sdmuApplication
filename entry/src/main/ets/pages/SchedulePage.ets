@@ -7,6 +7,7 @@ import { CourseItem, ScheduleTermParams, CourseDetailEntry, SCHEDULE_FALLBACK_ST
 import { BusinessError } from '@kit.BasicServicesKit';
 import { common } from '@kit.AbilityKit';
 import { WidgetDataHelper, WidgetCourseSummary } from '../common/WidgetDataHelper';
+import { LiveViewIntentHelper } from '../common/LiveViewIntentHelper';
 import { ImmersiveLightHelper } from '../common/ImmersiveLightHelper';
 import { BreakpointSystem, CreaseRegionVp } from '../common/BreakpointSystem';
 import { AdaptiveLayoutHelper, SplitPaneConfig } from '../common/AdaptiveLayoutHelper';
@@ -238,6 +239,7 @@ struct SchedulePage {
         if (data.length > 0) {
           this.courseList = data;
           this.syncScheduleToWidget();
+          LiveViewIntentHelper.syncTodayCourseLiveView(data, this.todayWeek);
         } else if (response.code !== 0) {
           console.info('SchedulePage degrade: code=' + response.code + ' msg=' + response.message);
         }
@@ -1285,7 +1287,24 @@ struct SchedulePage {
             .backgroundColor(this.colorPool[this.selectedCourseColorIdx])
             .alignItems(HorizontalAlign.Start)
 
-            Row() {
+            Row({ space: 10 }) {
+              Text('实况胶囊')
+                .fontSize(14)
+                .fontColor('#97000C')
+                .fontWeight(FontWeight.Medium)
+                .textAlign(TextAlign.Center)
+                .padding({ left: 16, right: 16, top: 10, bottom: 10 })
+                .borderRadius(6)
+                .backgroundColor('#FFF0F0')
+                .hoverEffect(HoverEffect.Highlight)
+                .onClick(() => {
+                  if (this.selectedCourse !== null) {
+                    LiveViewIntentHelper.startCourseLiveView(this.selectedCourse)
+                      .then((res) => {
+                        this.getUIContext().getPromptAction().showToast({ message: res.message });
+                      });
+                  }
+                })
               Text('打开完整页面')
                 .fontSize(15)
                 .fontColor($r('app.color.white'))

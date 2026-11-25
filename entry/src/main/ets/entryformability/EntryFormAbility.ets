@@ -8,8 +8,13 @@ import { WidgetDataHelper } from '../common/WidgetDataHelper';
 export default class EntryFormAbility extends FormExtensionAbility {
   onAddForm(want: Want): formBindingData.FormBindingData {
     const formId = want.parameters ? String(want.parameters['ohos.extra.param.key.form_identity'] || '') : '';
+    const rawDim = want.parameters ? want.parameters['ohos.extra.param.key.form_dimension'] : 4;
+    const dimNum: number = Number(rawDim);
     if (formId !== '') {
       WidgetDataHelper.saveFormId(this.context, formId);
+      if (dimNum === 2 || dimNum === 4) {
+        WidgetDataHelper.saveFormDimension(this.context, formId, dimNum);
+      }
     }
     return formBindingData.createFormBindingData(WidgetDataHelper.loadFormData(this.context, formId));
   }

@@ -38,12 +38,28 @@ const CELL_TEXT_COLORS: string[] = [
 ];
 const WEEKDAY_LABELS: string[] = ['一', '二', '三', '四', '五', '六', '日'];
 const SECTION_LABELS: string[] = ['1-2', '3-4', '5-6', '7-8', '9+'];
+const SECTION_CLOCKS: string[][] = [
+  ['08:00', '08:45'], ['08:55', '09:40'], ['10:00', '10:45'], ['10:55', '11:40'],
+  ['14:00', '14:45'], ['14:55', '15:40'], ['16:00', '16:45'], ['16:55', '17:40'],
+  ['19:00', '19:45'], ['19:55', '20:40'], ['20:50', '21:35'], ['21:45', '22:30']
+];
+const SECTION_END_MINUTES: number[] = [
+  8 * 60 + 45, 9 * 60 + 40, 10 * 60 + 45, 11 * 60 + 40,
+  14 * 60 + 45, 15 * 60 + 40, 16 * 60 + 45, 17 * 60 + 40,
+  19 * 60 + 45, 20 * 60 + 40, 21 * 60 + 35, 22 * 60 + 30
+];
+const SECTION_START_MINUTES: number[] = [
+  8 * 60, 8 * 60 + 55, 10 * 60, 10 * 60 + 55,
+  14 * 60, 14 * 60 + 55, 16 * 60, 16 * 60 + 55,
+  19 * 60, 19 * 60 + 55, 20 * 60 + 50, 21 * 60 + 45
+];
 
 const localStorage: LocalStorage = new LocalStorage();
 
 @Entry(localStorage)
 @Component
 struct ScheduleWidgetCard {
+  @LocalStorageProp('formDimension') formDimension: number = 4;
   @LocalStorageProp('viewMode') @Watch('onFormPropsChange') propViewMode: string = 'week';
   @LocalStorageProp('weekNum') @Watch('onFormPropsChange') propWeekNum: number = 1;
   @LocalStorageProp('maxWeek') maxWeek: number = 20;
@@ -280,6 +296,36 @@ struct ScheduleWidgetCard {
     });
   }
 
+  private getNextTodayCourse(): DayCourseItem | null {
+    const safeToday: number = this.todayWeekday >= 1 && this.todayWeekday <= 7 ? this.todayWeekday : 1;
+    if (this.propAllCourses.length > 0) {
+      const todayList: CompactWidgetCourse[] = [];
+      for (const c of this.propAllCourses) {
+        if (c.d === safeToday && this.isCourseInWeek(c, this.localWeekNum)) {
+          todayList.push(c);
+        }
+      }
+      todayList.sort((a: CompactWidgetCourse, b: CompactWidgetCourse) => a.s - b.s);
+      const now: Date = new Date();
+      const nowMin: number = now.getHours() * 60 + now.getMinutes();
+      for (const c of todayList) {
+        const sIdx: number = Math.max(0, Math.min(SECTION_CLOCKS.length - 1, c.s - 1));
+        const eIdx: number = Math.max(sIdx, Math.min(SECTION_CLOCKS.length - 1, c.e - 1));
+        if (SECTION_END_MINUTES[eIdx] >= nowMin) {
+          const status: string = nowMin >= SECTION_START_MINUTES[sIdx] ? '上课中' : '下一节';
+          const clock: string = SECTION_CLOCKS[sIdx][0] + '-' + SECTION_CLOCKS[eIdx][1];
+          return {
+            name: c.n,
+            time: `${status} · 第${c.s}-${c.e}节 (${clock})`,
+            place: c.p
+          };
+        }
+      }
+      return null;
+    }
+    return this.propDayCourses.length > 0 ? this.propDayCourses[0] : null;
+  }
+
   private openScheduleApp(): void {
     postCardAction(this, {
       action: 'router',
@@ -336,6 +382,85 @@ struct ScheduleWidgetCard {
   }
 
   build() {
+    if (this.formDimension === 2) {
+      this.buildCompactCard();
+    } else {
+      this.buildFullCard();
+    }
+  }
+
+  @Builder
+  buildCompactCard() {
+    Column() {
+      Row() {
+        Text('第' + this.localWeekNum + '周')
+          .fontSize(11)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#FFFFFF')
+          .backgroundColor('#97000C')
+          .padding({ left: 7, right: 7, top: 2, bottom: 2 })
+          .borderRadius(6)
+        Blank()
+        Text('周' + WEEKDAY_LABELS[(this.todayWeekday >= 1 && this.todayWeekday <= 7 ? this.todayWeekday : 1) - 1])
+          .fontSize(11)
+          .fontWeight(FontWeight.Medium)
+          .fontColor('#97000C')
+      }
+      .width('100%')
+
+      if (this.getNextTodayCourse() !== null) {
+        Column({ space: 4 }) {
+          Text(this.getNextTodayCourse()!.name)
+            .fontSize(15)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#222222')
+            .maxLines(2)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+          Text(this.getNextTodayCourse()!.time)
+            .fontSize(11)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#97000C')
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+          if (this.getNextTodayCourse()!.place !== '') {
+            Text(this.getNextTodayCourse()!.place)
+              .fontSize(11)
+              .fontColor('#666666')
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .justifyContent(FlexAlign.Center)
+        .alignItems(HorizontalAlign.Start)
+      } else {
+        Column({ space: 4 }) {
+          Text(this.propAllCourses.length > 0 ? '今日课程已结束' : '暂无同步课表')
+            .fontSize(13)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#333333')
+          Text('点击查看完整课表')
+            .fontSize(11)
+            .fontColor('#888888')
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .justifyContent(FlexAlign.Center)
+        .alignItems(HorizontalAlign.Start)
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .padding(12)
+    .backgroundColor('#FFFFFF')
+    .onClick(() => {
+      this.openScheduleApp();
+    })
+  }
+
+  @Builder
+  buildFullCard() {
     Column() {
       // 顶部栏：< 第N周 > + [本周 | 今日] 切换开关
       Row() {
