@@ -10,6 +10,7 @@ import { HttpClient } from '../network/HttpClient';
 import { LoginSession } from '../network/LoginSession';
 import { Constants } from '../data/Constants';
 import { ApiService } from '../network/ApiService';
+import { UrlSecurityHelper } from '../common/UrlSecurityHelper';
 
 /**
  * 通用 WebView 页 — 源码级翻译（module/app/view/WebViewActivity.java + 旧版
@@ -80,6 +81,9 @@ struct WebViewPage {
       this.initialTitle = WebViewPage.pickStr(params, 'title');
     }
     this.targetUrl = WebViewPage.pickStr(params, 'url');
+    if (!UrlSecurityHelper.isSafeHttpUrl(this.targetUrl)) {
+      this.targetUrl = '';
+    }
     this.isZoom = params['isZoom'] === true;
     this.isVerify = params['isVerify'] === true;
     this.isKeyReturn = params['isKeyReturn'] === true;
@@ -89,7 +93,7 @@ struct WebViewPage {
     this.showShare = this.shareContent.startsWith('http');
     if (this.isVerify) {
       this.buildVerifyHeaders();
-    } else if (this.isToken && this.targetUrl.startsWith('http')) {
+    } else if (this.isToken && UrlSecurityHelper.isTrustedAuthHost(this.targetUrl)) {
       this.seedCookies();
     }
     if (this.targetUrl === '') {
@@ -123,13 +127,16 @@ struct WebViewPage {
     return '';
   }
 
-  /** 源码 i3()：Access-Token(AES 4字段) + Unique-Code + AppType；aesKey 缺失 → 空态不加载 */
+  /** 源码 i3()：Access-Token(AES 4字段) + Unique-Code + AppType；仅对受信任域名注入凭据 */
   private buildVerifyHeaders(): void {
     try {
       if (LoginSession.aesKey === '') {
         // 源码 i3()：strE=="" → q2（空态）直接返回，不 loadUrl
         this.verifyBlocked = true;
         this.pageState = 'empty';
+        return;
+      }
+      if (!UrlSecurityHelper.isTrustedAuthHost(this.targetUrl)) {
         return;
       }
       const at: string = HttpClient.buildWebEncryptedAccessToken();
@@ -178,22 +185,23 @@ struct WebViewPage {
       .catch((error: BusinessError) => ApiService.logError('WebViewPage share fail: ' + error.message));
   }
 
-  /** 源码下载监听：文件名从 URL path 提取；request.agent 下载到沙箱 */
+  /** 源码下载监听：校验 http(s) 并清洗文件名防止路径穿越；request.agent 下载到沙箱 */
   private startDownload(url: string): void {
-    if (url === '') {
+    if (!UrlSecurityHelper.isSafeHttpUrl(url)) {
       return;
     }
-    let fileName: string = 'web_download_' + String(Date.now());
+    let rawName: string = '';
     try {
       const path: string = url.split('?')[0];
       const parts: string[] = path.split('/');
       if (parts.length > 0 && parts[parts.length - 1] !== '') {
-        fileName = parts[parts.length - 1];
+        rawName = parts[parts.length - 1];
       }
     } catch (error) {
       const be = error as BusinessError;
       ApiService.logError('WebViewPage parse filename: ' + be.message);
     }
+    const fileName: string = UrlSecurityHelper.sanitizeFileName(rawName, 'web_download');
     const ctx: Context | undefined = this.getUIContext().getHostContext();
     if (ctx === undefined || ctx === null) {
       return;
@@ -285,7 +293,7 @@ struct WebViewPage {
               .javaScriptAccess(true)
               .domStorageAccess(true)
               .zoomAccess(this.isZoom)
-              .fileAccess(true)
+              .fileAccess(false)
               .onControllerAttached(() => {
                 if (this.targetUrl !== '' && !this.verifyBlocked) {
                   this.controller.loadUrl(this.targetUrl, this.headers);

@@ -1,4 +1,5 @@
 import { userAuth } from '@kit.UserAuthenticationKit';
+import { cryptoFramework } from '@kit.CryptoArchitectureKit';
 import { common } from '@kit.AbilityKit';
 import { preferences } from '@kit.ArkData';
 import { BusinessError } from '@kit.BasicServicesKit';
@@ -99,11 +100,20 @@ export class BiometricAuthHelper {
     return widgetParam;
   }
 
-  /** 纯函数：生成合法长度（1..32 字节）的随机挑战值 */
+  /** 纯函数：生成合法长度（1..32 字节）的密码学随机挑战值 */
   public static generateChallenge(length: number = 16): Uint8Array {
     const safeLen: number = Number.isFinite(length)
       ? Math.min(32, Math.max(1, Math.floor(length)))
       : 16;
+    try {
+      const rand: cryptoFramework.Random = cryptoFramework.createRandom();
+      const blob: cryptoFramework.DataBlob = rand.generateRandomSync(safeLen);
+      if (blob && blob.data && blob.data.byteLength === safeLen) {
+        return blob.data;
+      }
+    } catch {
+      // 单元测试无原生 CryptoArchitectureKit 环境时回退
+    }
     const challenge: Uint8Array = new Uint8Array(safeLen);
     for (let i = 0; i < safeLen; i++) {
       challenge[i] = Math.floor(Math.random() * 256);

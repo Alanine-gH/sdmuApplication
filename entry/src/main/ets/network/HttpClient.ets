@@ -8,6 +8,7 @@ import { CryptoUtil } from './CryptoUtil';
 import { LoginSession } from './LoginSession';
 import { Constants } from '../data/Constants';
 import { PreferencesUtil } from '../data/PreferencesUtil';
+import { UrlSecurityHelper } from '../common/UrlSecurityHelper';
 
 interface ApiRawData {
   code: Object;
@@ -108,7 +109,6 @@ export class HttpClient {
       'xxdm': xxdm
     };
     const json: string = JSON.stringify(token);
-    CryptoUtil.log('AT json=' + json);
     return CryptoUtil.encryptAES(json, LoginSession.aesKey);
   }
 
@@ -390,7 +390,6 @@ export class HttpClient {
       'userType': utype,
       'xxdm': xxdm
     };
-    CryptoUtil.log('WebAT json=' + JSON.stringify(token));
     return CryptoUtil.encryptAES(JSON.stringify(token), LoginSession.aesKey);
   }
 
@@ -882,8 +881,14 @@ export class HttpClient {
   /** 单个文件 part（源码 FeedbackPImpl.g() 逐图 SubmitFileBean keyName="imgs" → impl.k() case 7） */
   private static appendFilePart(parts: Uint8Array[], encoder: util.TextEncoder,
     boundary: string, uri: string, keyName: string = 'imgs'): void {
-    const fileName: string = uri.substring(uri.lastIndexOf('/') + 1);
+    const rawName: string = uri.substring(uri.lastIndexOf('/') + 1);
+    const fileName: string = UrlSecurityHelper.sanitizeFileName(rawName, 'upload');
+    const safeKeyName: string = UrlSecurityHelper.sanitizeMultipartToken(keyName) || 'imgs';
     const stat: fs.Stat = fs.statSync(uri);
+    const maxFileBytes: number = 50 * 1024 * 1024;
+    if (stat.size <= 0 || stat.size > maxFileBytes) {
+      throw new Error('上传文件大小超出安全限制: ' + String(stat.size));
+    }
     const file = fs.openSync(uri, fs.OpenMode.READ_ONLY);
     try {
       const buf: ArrayBuffer = new ArrayBuffer(stat.size);
@@ -892,7 +897,7 @@ export class HttpClient {
         fileName.substring(fileName.lastIndexOf('.') + 1).toLowerCase() : 'jpg';
       const mime: string = ext === 'png' ? 'image/png' : 'image/jpeg';
       parts.push(encoder.encodeInto('--' + boundary + '\r\n'));
-      parts.push(encoder.encodeInto('Content-Disposition: form-data; name="' + keyName +
+      parts.push(encoder.encodeInto('Content-Disposition: form-data; name="' + safeKeyName +
         '"; filename="' + fileName + '"\r\n'));
       parts.push(encoder.encodeInto('Content-Type: ' + mime + '\r\n\r\n'));
       parts.push(new Uint8Array(buf));

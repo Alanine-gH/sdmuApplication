@@ -11,6 +11,7 @@ import { ApiResponse } from '../model/ResponseModel';
 import { ScanJumpUrl } from '../model/ContactModel';
 import { LoginSession } from '../network/LoginSession';
 import { Constants } from '../data/Constants';
+import { UrlSecurityHelper } from '../common/UrlSecurityHelper';
 
 /**
  * 扫码页 — 1:1 复刻 activity_qr_code_scan.xml + QrCodeScanActivity 行为（[W26 partial-finish]）：
@@ -166,9 +167,8 @@ struct QrCodeScanPage {
       // 源码 NXMZBean{app_id:"wangxun", type:"CAS_APP", url} → W0 scan/index{url,longitude:"",latitude:""}
       const bean: Record<string, string> = { 'app_id': 'wangxun', 'type': 'CAS_APP', 'url': result };
       this.scanIndexToWeb(JSON.stringify(bean));
-    } else if (result.indexOf('/paysec/pay/cm') >= 0) {
-      // 源码 L1483-1494：userCode=URLEncoder.encode(AES/CBC(userId)) 拼接；
-      // 加密异常时 userId 保持原值（源码 userId 初始值兜底）
+    } else if (result.indexOf('/paysec/pay/cm') >= 0 && UrlSecurityHelper.isTrustedAuthHost(result)) {
+      // 源码 L1483-1494：仅对受信任域名拼接加密 userCode，防止恶意二维码诱导凭据泄露
       let userCode: string = LoginSession.userId;
       try {
         userCode = encodeURIComponent(ApiService.encryptPayUserCode(LoginSession.userId));
@@ -188,16 +188,18 @@ struct QrCodeScanPage {
     } else if (result.indexOf('/pages/account/login/erweima') >= 0) {
       this.y3(result, 5);
     } else {
-      // 源码 L1504-1513：ACTION_VIEW（失败 → QrCodeScanResultActivity）
+      // 源码 L1504-1513：仅允许安全 URI Scheme 拉起外部应用，其余交结果页纯文本展示
       let viewOk: boolean = false;
-      try {
-        const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
-        const want: Want = { action: 'ohos.want.action.viewData', uri: result };
-        await context.startAbility(want);
-        viewOk = true;
-      } catch (error) {
-        const be = error as BusinessError;
-        ApiService.logError('QrCodeScanPage VIEW fail: ' + be.message);
+      if (UrlSecurityHelper.isSafeExternalUri(result)) {
+        try {
+          const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
+          const want: Want = { action: 'ohos.want.action.viewData', uri: result };
+          await context.startAbility(want);
+          viewOk = true;
+        } catch (error) {
+          const be = error as BusinessError;
+          ApiService.logError('QrCodeScanPage VIEW fail: ' + be.message);
+        }
       }
       if (!viewOk) {
         router.pushUrl({ url: 'pages/QrCodeScanResultPage', params: { 'QrCodeScanResult': result } });

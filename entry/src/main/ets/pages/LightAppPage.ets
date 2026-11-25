@@ -5,6 +5,7 @@ import { BreakpointSystem } from '../common/BreakpointSystem';
 import { LoginSession } from '../network/LoginSession';
 import { HttpClient } from '../network/HttpClient';
 import { Constants } from '../data/Constants';
+import { UrlSecurityHelper } from '../common/UrlSecurityHelper';
 
 /**
  * 轻应用页 — 1:1 翻译原 APK LightActivity.java(1080行)/X5LightActivity.java 的加载公式：
@@ -120,56 +121,65 @@ struct LightAppPage {
     }
     if (this.loadOnly === '1' && this.targetUrl !== '') {
       // [W26 partial-finish] (d) APK X5 I2() w=true（L1552-1555）：isLoadOnly 无头直载。
-      //   QrCodeScanPage 分流 a.m（y3 type=3/5 data 直载）场景。
+      if (!UrlSecurityHelper.isSafeHttpUrl(this.targetUrl)) {
+        this.targetUrl = '';
+      }
       this.headers = [];
     } else if (this.h5 === '1' && this.targetUrl !== '') {
       // [W26 partial-finish] (e) APK X5 I2() u=true h5 直载分支（L1583-1610）：
-      //   loadUrl(url, {AT(加密), UC})（无 AppType 头）；LX=6 相对路径前缀域名；
-      //   YiClassroom/leavingSchool/unifyTodo 特例（yyid 不同时不涉及）。
       if (this.lx === '6' && !this.targetUrl.startsWith('http')) {
         this.targetUrl = Constants.SOCKET_HOST + this.targetUrl;
       }
-      const h5Headers: HttpHeader[] = [{ headerKey: 'Unique-Code', headerValue: uc }];
-      if (this.webAccessToken !== '') {
-        h5Headers.unshift({ headerKey: 'Access-Token', headerValue: this.webAccessToken });
+      if (!UrlSecurityHelper.isSafeHttpUrl(this.targetUrl)) {
+        this.targetUrl = '';
+        this.headers = [];
+      } else if (UrlSecurityHelper.isTrustedAuthHost(this.targetUrl)) {
+        const h5Headers: HttpHeader[] = [{ headerKey: 'Unique-Code', headerValue: uc }];
+        if (this.webAccessToken !== '') {
+          h5Headers.unshift({ headerKey: 'Access-Token', headerValue: this.webAccessToken });
+        }
+        this.headers = h5Headers;
+      } else {
+        this.headers = [];
       }
-      this.headers = h5Headers;
     } else if (this.lx === '8' && this.targetUrl !== '' && this.webAccessToken !== '') {
-      // (b) LX=8"第三方应用对接移动校园单点"：URL query 单点参数；头仅 AT+UC（X5 L1580-1581）
-      const yyidPart: string = this.yyid === '' ? '' : '&yyid=' + this.yyid;
-      const glue: string = this.targetUrl.includes('?') ? '&' : '?';
-      this.targetUrl = this.targetUrl + glue + 'accessToken=' + encodeURIComponent(this.webAccessToken) +
-        '&uniqueCode=' + uc + yyidPart;
-      this.headers = [
-        { headerKey: 'Access-Token', headerValue: this.webAccessToken },
-        { headerKey: 'Unique-Code', headerValue: uc }
-      ];
+      // (b) LX=8"第三方应用对接移动校园单点"：仅对受信任域名拼接单点参数与认证头
+      if (!UrlSecurityHelper.isSafeHttpUrl(this.targetUrl)) {
+        this.targetUrl = '';
+        this.headers = [];
+      } else if (UrlSecurityHelper.isTrustedAuthHost(this.targetUrl)) {
+        const yyidPart: string = this.yyid === '' ? '' : '&yyid=' + this.yyid;
+        const glue: string = this.targetUrl.includes('?') ? '&' : '?';
+        this.targetUrl = this.targetUrl + glue + 'accessToken=' + encodeURIComponent(this.webAccessToken) +
+          '&uniqueCode=' + uc + yyidPart;
+        this.headers = [
+          { headerKey: 'Access-Token', headerValue: this.webAccessToken },
+          { headerKey: 'Unique-Code', headerValue: uc }
+        ];
+      } else {
+        this.headers = [];
+      }
     } else if (this.lx === '6' && this.targetUrl !== '' && !this.targetUrl.startsWith('http')) {
-      // (c) LX=6：相对路径前缀服务器域名（APK netconstant.d.d() + getURL()）；
-      //     APK 中该前缀仅 h5 直载模式生效（Light L781-784 在 o=h5 分支 / X5 L1604-1607 在 u=h5 分支），
-      //     本工程 dispatchApp lx='6' 不入此页，保留为直载兜底分支
       this.targetUrl = Constants.SOCKET_HOST + this.targetUrl;
-      this.headers = this.buildAuthHeaders(uc);
+      this.headers = UrlSecurityHelper.isTrustedAuthHost(this.targetUrl) ? this.buildAuthHeaders(uc) : [];
     } else {
-      // (a) LX=2/4 及缺省：springboard 跳板（APK 非 h5 分支 Light L761 / X5 L1621 —— URL 字段弃用）；
-      //     WebView 自动跟随 302 免登链；yyid 空时保留服务端直载 URL + 头 + cookie 兜底
       if (this.yyid !== '') {
         this.targetUrl = Constants.SOCKET_HOST + '/mobileapi_ydxy/api/lapp/springboard?yyid=' + this.yyid;
+      } else if (this.targetUrl !== '' && !UrlSecurityHelper.isSafeHttpUrl(this.targetUrl)) {
+        this.targetUrl = '';
       }
-      this.headers = this.buildAuthHeaders(uc);
+      this.headers = UrlSecurityHelper.isTrustedAuthHost(this.targetUrl) ? this.buildAuthHeaders(uc) : [];
     }
-    // Cookie 兜底（APK X5 S3() L1852-1859 / Light n3() L863-871 并集：accessToken/uniqueCode/AppType=ydxy；
-    // loadUrl 前写入，直载场景 thirdAuth 可从 cookie 取凭据；springboard 场景由服务端 302 自种 ydxy_accessToken）
-    if (this.webAccessToken !== '' && this.targetUrl.startsWith('http')) {
+    // Cookie 兜底：仅对受信任校园/合作域写入凭据 Cookie，且日志不打印明文 Token
+    if (this.webAccessToken !== '' && UrlSecurityHelper.isTrustedAuthHost(this.targetUrl)) {
       try {
         webview.WebCookieManager.configCookieSync(this.targetUrl, 'accessToken=' + this.webAccessToken);
         webview.WebCookieManager.configCookieSync(this.targetUrl, 'uniqueCode=' + uc);
         webview.WebCookieManager.configCookieSync(this.targetUrl, 'AppType=ydxy');
-        this.diag('cookieSeed url=' + this.targetUrl + ' ok, final loadUrl=' + this.targetUrl +
-          ' headers=' + JSON.stringify(this.headers) + ' lx=' + this.lx + ' yyid=' + this.yyid);
+        this.diag('cookieSeed ok host=' + UrlSecurityHelper.extractHttpHost(this.targetUrl) +
+          ' lx=' + this.lx + ' yyid=' + this.yyid);
       } catch {
-        // cookie 写入失败不阻断首屏，仍有 header 通道
-        this.diag('cookieSeed failed (non-fatal), loadUrl=' + this.targetUrl);
+        this.diag('cookieSeed failed (non-fatal) host=' + UrlSecurityHelper.extractHttpHost(this.targetUrl));
       }
     }
     // 原 7 字段异步 AT 直载实现已被上方 APK 分支矩阵替代（注释溯源）
@@ -293,7 +303,7 @@ struct LightAppPage {
               .javaScriptAccess(true)
               .domStorageAccess(true)
               .databaseAccess(true)
-              .fileAccess(true)
+              .fileAccess(false)
               .imageAccess(true)
               .onlineImageAccess(true)
               .zoomAccess(true)
@@ -304,7 +314,7 @@ struct LightAppPage {
                 // 源码 loadUrl(url, map)：认证头注入
                 // [R57] loadFailed=true 时由重试按钮手动 loadUrl，此处不重复加载
                 if (!this.loadFailed) {
-                  this.diag('controllerAttached, loadUrl=' + this.targetUrl);
+                  this.diag('controllerAttached, host=' + UrlSecurityHelper.extractHttpHost(this.targetUrl));
                   this.webController.loadUrl(this.targetUrl, this.headers);
                 }
               })
@@ -349,11 +359,14 @@ struct LightAppPage {
                 this.viewState = 'error';
               })
               .onSslErrorEventReceive((event: OnSslErrorEventReceiveEvent) => {
-                // 对齐 Android APK X5LightActivity.onReceivedSslError(handler.proceed())：
-                // 校园轻应用（毕业报告、督评系统、公寓系统、财务跳板等）在 302 免登链中可能跳转校内网关或合作域名，
-                // 放行 SSL 证书校验以防止白屏或连接中断。
-                this.diag('sslError code=' + event.error + ' confirm proceed');
-                event.handler.handleConfirm();
+                // 安全加固：仅对受信任校内域名兼容自签证书，其余站点一律拒绝无效证书，防止 MitM 攻击
+                if (UrlSecurityHelper.isTrustedCampusSslHost(this.targetUrl)) {
+                  this.diag('sslError code=' + event.error + ' confirm trusted campus host');
+                  event.handler.handleConfirm();
+                } else {
+                  this.diag('sslError code=' + event.error + ' cancel untrusted host');
+                  event.handler.handleCancel();
+                }
               })
               .onHttpErrorReceive((event: OnHttpErrorReceiveEvent) => {
                 // [W6 light-diag] HTTP >=400 响应（302 不触发）：CAS/myhall 拒绝时可在此看到

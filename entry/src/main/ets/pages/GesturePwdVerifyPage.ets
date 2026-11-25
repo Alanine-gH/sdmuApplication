@@ -1,5 +1,6 @@
 import { router } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
+import { preferences } from '@kit.ArkData';
 import { TitleBar } from '../components/TitleBar';
 import { GesturePwdGrid } from '../components/GesturePwdGrid';
 import { GestureManager, GesturePwdBean } from '../model/GestureManager';
@@ -107,6 +108,7 @@ struct GesturePwdVerifyPage {
     this.N2();
     // 源码 f1()：gesturePwdBean != null → switchToCheckMode(gesturePwds, 5)
     this.currentAttemptTime = 1;
+    this.restoreLockoutState();
     this.biometricCap = BiometricAuthHelper.checkCapability();
     try {
       const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
@@ -247,6 +249,7 @@ struct GesturePwdVerifyPage {
     if (match) {
       // 源码：zCompare → c(true)
       this.currentAttemptTime = 1;
+      this.saveLockoutState(1, 0);
       this.M2();
       return;
     }
@@ -255,11 +258,13 @@ struct GesturePwdVerifyPage {
       // 源码 onToast(String.format("手势密码不正确，剩余尝试次数%s次", i3), red, 5) → tvErrorTip
       this.errorTip = '手势密码不正确，剩余尝试次数' + remaining + '次';
       this.errorToken = this.errorToken + 1;
+      this.currentAttemptTime++;
+      this.saveLockoutState(this.currentAttemptTime, 0);
     } else {
       // 源码：剩余 0 → c(false) → L2() 冻结
+      this.currentAttemptTime++;
       this.L2();
     }
-    this.currentAttemptTime++;
   }
 
   /** 源码 M2()：校验通过后按模式分发（disable / unlock / reset） */
@@ -278,15 +283,50 @@ struct GesturePwdVerifyPage {
     router.replaceUrl({ url: 'pages/GesturePwdSettingPage' });
   }
 
-  /** 源码 L2()：setIfAllowInteract(false) + "冻结60s" + CountDownTimer(s*1000, 1000) */
-  private L2(): void {
+  /** 持久化手势失败次数与锁定截止时间，防止强杀重启绕过冻结 */
+  private saveLockoutState(attempt: number, lockUntilMs: number): void {
+    try {
+      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      const store = preferences.getPreferencesSync(ctx, { name: 'sdmu_security_prefs' });
+      store.putSync('gesture_attempt_count', attempt);
+      store.putSync('gesture_lock_until_ms', lockUntilMs);
+      store.flushSync();
+    } catch {
+      // 忽略持久化异常
+    }
+  }
+
+  /** 启动时恢复手势冻结状态与剩余尝试次数 */
+  private restoreLockoutState(): void {
+    try {
+      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      const store = preferences.getPreferencesSync(ctx, { name: 'sdmu_security_prefs' });
+      const savedAttempt = store.getSync('gesture_attempt_count', 1) as number;
+      const lockUntilMs = store.getSync('gesture_lock_until_ms', 0) as number;
+      const now: number = Date.now();
+      if (typeof lockUntilMs === 'number' && lockUntilMs > now) {
+        this.startFreezeCountdown(lockUntilMs - now);
+        return;
+      }
+      if (typeof savedAttempt === 'number' && savedAttempt >= 1 && savedAttempt <= this.maxAttemptTimes) {
+        this.currentAttemptTime = savedAttempt;
+      }
+    } catch {
+      // 忽略读取异常
+    }
+  }
+
+  private startFreezeCountdown(durationMs: number): void {
+    if (this.countdownTimerId !== -1) {
+      clearInterval(this.countdownTimerId);
+      this.countdownTimerId = -1;
+    }
     this.frozen = true;
-    this.errorTip = '冻结' + this.freezeSeconds + 's';
-    let remainingMs: number = this.freezeSeconds * 1000;
+    let remainingMs: number = durationMs;
+    this.errorTip = '冻结' + Math.max(1, Math.ceil(remainingMs / 1000)) + 's';
     this.countdownTimerId = setInterval(() => {
       remainingMs -= 1000;
       if (remainingMs <= 0) {
-        // 源码 onFinish：t=false + 允许交互 + tip 清空 + 重新挂 check 模式（尝试次数复位）
         if (this.countdownTimerId !== -1) {
           clearInterval(this.countdownTimerId);
           this.countdownTimerId = -1;
@@ -294,11 +334,18 @@ struct GesturePwdVerifyPage {
         this.frozen = false;
         this.errorTip = '';
         this.currentAttemptTime = 1;
+        this.saveLockoutState(1, 0);
         return;
       }
-      // 源码 onTick："冻结" + (j / 1000 + 1) + "s"
       this.errorTip = '冻结' + (Math.floor(remainingMs / 1000) + 1) + 's';
     }, 1000);
+  }
+
+  /** 源码 L2()：setIfAllowInteract(false) + "冻结60s" + 持久化锁定截止时间 */
+  private L2(): void {
+    const durationMs: number = this.freezeSeconds * 1000;
+    this.saveLockoutState(1, Date.now() + durationMs);
+    this.startFreezeCountdown(durationMs);
   }
 
   /** 源码 finish() 覆盖：冻结中或启动解锁态抑制返回 */

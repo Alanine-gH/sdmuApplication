@@ -20,12 +20,26 @@ export class CryptoUtil {
     hilog.info(TAG, DOMAIN, '%{public}s', msg);
   }
 
-  static generateKey(): string {
-    const bytes: Uint8Array = new Uint8Array(16);
-    for (let i = 0; i < 16; i++) {
+  static generateRandomBytes(length: number): Uint8Array {
+    const safeLen: number = Math.max(1, Math.floor(length));
+    try {
+      const rand: cryptoFramework.Random = cryptoFramework.createRandom();
+      const blob: cryptoFramework.DataBlob = rand.generateRandomSync(safeLen);
+      if (blob && blob.data && blob.data.byteLength === safeLen) {
+        return blob.data;
+      }
+    } catch {
+      // 单元测试无原生 CryptoArchitectureKit 环境时回退
+    }
+    const bytes: Uint8Array = new Uint8Array(safeLen);
+    for (let i = 0; i < safeLen; i++) {
       bytes[i] = Math.floor(Math.random() * 256);
     }
-    return CryptoUtil.bytesToBase64(bytes);
+    return bytes;
+  }
+
+  static generateKey(): string {
+    return CryptoUtil.bytesToBase64(CryptoUtil.generateRandomBytes(16));
   }
 
   static base64ToBytes(b64: string): Uint8Array {

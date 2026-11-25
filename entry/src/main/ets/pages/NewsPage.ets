@@ -432,7 +432,7 @@ struct NewsPage {
             .layoutWeight(1)
             .backgroundColor($r('app.color.white'))
             .javaScriptAccess(true)                     // f1():1068 setJavaScriptEnabled(true)
-            .fileAccess(true)                           // f1():1071 setAllowFileAccess(true)
+            .fileAccess(false)                          // 安全加固：远端网页禁用本地 file:// 访问
             .mixedMode(MixedMode.All)                  // f1():1075/1097 setMixedContentMode(0)=ALWAYS_ALLOW
             .domStorageAccess(true)                     // f1():1090 setDomStorageEnabled(true)
             .mediaPlayGestureAccess(false)              // f1():1091 setMediaPlaybackRequiresUserGesture(false)

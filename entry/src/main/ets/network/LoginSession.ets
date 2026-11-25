@@ -10,6 +10,7 @@ import { UserInfo } from '../model/UserModel';
 import { Constants } from '../data/Constants';
 import { ApiService } from './ApiService';
 import { LoginSecretBundle, SecureAssetHelper } from '../common/SecureAssetHelper';
+import { UrlSecurityHelper } from '../common/UrlSecurityHelper';
 
 const TAG = 0x0000;
 const DOMAIN = 'SDMU';
@@ -50,10 +51,7 @@ export class LoginSession {
   }
 
   private static randomUuid(): string {
-    const bytes: Uint8Array = new Uint8Array(16);
-    for (let i = 0; i < 16; i++) {
-      bytes[i] = Math.floor(Math.random() * 256);
-    }
+    const bytes: Uint8Array = CryptoUtil.generateRandomBytes(16);
     bytes[6] = (bytes[6] & 0x0f) | 0x40;
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
     const hex: string[] = [];
@@ -199,7 +197,7 @@ export class LoginSession {
         if (typeof n6 === 'string') {
           LoginSession.sessionPhone = n6;
         }
-        LoginSession.log('会话恢复成功 UC=' + uc);
+        LoginSession.log('会话恢复成功 UC=' + UrlSecurityHelper.redactSecret(uc));
         return true;
       }
     } catch (error) {
@@ -252,7 +250,7 @@ export class LoginSession {
           LoginSession.deviceCode = LoginSession.randomUuid();
         }
       }
-      LoginSession.log('UC=' + LoginSession.deviceCode);
+      LoginSession.log('UC=' + UrlSecurityHelper.redactSecret(LoginSession.deviceCode));
 
       // ===== 第1步：GET动态公钥 =====
       LoginSession.step = 'fetchPubKey';
@@ -403,7 +401,7 @@ export class LoginSession {
         }
       }
       if (LoginSession.aesKey !== '' && LoginSession.onlyCode !== '') {
-        LoginSession.log('ensureNegotiated 复用 UC=' + LoginSession.deviceCode);
+        LoginSession.log('ensureNegotiated 复用 UC=' + UrlSecurityHelper.redactSecret(LoginSession.deviceCode));
         return true;
       }
       // 第1步：GET动态公钥
@@ -444,7 +442,7 @@ export class LoginSession {
       // 第5步：持久化新协商产物（APK GetKeyUtil 启动即协商并持久化 UC/aesKey/onlyCode；
       // 冷启动进入手机号登录时免重复协商。此时无登录态，会话用户字段本就为空，覆盖安全）
       await LoginSession.persistSession();
-      LoginSession.log('ensureNegotiated OK UC=' + LoginSession.deviceCode);
+      LoginSession.log('ensureNegotiated OK UC=' + UrlSecurityHelper.redactSecret(LoginSession.deviceCode));
       return true;
     } catch (error) {
       const be = error as BusinessError;
